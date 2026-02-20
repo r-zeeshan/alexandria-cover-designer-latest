@@ -35,7 +35,7 @@
 ## Batch Checks
 
 - [ ] All 99 covers have 5 variant folders each
-- [ ] Output folder structure matches specification in PROJECT-STATE.md
+- [ ] Output folder structure matches specification in Project state Alexandria Cover designer.md
 - [ ] No missing or empty variant folders
 - [ ] Total output count: 99 × 5 × 3 = 1,485 files
 - [ ] Google Drive sync completed (if applicable)

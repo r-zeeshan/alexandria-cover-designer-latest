@@ -9,7 +9,7 @@
 
 ## Context
 
-Read `PROJECT-STATE.md`. We now have:
+Read `Project state Alexandria Cover designer.md`. We now have:
 - The exact circular region coordinates from Prompt 1A (`config/cover_regions.json`)
 - 495 generated illustrations from Prompt 2A (`tmp/generated/`)
 - The original 99 input covers (`Input Covers/`)
@@ -36,6 +36,15 @@ Create `src/cover_compositor.py` that:
 - The ornamental gold frame must NOT be affected
 - The feathered edge should blend smoothly with the frame's inner border
 - The illustration should "sit inside" the frame naturally, not look pasted on
+- The gold baroque frame OVERLAPS the edge of the illustration by ~15-20px — this creates a natural seal. The illustration sits UNDERNEATH the frame edge.
+
+### Fit Verification Overlay
+
+Generate a "fit test" overlay mode that can be toggled on any composited cover:
+- Semi-transparent red highlight showing the exact compositing boundary
+- Frame edge overlay showing where the ornamental frame meets the illustration
+- This is used by Tim in the webapp to visually confirm perfect fit before bulk processing
+- Function: `generate_fit_overlay(cover_path, region, output_path)` → overlay image
 
 ### Code Structure
 

@@ -9,7 +9,7 @@
 
 ## Context
 
-Read `PROJECT-STATE.md`. After Prompt 3A we have composited JPG covers in the output directory. Now we need to export each variant in all 3 required formats: `.ai`, `.jpg`, `.pdf` — matching the input file specifications exactly.
+Read `Project state Alexandria Cover designer.md`. After Prompt 3A we have composited JPG covers in the output directory. Now we need to export each variant in all 3 required formats: `.ai`, `.jpg`, `.pdf` — matching the input file specifications exactly.
 
 ---
 

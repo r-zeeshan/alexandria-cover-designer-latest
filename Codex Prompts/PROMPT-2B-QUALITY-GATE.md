@@ -9,7 +9,7 @@
 
 ## Context
 
-Read `PROJECT-STATE.md`. After Prompt 2A, we have ~495 generated images in `tmp/generated/`. Some may be low quality (artifacts, wrong content, blank images, etc.). We need an automated quality gate to score and filter before compositing.
+Read `Project state Alexandria Cover designer.md`. After Prompt 2A, we have ~495 generated images in `tmp/generated/`. Some may be low quality (artifacts, wrong content, blank images, etc.). We need an automated quality gate to score and filter before compositing.
 
 ---
 
@@ -21,12 +21,26 @@ Create `src/quality_gate.py` with automated quality checks:
 2. **Color Compatibility**: The illustration should have warm tones compatible with the navy/gold cover palette
 3. **AI Artifact Detection**: Flag images with common AI artifacts (text-like patterns, distorted features)
 4. **Diversity Check**: Ensure the 5 variants for each book are sufficiently different from each other
-5. **Scoring**: Aggregate score 0-1, with configurable threshold (default 0.6)
+5. **Scoring**: Aggregate score 0-1, with configurable threshold (default 0.7)
+
+### Retry Strategy (Tim's decision: same model, tweaked prompt)
+- When an image fails the quality gate, re-generate using the **same model** with a **tweaked prompt**
+- Tweaks: add/adjust style words, modify composition guidance, adjust negative prompt emphasis
+- Max 3 retries per image. After 3 failures, flag for manual review (do NOT switch to a different model)
+- Log all retries with the original and tweaked prompts for analysis
+
+6. **Multi-Model Ranking (D20)**: When all models generate for the same prompt, rank results across models:
+   - Score all outputs for the same book/prompt across every model
+   - Rank by quality score, grouped by model
+   - Generate a "model leaderboard" per book showing which model scored highest
+   - This helps Tim identify the best models during iteration
 
 ### Output
-- `data/quality_scores.json`: Per-image scores and pass/fail
-- `data/quality_report.md`: Human-readable summary
-- Images below threshold flagged for re-generation or manual review
+- `data/quality_scores.json`: Per-image scores and pass/fail (includes model name for each)
+- `data/quality_report.md`: Human-readable summary with model leaderboard
+- `data/retry_log.json`: All retried images with original/tweaked prompts
+- `data/model_rankings.json`: Aggregated quality scores per model across all evaluated images
+- Images below threshold after 3 retries flagged for manual review
 
 ---
 

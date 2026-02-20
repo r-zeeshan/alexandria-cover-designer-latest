@@ -9,7 +9,7 @@
 
 ## Context
 
-Read `PROJECT-STATE.md` in the repository root for full technical context before starting.
+Read `Project state Alexandria Cover designer.md` in the repository root for full technical context before starting.
 
 We have 99 book covers (3784×2777 JPGs at 300 DPI). Each has the same template layout: navy background, gold ornamental corners, and a **circular medallion illustration** on the front cover (right side of the image). We need to precisely detect where that center illustration circle is located so we can replace it.
 
@@ -42,8 +42,13 @@ Since all 99 covers use the **same template**, the center illustration is in a c
 
 3. **Output artifacts**:
    - `config/cover_regions.json`: Region coordinates for compositing
-   - A circular alpha mask PNG for the compositing step
+   - A circular alpha mask PNG for the compositing step (with feathered edges for smooth blending)
    - Debug overlay images showing detected region on 5 sample covers
+
+4. **Fit verification overlay** (for Tim's review):
+   - Generate a "fit test" image: the original cover with the detected circle region filled with a bright red semi-transparent overlay, so Tim can visually confirm the detected region is exactly right
+   - Also generate a version with a checkerboard pattern inside the circle, showing exactly what area will be replaced
+   - Save to `tmp/fit_verification/` — these are critical for Tim to approve before any generation starts
 
 ### Code Structure
 

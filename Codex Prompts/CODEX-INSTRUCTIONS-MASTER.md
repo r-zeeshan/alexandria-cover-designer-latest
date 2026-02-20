@@ -6,7 +6,7 @@
 
 ## MASTER TASK: Implement Prompts 1A through 5
 
-You have implementation prompts to execute in strict sequence. Each builds on the previous one. Read `PROJECT-STATE.md` first for full context.
+You have implementation prompts to execute in strict sequence. Each builds on the previous one. Read `Project state Alexandria Cover designer.md` first for full context.
 
 ### Execution Order (STRICT — do not reorder)
 
@@ -34,7 +34,7 @@ You have implementation prompts to execute in strict sequence. Each builds on th
 ### For Each Prompt
 
 1. Read the prompt file (e.g., `Codex Prompts/PROMPT-1A-COVER-ANALYSIS.md`)
-2. Read `PROJECT-STATE.md` for architecture context
+2. Read `Project state Alexandria Cover designer.md` for architecture context
 3. Implement ALL features described in the prompt
 4. Run ALL verification checks from the prompt's checklist — ACTUAL execution, not code review
 5. If ANY check fails → fix → re-run ALL checks → repeat until 100% PASS
@@ -59,7 +59,7 @@ You have implementation prompts to execute in strict sequence. Each builds on th
 ### Golden Rules (Apply to ALL Prompts)
 
 1. **NEVER modify files in `Input Covers/`** — read-only
-2. **NEVER modify `PROJECT-STATE.md`** — managed by Cowork/Tim only
+2. **NEVER modify `Project state Alexandria Cover designer.md`** — managed by Cowork/Tim only
 3. **NEVER change ornamental borders, text, or layout** — only the center illustration
 4. **Output filenames must match input filenames** (folders without " copy" suffix)
 5. **All outputs: 3784×2777, 300 DPI**

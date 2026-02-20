@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-You are building an automated pipeline that replaces the center illustrations on 99 classic book covers with 5 AI-generated artistic variants per cover. Read `PROJECT-STATE.md` for full technical context before starting any work.
+You are building an automated pipeline that replaces the center illustrations on 99 classic book covers with 5 AI-generated artistic variants per cover. Read `Project state Alexandria Cover designer.md` for full technical context before starting any work.
 
 ## Repository Structure
 
@@ -17,8 +17,8 @@ You are building an automated pipeline that replaces the center illustrations on
 
 ## Critical Rules
 
-1. **Read `PROJECT-STATE.md` FIRST** before any implementation work
-2. **NEVER modify `PROJECT-STATE.md`** — it is managed by Cowork/Tim only
+1. **Read `Project state Alexandria Cover designer.md` FIRST** before any implementation work
+2. **NEVER modify `Project state Alexandria Cover designer.md`** — it is managed by Cowork/Tim only
 3. **NEVER modify files in `Input Covers/`** — read-only source material
 4. **NEVER modify the ornamental borders, text, or layout on covers** — only the center circular illustration changes
 5. **Output filenames must match input filenames exactly** (folder names without " copy" suffix)
@@ -30,7 +30,7 @@ You are building an automated pipeline that replaces the center illustrations on
 For each prompt (numbered phase):
 
 1. Read the prompt file from `Codex Prompts/`
-2. Read `PROJECT-STATE.md` for context
+2. Read `Project state Alexandria Cover designer.md` for context
 3. Implement ALL features described
 4. Run ALL verification checks — actual execution, not code review
 5. If ANY check fails → fix → re-run → repeat until 100% PASS

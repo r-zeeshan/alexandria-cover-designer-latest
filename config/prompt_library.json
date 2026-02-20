@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-02-20T21:50:48.003660+00:00",
+  "updated_at": "2026-02-20T22:17:09.785586+00:00",
   "style_anchors": [
     {
       "name": "allegorical_symbolic",
@@ -207,6 +207,24 @@
         "allegory",
         "symbolic",
         "baroque"
+      ]
+    },
+    {
+      "id": "18e920d4-4c6b-41fb-8382-fd303748c93a",
+      "name": "API Saved Prompt",
+      "prompt_template": "Classical engraving from {title}",
+      "style_anchors": [
+        "warm_sepia_sketch"
+      ],
+      "negative_prompt": "",
+      "source_book": "iteration",
+      "source_model": "manual",
+      "quality_score": 0.75,
+      "saved_by": "tim",
+      "created_at": "2026-02-20T22:17:09.785562+00:00",
+      "notes": "saved from iterate page",
+      "tags": [
+        "api-test"
       ]
     },
     {

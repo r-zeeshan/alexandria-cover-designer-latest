@@ -1,10 +1,10 @@
-# Output covers (large, stored in Google Drive)
+# Output covers (large, generated at runtime)
 Output Covers/
 
-# Input covers (large, stored locally / Google Drive)
+# Input covers (large, stored in Google Drive — not in repo)
 Input Covers/
 
-# Sample output (reference only)
+# Sample covers (reference only, stored locally)
 Sample Output style covers/
 
 # Environment / secrets
@@ -21,12 +21,12 @@ venv/
 .DS_Store
 Thumbs.db
 
-# Runtime data
+# Runtime data (generated at runtime, not source)
 data/
 tmp/
 logs/
 
-# Codex development status
+# Codex development status (ephemeral)
 .codex-status/
 
 # Generated reports
@@ -35,8 +35,5 @@ reports/
 # Editor swap files
 ~$*
 
-# Large AI model files (if downloaded locally)
-models/
-*.safetensors
-*.ckpt
-*.bin
+# Large binary files
+*.ai

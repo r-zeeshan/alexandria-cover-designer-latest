@@ -9,7 +9,7 @@
 
 ## Context
 
-Read `PROJECT-STATE.md` for full context. Read `config/book_catalog.json` for the list of all 99 books. Read `config/prompt_templates.json` for the 5 variant templates.
+Read `Project state Alexandria Cover designer.md` for full context. Read `config/book_catalog.json` for the list of all 99 books. Read `config/prompt_templates.json` for the 5 variant templates.
 
 We need to generate 5 unique, book-specific illustration prompts for each of the 99 books. Each prompt must produce a classical oil painting style circular illustration depicting something directly relevant to that specific book.
 
@@ -72,6 +72,7 @@ def save_prompts(prompts: list, output_path: Path):
 
 ### Implementation Notes
 
+- **Tim's decision: AI interprets freely from title.** The AI model will decide what to depict based on just the book title + author. No curated scene descriptions needed.
 - You MUST have specific literary knowledge for each book. Use the title and author to infer the content.
 - For less well-known titles, generate reasonable prompts based on the title, author, and genre context.
 - The prompts file will be reviewed by Tim before generation — it must be human-readable.

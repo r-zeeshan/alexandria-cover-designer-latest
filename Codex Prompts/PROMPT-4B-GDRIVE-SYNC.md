@@ -9,7 +9,7 @@
 
 ## Context
 
-Read `PROJECT-STATE.md`. Output covers are generated locally in `Output Covers/`. Tim wants the final output uploaded to Google Drive at: https://drive.google.com/drive/folders/1Vr184ZsX3k38xpmZkd8g2vwB5y9LYMRC
+Read `Project state Alexandria Cover designer.md`. Output covers are generated locally in `Output Covers/`. Tim wants the final output uploaded to Google Drive at: https://drive.google.com/drive/folders/1Vr184ZsX3k38xpmZkd8g2vwB5y9LYMRC
 
 ---
 
