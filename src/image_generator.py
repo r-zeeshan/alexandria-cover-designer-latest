@@ -7,13 +7,16 @@ import base64
 import io
 import json
 import logging
+import random
 import threading
 import time
+from collections import defaultdict, deque
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import numpy as np
 import requests
@@ -21,16 +24,35 @@ from PIL import Image, ImageDraw
 
 try:
     from src import config
+    from src import safe_json
+    from src import similarity_detector
+    from src import prompt_generator
+    from src.logger import get_logger
     from src.prompt_library import PromptLibrary
 except ModuleNotFoundError:  # pragma: no cover
     import config  # type: ignore
+    import safe_json  # type: ignore
+    import similarity_detector  # type: ignore
+    import prompt_generator  # type: ignore
+    from logger import get_logger  # type: ignore
     from prompt_library import PromptLibrary  # type: ignore
 
-
-logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+
+
+def _host_matches_allowlist(host: str, pattern: str) -> bool:
+    host_token = str(host or "").strip().lower()
+    allow = str(pattern or "").strip().lower()
+    if not host_token or not allow:
+        return False
+    if allow in {"*", "any"}:
+        return True
+    if allow.startswith("*.") and len(allow) > 2:
+        root = allow[2:]
+        return host_token == root or host_token.endswith(f".{root}")
+    return host_token == allow or host_token.endswith(f".{allow}")
 
 
 @dataclass(slots=True)
@@ -50,6 +72,9 @@ class GenerationResult:
     skipped: bool = False
     dry_run: bool = False
     attempts: int = 0
+    similarity_warning: str | None = None
+    similar_to_book: int | None = None
+    distinctiveness_score: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
@@ -74,13 +99,33 @@ class BaseProvider:
 
     name = "base"
 
-    def __init__(self, model: str, api_key: str = "", timeout: float = 120.0):
+    def __init__(
+        self,
+        model: str,
+        api_key: str = "",
+        timeout: float = 120.0,
+        runtime: config.Config | None = None,
+    ):
         self.model = model
         self.api_key = api_key
         self.timeout = timeout
+        self.runtime = runtime
 
-    def generate(self, prompt: str, negative_prompt: str, width: int, height: int) -> Image.Image:
+    def generate(self, prompt: str, negative_prompt: str, width: int, height: int, seed: int | None = None) -> Image.Image:
         raise NotImplementedError
+
+    def _assert_outbound_url(self, url: str) -> None:
+        runtime = self.runtime or config.get_config()
+        allowed = [str(item).strip().lower() for item in runtime.outbound_allowlist_domains if str(item).strip()]
+        if not allowed:
+            return
+        host = str(urlparse(url).hostname or "").strip().lower()
+        if not host:
+            raise GenerationError(f"Outbound URL missing host: {url}")
+        for token in allowed:
+            if _host_matches_allowlist(host, token):
+                return
+        raise GenerationError(f"Outbound URL blocked by allowlist: host={host}")
 
 
 class SyntheticProvider(BaseProvider):
@@ -88,8 +133,9 @@ class SyntheticProvider(BaseProvider):
 
     name = "synthetic"
 
-    def generate(self, prompt: str, negative_prompt: str, width: int, height: int) -> Image.Image:
+    def generate(self, prompt: str, negative_prompt: str, width: int, height: int, seed: int | None = None) -> Image.Image:
         del negative_prompt
+        del seed
         prompt_lower = prompt.lower()
         image = Image.new("RGB", (width, height), (26, 39, 68))
         draw = ImageDraw.Draw(image, "RGBA")
@@ -226,18 +272,20 @@ class OpenAIProvider(BaseProvider):
 
     name = "openai"
 
-    def generate(self, prompt: str, negative_prompt: str, width: int, height: int) -> Image.Image:
+    def generate(self, prompt: str, negative_prompt: str, width: int, height: int, seed: int | None = None) -> Image.Image:
         if not self.api_key:
             raise GenerationError("Missing OPENAI_API_KEY")
 
+        endpoint = "https://api.openai.com/v1/images/generations"
+        self._assert_outbound_url(endpoint)
+        seeded_prompt = f"{prompt}\nVariation seed: {seed}" if seed is not None else prompt
         payload = {
             "model": self.model,
-            "prompt": f"{prompt}\nAvoid: {negative_prompt}",
+            "prompt": f"{seeded_prompt}\nAvoid: {negative_prompt}",
             "size": f"{width}x{height}",
-            "response_format": "b64_json",
         }
         response = requests.post(
-            "https://api.openai.com/v1/images/generations",
+            endpoint,
             headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json",
@@ -254,11 +302,16 @@ class OpenAIProvider(BaseProvider):
             raise GenerationError(f"OpenAI error {response.status_code}: {response.text[:300]}")
 
         body = response.json()
-        encoded = body.get("data", [{}])[0].get("b64_json")
-        if not encoded:
-            raise GenerationError("OpenAI response missing image payload")
-        image_bytes = base64.b64decode(encoded)
-        return Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        candidate = (body.get("data") or [{}])[0]
+        if isinstance(candidate, dict):
+            encoded = candidate.get("b64_json")
+            if encoded:
+                image_bytes = base64.b64decode(encoded)
+                return Image.open(io.BytesIO(image_bytes)).convert("RGB")
+            image_url = candidate.get("url")
+            if image_url:
+                return _download_image(str(image_url), timeout=self.timeout)
+        raise GenerationError("OpenAI response missing image payload")
 
 
 class OpenRouterProvider(BaseProvider):
@@ -266,23 +319,29 @@ class OpenRouterProvider(BaseProvider):
 
     name = "openrouter"
 
-    def generate(self, prompt: str, negative_prompt: str, width: int, height: int) -> Image.Image:
+    def generate(self, prompt: str, negative_prompt: str, width: int, height: int, seed: int | None = None) -> Image.Image:
         if not self.api_key:
             raise GenerationError("Missing OPENROUTER_API_KEY")
 
+        endpoint = "https://openrouter.ai/api/v1/chat/completions"
+        self._assert_outbound_url(endpoint)
+        seeded_prompt = f"{prompt}\nVariation seed: {seed}" if seed is not None else prompt
         payload = {
             "model": self.model,
             "messages": [
                 {
                     "role": "user",
-                    "content": f"{prompt}\nAvoid: {negative_prompt}\nTarget size: {width}x{height}.",
+                    "content": (
+                        "Create a distinctly different artistic interpretation than prior variants. "
+                        f"{seeded_prompt}\nAvoid: {negative_prompt}\nTarget size: {width}x{height}."
+                    ),
                 }
             ],
             "modalities": ["image"],
             "stream": False,
         }
         response = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
+            endpoint,
             headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json",
@@ -339,22 +398,27 @@ class FalProvider(BaseProvider):
 
     name = "fal"
 
-    def generate(self, prompt: str, negative_prompt: str, width: int, height: int) -> Image.Image:
+    def generate(self, prompt: str, negative_prompt: str, width: int, height: int, seed: int | None = None) -> Image.Image:
         if not self.api_key:
             raise GenerationError("Missing FAL_API_KEY")
 
         endpoint_model = self.model.replace("fal/", "")
+        endpoint = f"https://fal.run/{endpoint_model}"
+        self._assert_outbound_url(endpoint)
+        payload: dict[str, Any] = {
+            "prompt": prompt,
+            "negative_prompt": negative_prompt,
+            "image_size": {"width": width, "height": height},
+        }
+        if seed is not None:
+            payload["seed"] = int(seed)
         response = requests.post(
-            f"https://fal.run/{endpoint_model}",
+            endpoint,
             headers={
                 "Authorization": f"Key {self.api_key}",
                 "Content-Type": "application/json",
             },
-            json={
-                "prompt": prompt,
-                "negative_prompt": negative_prompt,
-                "image_size": {"width": width, "height": height},
-            },
+            json=payload,
             timeout=self.timeout,
         )
         if response.status_code in RETRYABLE_STATUS_CODES:
@@ -384,24 +448,29 @@ class ReplicateProvider(BaseProvider):
 
     name = "replicate"
 
-    def generate(self, prompt: str, negative_prompt: str, width: int, height: int) -> Image.Image:
+    def generate(self, prompt: str, negative_prompt: str, width: int, height: int, seed: int | None = None) -> Image.Image:
         if not self.api_key:
             raise GenerationError("Missing REPLICATE_API_TOKEN")
 
+        endpoint = "https://api.replicate.com/v1/predictions"
+        self._assert_outbound_url(endpoint)
+        input_payload: dict[str, Any] = {
+            "prompt": prompt,
+            "negative_prompt": negative_prompt,
+            "width": width,
+            "height": height,
+        }
+        if seed is not None:
+            input_payload["seed"] = int(seed)
         create_response = requests.post(
-            "https://api.replicate.com/v1/predictions",
+            endpoint,
             headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json",
             },
             json={
                 "version": self.model,
-                "input": {
-                    "prompt": prompt,
-                    "negative_prompt": negative_prompt,
-                    "width": width,
-                    "height": height,
-                },
+                "input": input_payload,
             },
             timeout=self.timeout,
         )
@@ -422,6 +491,7 @@ class ReplicateProvider(BaseProvider):
             raise GenerationError("Replicate response missing prediction id")
 
         poll_url = f"https://api.replicate.com/v1/predictions/{prediction_id}"
+        self._assert_outbound_url(poll_url)
         deadline = time.time() + self.timeout
         while time.time() < deadline:
             poll = requests.get(
@@ -461,13 +531,18 @@ class GoogleCloudProvider(BaseProvider):
 
     name = "google"
 
-    def generate(self, prompt: str, negative_prompt: str, width: int, height: int) -> Image.Image:
+    def generate(self, prompt: str, negative_prompt: str, width: int, height: int, seed: int | None = None) -> Image.Image:
         if not self.api_key:
             raise GenerationError("Missing GOOGLE_API_KEY")
 
         model_name = self.model if self.model.startswith("models/") else f"models/{self.model}"
         url = f"https://generativelanguage.googleapis.com/v1beta/{model_name}:generateContent"
-        prompt_text = f"{prompt}. Avoid: {negative_prompt}"
+        self._assert_outbound_url(url)
+        prompt_text = (
+            "Create a distinctly different artistic interpretation than prior variants. "
+            f"{prompt}. Variation seed: {seed if seed is not None else 'n/a'}. "
+            f"Avoid: {negative_prompt}"
+        )
         payload = {
             "contents": [{"parts": [{"text": prompt_text}]}],
             "generationConfig": {
@@ -536,54 +611,333 @@ _PROVIDER_CLASS_MAP = {
 
 
 class ProviderRateLimiter:
-    """Simple per-provider request limiter."""
+    """Sliding-window limiter with per-second and per-minute caps."""
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
-        self._last_call: dict[str, float] = {}
+        self._second_windows: dict[str, deque[float]] = defaultdict(deque)
+        self._minute_windows: dict[str, deque[float]] = defaultdict(deque)
 
-    def wait(self, provider: str, delay: float) -> None:
-        if delay <= 0:
-            return
+    def wait(self, provider: str, *, per_second: int, per_minute: int, base_delay: float) -> None:
+        if base_delay > 0:
+            time.sleep(base_delay)
 
-        with self._lock:
+        backoff = 1.0
+        while True:
             now = time.monotonic()
-            last = self._last_call.get(provider, 0.0)
-            wait_for = delay - (now - last)
-            if wait_for > 0:
-                time.sleep(wait_for)
-            self._last_call[provider] = time.monotonic()
+            with self._lock:
+                second_window = self._second_windows[provider]
+                minute_window = self._minute_windows[provider]
+
+                while second_window and (now - second_window[0]) >= 1.0:
+                    second_window.popleft()
+                while minute_window and (now - minute_window[0]) >= 60.0:
+                    minute_window.popleft()
+
+                sec_blocked = per_second > 0 and len(second_window) >= per_second
+                min_blocked = per_minute > 0 and len(minute_window) >= per_minute
+                if not sec_blocked and not min_blocked:
+                    second_window.append(now)
+                    minute_window.append(now)
+                    return
+
+            sleep_for = min(60.0, backoff)
+            logger.warning(
+                "Rate limit reached for provider '%s'; backing off %.1fs",
+                provider,
+                sleep_for,
+            )
+            time.sleep(sleep_for)
+            backoff = min(60.0, backoff * 2.0)
+
+    def reset(self, provider: str | None = None) -> None:
+        with self._lock:
+            if provider is None:
+                self._second_windows.clear()
+                self._minute_windows.clear()
+                return
+            token = str(provider).strip().lower()
+            self._second_windows.pop(token, None)
+            self._minute_windows.pop(token, None)
+
+    def snapshot(self) -> dict[str, dict[str, int]]:
+        now = time.monotonic()
+        with self._lock:
+            rows: dict[str, dict[str, int]] = {}
+            providers = set(self._second_windows.keys()) | set(self._minute_windows.keys())
+            for provider in providers:
+                second_window = self._second_windows[provider]
+                minute_window = self._minute_windows[provider]
+                while second_window and (now - second_window[0]) >= 1.0:
+                    second_window.popleft()
+                while minute_window and (now - minute_window[0]) >= 60.0:
+                    minute_window.popleft()
+                rows[provider] = {
+                    "rate_limit_window_second": len(second_window),
+                    "rate_limit_window_minute": len(minute_window),
+                }
+            return rows
+
+
+class ProviderCircuitBreaker:
+    """Simple per-provider circuit breaker to avoid retry storms."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._state: dict[str, dict[str, Any]] = defaultdict(
+            lambda: {
+                "state": "closed",
+                "consecutive_failures": 0,
+                "opened_until_monotonic": 0.0,
+                "opened_until_utc": "",
+                "last_error": "",
+                "open_events": 0,
+                "probe_in_flight": False,
+            }
+        )
+
+    def allow(self, provider: str) -> tuple[bool, float]:
+        now_mono = time.monotonic()
+        with self._lock:
+            state = self._state[provider]
+            current_state = str(state.get("state", "closed") or "closed")
+            opened_until = float(state.get("opened_until_monotonic", 0.0) or 0.0)
+
+            if current_state == "open":
+                if opened_until > now_mono:
+                    return False, max(0.0, opened_until - now_mono)
+                # Cooldown elapsed: permit exactly one half-open probe request.
+                state["state"] = "half_open"
+                state["opened_until_monotonic"] = 0.0
+                state["opened_until_utc"] = ""
+                state["consecutive_failures"] = 0
+                state["probe_in_flight"] = False
+                current_state = "half_open"
+
+            if current_state == "half_open":
+                if bool(state.get("probe_in_flight", False)):
+                    return False, 0.25
+                state["probe_in_flight"] = True
+                return True, 0.0
+
+            return True, 0.0
+
+    def record_success(self, provider: str) -> None:
+        with self._lock:
+            state = self._state[provider]
+            state["state"] = "closed"
+            state["consecutive_failures"] = 0
+            state["opened_until_monotonic"] = 0.0
+            state["opened_until_utc"] = ""
+            state["last_error"] = ""
+            state["probe_in_flight"] = False
+
+    def record_failure(
+        self,
+        provider: str,
+        *,
+        error_text: str,
+        failure_threshold: int,
+        cooldown_seconds: float,
+        transient: bool = True,
+    ) -> None:
+        threshold = max(1, int(failure_threshold))
+        cooldown = max(1.0, float(cooldown_seconds))
+        now_mono = time.monotonic()
+        now_utc = datetime.now(timezone.utc)
+        with self._lock:
+            state = self._state[provider]
+            state["last_error"] = str(error_text or "")
+            current_state = str(state.get("state", "closed") or "closed")
+
+            if not transient:
+                state["probe_in_flight"] = False
+                if current_state == "half_open":
+                    state["state"] = "closed"
+                    state["consecutive_failures"] = 0
+                return
+
+            if current_state == "half_open":
+                next_open_event = int(state.get("open_events", 0) or 0) + 1
+                factor = min(4.0, float(2 ** max(0, next_open_event - 1)))
+                adaptive_cooldown = min(900.0, cooldown * factor)
+                state["state"] = "open"
+                state["probe_in_flight"] = False
+                state["consecutive_failures"] = threshold
+                state["opened_until_monotonic"] = now_mono + adaptive_cooldown
+                state["opened_until_utc"] = (now_utc + timedelta(seconds=adaptive_cooldown)).isoformat()
+                state["open_events"] = next_open_event
+                return
+
+            state["consecutive_failures"] = int(state.get("consecutive_failures", 0) or 0) + 1
+            if state["consecutive_failures"] < threshold:
+                return
+            next_open_event = int(state.get("open_events", 0) or 0) + 1
+            factor = min(4.0, float(2 ** max(0, next_open_event - 1)))
+            adaptive_cooldown = min(900.0, cooldown * factor)
+            state["state"] = "open"
+            state["probe_in_flight"] = False
+            state["opened_until_monotonic"] = now_mono + adaptive_cooldown
+            state["opened_until_utc"] = (now_utc + timedelta(seconds=adaptive_cooldown)).isoformat()
+            state["open_events"] = next_open_event
+
+    def snapshot(self) -> dict[str, dict[str, Any]]:
+        now_mono = time.monotonic()
+        with self._lock:
+            rows: dict[str, dict[str, Any]] = {}
+            for provider, values in self._state.items():
+                opened_until = float(values.get("opened_until_monotonic", 0.0) or 0.0)
+                remaining = max(0.0, opened_until - now_mono) if opened_until > 0 else 0.0
+                state = str(values.get("state", "closed"))
+                if state == "open" and opened_until <= now_mono:
+                    state = "closed"
+                rows[provider] = {
+                    "state": state,
+                    "consecutive_failures": int(values.get("consecutive_failures", 0) or 0),
+                    "open_events": int(values.get("open_events", 0) or 0),
+                    "cooldown_remaining_seconds": round(remaining, 3),
+                    "opened_until_utc": str(values.get("opened_until_utc", "") or ""),
+                    "last_error": str(values.get("last_error", "") or ""),
+                    "probe_in_flight": bool(values.get("probe_in_flight", False)),
+                }
+            return rows
+
+    def reset(self, provider: str | None = None) -> None:
+        with self._lock:
+            if provider is None:
+                self._state.clear()
+                return
+            token = str(provider).strip().lower()
+            self._state.pop(token, None)
 
 
 _RATE_LIMITER = ProviderRateLimiter()
+_CIRCUIT_BREAKER = ProviderCircuitBreaker()
+_PROVIDER_STATS_LOCK = threading.Lock()
+_PROVIDER_STATS: dict[str, dict[str, int]] = defaultdict(lambda: {"requests_today": 0, "errors_today": 0})
 
 
-def generate_image(prompt: str, negative_prompt: str, model: str, params: dict[str, Any]) -> bytes:
+def _record_provider_request(provider: str, *, success: bool) -> None:
+    with _PROVIDER_STATS_LOCK:
+        stats = _PROVIDER_STATS[provider]
+        stats["requests_today"] += 1
+        if not success:
+            stats["errors_today"] += 1
+
+
+def _is_transient_provider_exception(exc: Exception) -> bool:
+    if isinstance(exc, (RetryableGenerationError, requests.RequestException, TimeoutError)):
+        return True
+    status_code = getattr(exc, "status_code", None)
+    return isinstance(status_code, int) and status_code in RETRYABLE_STATUS_CODES
+
+
+def reset_provider_runtime_state(provider: str | None = None) -> None:
+    """Reset in-memory provider runtime state (rate limiter, breaker, stats)."""
+    token = str(provider).strip().lower() if provider else None
+    _RATE_LIMITER.reset(token)
+    _CIRCUIT_BREAKER.reset(token)
+    with _PROVIDER_STATS_LOCK:
+        if token is None:
+            _PROVIDER_STATS.clear()
+        else:
+            _PROVIDER_STATS.pop(token, None)
+
+
+def get_provider_runtime_stats() -> dict[str, dict[str, Any]]:
+    breaker_state = _CIRCUIT_BREAKER.snapshot()
+    limiter_state = _RATE_LIMITER.snapshot()
+    with _PROVIDER_STATS_LOCK:
+        rows: dict[str, dict[str, Any]] = {}
+        for provider, values in _PROVIDER_STATS.items():
+            merged: dict[str, Any] = values.copy()
+            merged.update(breaker_state.get(provider, {}))
+            merged.update(limiter_state.get(provider, {}))
+            rows[provider] = merged
+        for provider, values in breaker_state.items():
+            if provider in rows:
+                continue
+            rows[provider] = {
+                "requests_today": 0,
+                "errors_today": 0,
+                **values,
+                **limiter_state.get(provider, {}),
+            }
+        for provider, values in limiter_state.items():
+            if provider in rows:
+                continue
+            rows[provider] = {
+                "requests_today": 0,
+                "errors_today": 0,
+                "state": "closed",
+                "consecutive_failures": 0,
+                "open_events": 0,
+                "cooldown_remaining_seconds": 0.0,
+                "opened_until_utc": "",
+                "last_error": "",
+                "probe_in_flight": False,
+                **values,
+            }
+        return rows
+
+
+def generate_image(
+    prompt: str,
+    negative_prompt: str,
+    model: str,
+    params: dict[str, Any],
+    *,
+    seed: int | None = None,
+) -> bytes:
     """Generate a single image via the specified model/provider."""
     runtime = config.get_config()
 
-    provider = params.get("provider") or runtime.resolve_model_provider(model)
+    model_prefix = _model_provider_prefix(runtime, model)
+    provider = model_prefix or params.get("provider") or runtime.resolve_model_provider(model)
     provider = str(provider).lower()
     provider_model = _resolve_provider_model_name(provider=provider, model=model)
     width = int(params.get("width", runtime.image_width))
     height = int(params.get("height", runtime.image_height))
 
+    allowed, cooldown_remaining = _CIRCUIT_BREAKER.allow(provider)
+    if not allowed:
+        raise RetryableGenerationError(
+            f"Provider '{provider}' is in cooldown ({cooldown_remaining:.1f}s remaining)",
+            status_code=503,
+        )
+
     request_delay = float(params.get("request_delay", _provider_request_delay(runtime, provider)))
-    _RATE_LIMITER.wait(provider, request_delay)
+    per_second = int(runtime.provider_rate_limit_per_second.get(provider, 0))
+    per_minute = int(runtime.provider_rate_limit_per_minute.get(provider, 0))
+    _RATE_LIMITER.wait(provider, per_second=per_second, per_minute=per_minute, base_delay=request_delay)
 
     provider_instance = _create_provider_instance(
         runtime=runtime,
         provider=provider,
         model=provider_model,
-        allow_synthetic_fallback=bool(params.get("allow_synthetic_fallback", True)),
+        allow_synthetic_fallback=bool(params.get("allow_synthetic_fallback", not runtime.has_any_api_key())),
     )
 
-    image = provider_instance.generate(
-        prompt=prompt,
-        negative_prompt=negative_prompt,
-        width=width,
-        height=height,
-    )
+    try:
+        image = provider_instance.generate(
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            width=width,
+            height=height,
+            seed=seed,
+        )
+        _record_provider_request(provider, success=True)
+        _CIRCUIT_BREAKER.record_success(provider)
+    except Exception as exc:
+        _record_provider_request(provider, success=False)
+        _CIRCUIT_BREAKER.record_failure(
+            provider,
+            error_text=str(exc),
+            failure_threshold=runtime.provider_circuit_failure_threshold,
+            cooldown_seconds=runtime.provider_circuit_cooldown_seconds,
+            transient=_is_transient_provider_exception(exc),
+        )
+        raise
 
     processed = _post_process_image(image, width=width, height=height)
     if _is_blank_or_solid(processed):
@@ -619,7 +973,8 @@ def generate_all_models(
     failures: list[GenerationResult] = []
     dry_run_plan: list[dict[str, Any]] = []
 
-    tasks: list[tuple[str, int, Path, str]] = []
+    tasks: list[tuple[str, int, Path, str, str, int]] = []
+    rng = random.SystemRandom()
     for model in models:
         model_dir = output_dir / str(book_number) / _model_to_directory(model)
         model_dir.mkdir(parents=True, exist_ok=True)
@@ -629,6 +984,8 @@ def generate_all_models(
 
         for variant in range(1, variants_per_model + 1):
             image_path = model_dir / f"variant_{variant}.png"
+            diversified_prompt = _diversify_prompt_for_variant(prompt=prompt, variant=variant)
+            seed = _variant_seed(rng=rng, book_number=book_number, model=model, variant=variant)
             if resume and image_path.exists():
                 logger.info(
                     'Skipping existing image for book %s model "%s" variant %s',
@@ -640,7 +997,7 @@ def generate_all_models(
                     GenerationResult(
                         book_number=book_number,
                         variant=variant,
-                        prompt=prompt,
+                        prompt=diversified_prompt,
                         model=model,
                         image_path=image_path,
                         success=True,
@@ -661,17 +1018,18 @@ def generate_all_models(
                         "model": model,
                         "provider": provider,
                         "variant": variant,
-                        "prompt": prompt,
+                        "prompt": diversified_prompt,
                         "negative_prompt": negative_prompt,
                         "output_path": str(image_path),
                         "estimated_cost": runtime.get_model_cost(model),
+                        "seed": seed,
                     }
                 )
                 results.append(
                     GenerationResult(
                         book_number=book_number,
                         variant=variant,
-                        prompt=prompt,
+                        prompt=diversified_prompt,
                         model=model,
                         image_path=None,
                         success=True,
@@ -685,7 +1043,7 @@ def generate_all_models(
                 )
                 continue
 
-            tasks.append((model, variant, image_path, provider))
+            tasks.append((model, variant, image_path, provider, diversified_prompt, seed))
 
     if dry_run:
         _append_generation_plan(runtime.generation_plan_path, dry_run_plan)
@@ -699,14 +1057,15 @@ def generate_all_models(
                     _generate_one,
                     book_number=book_number,
                     variant=variant,
-                    prompt=prompt,
+                    prompt=variant_prompt,
                     negative_prompt=negative_prompt,
                     model=model,
                     provider=provider,
                     output_path=image_path,
                     resume=resume,
+                    seed=seed,
                 ): (model, variant)
-                for model, variant, image_path, provider in tasks
+                for model, variant, image_path, provider, variant_prompt, seed in tasks
             }
 
             for future in as_completed(future_map):
@@ -715,10 +1074,159 @@ def generate_all_models(
                 if not result.success:
                     failures.append(result)
 
+    if tasks and results:
+        results = _regenerate_near_duplicate_variants(
+            runtime=runtime,
+            book_number=book_number,
+            negative_prompt=negative_prompt,
+            output_dir=output_dir,
+            results=results,
+            resume=resume,
+            provider_override=provider_override,
+        )
+        failures = [row for row in results if not row.success]
+
     if failures:
         _append_failures(runtime.failures_path, failures)
 
     return _sort_results(results)
+
+
+def _diversify_prompt_for_variant(*, prompt: str, variant: int) -> str:
+    base = prompt_generator.enforce_prompt_constraints(str(prompt or "").strip())
+    diversified = prompt_generator.diversify_prompt(base, int(variant))
+    if int(variant) > 1:
+        diversified = (
+            f"{diversified} Create a visibly distinct composition from prior variants for this title."
+        ).strip()
+    return prompt_generator.enforce_prompt_constraints(diversified)
+
+
+def _variant_seed(*, rng: random.Random | random.SystemRandom, book_number: int, model: str, variant: int) -> int:
+    del book_number
+    del model
+    del variant
+    return int(rng.getrandbits(32))
+
+
+def _duplicate_prompt_suffix(*, variant: int, distance: float) -> str:
+    return (
+        "Force a substantially different visual outcome than previous variants. "
+        f"Use a fresh palette/composition strategy for variant {int(variant)} (similarity distance={distance:.3f})."
+    )
+
+
+def _regenerate_near_duplicate_variants(
+    *,
+    runtime: config.Config,
+    book_number: int,
+    negative_prompt: str,
+    output_dir: Path,
+    results: list[GenerationResult],
+    resume: bool,
+    provider_override: str | None,
+) -> list[GenerationResult]:
+    del output_dir
+    del resume
+    distance_threshold = 0.15  # ~= 85%+ similar by inverse distance interpretation.
+    viable: list[tuple[int, GenerationResult]] = []
+    for idx, row in enumerate(results):
+        if not row.success or row.dry_run or row.skipped or not row.image_path or not row.image_path.exists():
+            continue
+        viable.append((idx, row))
+    if len(viable) < 2:
+        return results
+
+    try:
+        regions = safe_json.load_json(
+            config.cover_regions_path(catalog_id=runtime.catalog_id, config_dir=runtime.config_dir),
+            {},
+        )
+    except Exception as exc:
+        logger.debug("Similarity dedupe skipped (regions unavailable): %s", exc)
+        return results
+
+    grouped: dict[str, list[tuple[int, GenerationResult, Any]]] = {}
+    for idx, row in viable:
+        try:
+            hash_obj = similarity_detector._compute_hash_for_book(  # type: ignore[attr-defined]
+                book_number=book_number,
+                image_path=row.image_path,
+                regions=regions,
+            )
+        except Exception as exc:
+            logger.debug("Similarity hash failed for %s: %s", row.image_path, exc)
+            continue
+        grouped.setdefault(row.model, []).append((idx, row, hash_obj))
+
+    duplicate_targets: dict[int, tuple[GenerationResult, float]] = {}
+    for model, rows in grouped.items():
+        if len(rows) < 2:
+            continue
+        rows = sorted(rows, key=lambda item: item[1].variant)
+        for i in range(len(rows)):
+            for j in range(i + 1, len(rows)):
+                left = rows[i]
+                right = rows[j]
+                try:
+                    metrics = similarity_detector._compare_hash_objects(left[2], right[2])  # type: ignore[attr-defined]
+                    distance = float(metrics.get("combined_similarity", 1.0) or 1.0)
+                except Exception as exc:
+                    logger.debug("Similarity compare failed for model %s: %s", model, exc)
+                    continue
+                if distance > distance_threshold:
+                    continue
+                idx = int(right[0])
+                existing = duplicate_targets.get(idx)
+                if existing is None or distance < existing[1]:
+                    duplicate_targets[idx] = (right[1], distance)
+
+    if not duplicate_targets:
+        return results
+
+    logger.warning(
+        "Detected %d near-duplicate variant(s) for book %s; attempting one regeneration pass",
+        len(duplicate_targets),
+        book_number,
+    )
+    regen_rng = random.SystemRandom()
+    for idx, (row, distance) in sorted(duplicate_targets.items(), key=lambda item: item[0]):
+        if not row.image_path:
+            continue
+        regen_prompt = f"{row.prompt} {_duplicate_prompt_suffix(variant=row.variant, distance=distance)}".strip()
+        regen_prompt = prompt_generator.enforce_prompt_constraints(regen_prompt)
+        seed = _variant_seed(rng=regen_rng, book_number=book_number, model=row.model, variant=row.variant)
+        provider = provider_override or row.provider or runtime.resolve_model_provider(row.model)
+        regenerated = _generate_one(
+            book_number=book_number,
+            variant=row.variant,
+            prompt=regen_prompt,
+            negative_prompt=negative_prompt,
+            model=row.model,
+            provider=provider,
+            output_path=row.image_path,
+            resume=False,
+            seed=seed,
+        )
+        if regenerated.success:
+            logger.info(
+                "Regenerated near-duplicate variant for book %s model %s variant %s (distance %.3f)",
+                book_number,
+                row.model,
+                row.variant,
+                distance,
+            )
+            results[idx] = regenerated
+        else:
+            logger.warning(
+                "Failed to regenerate near-duplicate variant for book %s model %s variant %s: %s",
+                book_number,
+                row.model,
+                row.variant,
+                regenerated.error,
+            )
+
+    return results
 
 
 def generate_single_book(
@@ -928,8 +1436,29 @@ def _generate_one(
     provider: str,
     output_path: Path,
     resume: bool,
+    seed: int | None = None,
 ) -> GenerationResult:
     runtime = config.get_config()
+    catalog_id = getattr(runtime, "catalog_id", None)
+
+    prompt_similarity_alert: str | None = None
+    try:
+        prompt_similarity = similarity_detector.check_prompt_similarity_against_winners(
+            prompt=prompt,
+            current_book=book_number,
+            winner_selections_path=config.winner_selections_path(catalog_id=catalog_id, data_dir=runtime.data_dir),
+            generation_history_path=config.generation_history_path(catalog_id=catalog_id, data_dir=runtime.data_dir),
+            threshold=0.85,
+        )
+        if bool(prompt_similarity.get("alert")):
+            close_book = prompt_similarity.get("closest_book")
+            similarity_value = float(prompt_similarity.get("similarity", 0.0) or 0.0)
+            prompt_similarity_alert = (
+                f"Prompt similarity warning: book {book_number} prompt is {similarity_value:.3f} similar to winner prompt for book {close_book}."
+            )
+            logger.warning(prompt_similarity_alert)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug("Prompt similarity pre-check failed: %s", exc)
 
     if resume and output_path.exists():
         return GenerationResult(
@@ -949,23 +1478,88 @@ def _generate_one(
 
     start = time.perf_counter()
     last_error: str | None = None
+    model_prefix = _model_provider_prefix(runtime, model)
+    if model_prefix:
+        provider_chain = [model_prefix]
+    else:
+        provider_chain = _provider_fallback_chain(runtime, primary=provider)
+    provider_index = 0
+    active_provider = provider_chain[provider_index]
+    consecutive_provider_failures = 0
 
-    for attempt in range(1, runtime.max_retries + 1):
+    attempt = 0
+    max_attempts = max(1, runtime.max_retries) * max(1, len(provider_chain))
+    while attempt < max_attempts:
+        # Skip providers that are currently in cooldown.
+        provider_advanced = False
+        while provider_index < len(provider_chain):
+            candidate = provider_chain[provider_index]
+            allowed, cooldown_remaining = _CIRCUIT_BREAKER.allow(candidate)
+            if allowed:
+                active_provider = candidate
+                break
+            logger.warning(
+                "Skipping provider '%s' for book %s model %s variant %s due to cooldown (%.1fs remaining)",
+                candidate,
+                book_number,
+                model,
+                variant,
+                cooldown_remaining,
+            )
+            provider_index += 1
+            provider_advanced = True
+        if provider_index >= len(provider_chain):
+            last_error = "All providers are in cooldown"
+            break
+        if provider_advanced:
+            consecutive_provider_failures = 0
+
+        attempt += 1
         try:
             image_bytes = generate_image(
                 prompt=prompt,
                 negative_prompt=negative_prompt,
                 model=model,
                 params={
-                    "provider": provider,
+                    "provider": active_provider,
                     "width": runtime.image_width,
                     "height": runtime.image_height,
-                    "request_delay": _provider_request_delay(runtime, provider),
-                    "allow_synthetic_fallback": True,
+                    "request_delay": _provider_request_delay(runtime, active_provider),
+                    "allow_synthetic_fallback": not runtime.has_any_api_key(),
                 },
+                seed=seed,
             )
             output_path.parent.mkdir(parents=True, exist_ok=True)
             output_path.write_bytes(image_bytes)
+
+            similar_to_book: int | None = None
+            distinctiveness_score: float = 1.0
+            post_warning: str | None = prompt_similarity_alert
+            try:
+                post_check = similarity_detector.check_generated_image_against_winners(
+                    image_path=output_path,
+                    book_number=book_number,
+                    output_dir=runtime.output_dir,
+                    catalog_path=runtime.book_catalog_path,
+                    winner_selections_path=config.winner_selections_path(catalog_id=catalog_id, data_dir=runtime.data_dir),
+                    regions_path=config.cover_regions_path(catalog_id=catalog_id, config_dir=runtime.config_dir),
+                    threshold=0.25,
+                )
+                nearest_similarity = float(post_check.get("similarity", 1.0) or 1.0)
+                distinctiveness_score = max(0.0, min(1.0, nearest_similarity))
+                similar_to_book = post_check.get("closest_book")
+                if bool(post_check.get("alert")) and similar_to_book:
+                    suffix = f"SIMILAR TO BOOK #{similar_to_book} (distance={nearest_similarity:.3f})"
+                    post_warning = f"{post_warning} | {suffix}" if post_warning else suffix
+                    logger.warning(
+                        "Post-generation similarity alert for book %s variant %s model %s: %s",
+                        book_number,
+                        variant,
+                        model,
+                        suffix,
+                    )
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.debug("Post-generation similarity check failed: %s", exc)
 
             elapsed = time.perf_counter() - start
             return GenerationResult(
@@ -978,39 +1572,102 @@ def _generate_one(
                 error=None,
                 generation_time=elapsed,
                 cost=runtime.get_model_cost(model),
-                provider=provider,
+                provider=active_provider,
                 attempts=attempt,
+                similarity_warning=post_warning,
+                similar_to_book=similar_to_book,
+                distinctiveness_score=distinctiveness_score,
             )
         except RetryableGenerationError as exc:
             last_error = str(exc)
-            if attempt >= runtime.max_retries:
+            consecutive_provider_failures += 1
+            if consecutive_provider_failures >= 3 and provider_index < (len(provider_chain) - 1):
+                previous_provider = active_provider
+                provider_index += 1
+                active_provider = provider_chain[provider_index]
+                consecutive_provider_failures = 0
+                logger.warning(
+                    "Provider failover triggered for book %s model %s variant %s: %s -> %s",
+                    book_number,
+                    model,
+                    variant,
+                    previous_provider,
+                    active_provider,
+                )
+                continue
+            if attempt >= max_attempts:
                 break
-            backoff = runtime.request_delay * (2 ** (attempt - 1))
+            if "in cooldown" in str(exc).lower() and provider_index < (len(provider_chain) - 1):
+                previous_provider = active_provider
+                provider_index += 1
+                active_provider = provider_chain[provider_index]
+                consecutive_provider_failures = 0
+                logger.warning(
+                    "Provider cooldown failover for book %s model %s variant %s: %s -> %s",
+                    book_number,
+                    model,
+                    variant,
+                    previous_provider,
+                    active_provider,
+                )
+                continue
+            backoff = min(60.0, max(1.0, runtime.request_delay * (2 ** (attempt - 1))))
             logger.warning(
                 "Retryable error for book %s model %s variant %s (%d/%d): %s",
                 book_number,
                 model,
                 variant,
                 attempt,
-                runtime.max_retries,
+                max_attempts,
                 exc,
             )
             time.sleep(backoff)
         except GenerationError as exc:
             last_error = str(exc)
-            break
+            consecutive_provider_failures += 1
+            if consecutive_provider_failures >= 3 and provider_index < (len(provider_chain) - 1):
+                previous_provider = active_provider
+                provider_index += 1
+                active_provider = provider_chain[provider_index]
+                consecutive_provider_failures = 0
+                logger.warning(
+                    "Provider failover triggered for book %s model %s variant %s after GenerationError: %s -> %s",
+                    book_number,
+                    model,
+                    variant,
+                    previous_provider,
+                    active_provider,
+                )
+                continue
+            if attempt >= max_attempts:
+                break
         except requests.RequestException as exc:
             last_error = f"Request failure: {exc}"
-            if attempt >= runtime.max_retries:
+            consecutive_provider_failures += 1
+            if consecutive_provider_failures >= 3 and provider_index < (len(provider_chain) - 1):
+                previous_provider = active_provider
+                provider_index += 1
+                active_provider = provider_chain[provider_index]
+                consecutive_provider_failures = 0
+                logger.warning(
+                    "Provider failover triggered for book %s model %s variant %s after network failures: %s -> %s",
+                    book_number,
+                    model,
+                    variant,
+                    previous_provider,
+                    active_provider,
+                )
+                continue
+            if attempt >= max_attempts:
                 break
-            backoff = runtime.request_delay * (2 ** (attempt - 1))
+            backoff = min(60.0, max(1.0, runtime.request_delay * (2 ** (attempt - 1))))
             logger.warning(
                 "Network retry for book %s model %s variant %s (%d/%d): %s",
                 book_number,
                 model,
                 variant,
                 attempt,
-                runtime.max_retries,
+                max_attempts,
                 exc,
             )
             time.sleep(backoff)
@@ -1026,13 +1683,37 @@ def _generate_one(
         error=last_error or "Unknown generation failure",
         generation_time=elapsed,
         cost=0.0,
-        provider=provider,
-        attempts=runtime.max_retries,
+        provider=active_provider,
+        attempts=attempt,
     )
 
 
 def _provider_request_delay(runtime: config.Config, provider: str) -> float:
     return float(runtime.provider_request_delay.get(provider, runtime.request_delay))
+
+
+def _provider_fallback_chain(runtime: config.Config, *, primary: str) -> list[str]:
+    primary_token = str(primary or "").strip().lower()
+    any_key = runtime.has_any_api_key()
+
+    def _provider_enabled(token: str) -> bool:
+        if not any_key:
+            return True
+        return bool(runtime.get_api_key(token).strip())
+
+    providers: list[str] = []
+    if primary_token and _provider_enabled(primary_token):
+        providers.append(primary_token)
+    for provider in runtime.provider_keys.keys():
+        token = str(provider).strip().lower()
+        if not token or token in providers:
+            continue
+        if not _provider_enabled(token):
+            continue
+        providers.append(token)
+    if not providers and primary_token:
+        providers.append(primary_token)
+    return providers
 
 
 def _create_provider_instance(
@@ -1052,10 +1733,10 @@ def _create_provider_instance(
             "No API key configured for provider '%s'; using synthetic provider fallback for local iteration",
             provider,
         )
-        return SyntheticProvider(model=model)
+        return SyntheticProvider(model=model, runtime=runtime)
 
     provider_class = _PROVIDER_CLASS_MAP[provider]
-    return provider_class(model=model, api_key=api_key)
+    return provider_class(model=model, api_key=api_key, runtime=runtime)
 
 
 def _resolve_provider_model_name(provider: str, model: str) -> str:
@@ -1068,6 +1749,17 @@ def _resolve_provider_model_name(provider: str, model: str) -> str:
     if prefix.lower() == provider.lower() and suffix:
         return suffix
     return token
+
+
+def _model_provider_prefix(runtime: config.Config, model: str) -> str | None:
+    """Return explicit provider prefix for provider/model notation, when present."""
+    token = str(model).strip()
+    if "/" not in token:
+        return None
+    prefix = token.split("/", 1)[0].strip().lower()
+    if prefix in runtime.provider_keys:
+        return prefix
+    return None
 
 
 def _post_process_image(image: Image.Image, width: int, height: int) -> Image.Image:
@@ -1103,7 +1795,9 @@ def _download_image(url: str, timeout: float = 120.0) -> Image.Image:
 
 
 def _load_prompts_payload(prompts_path: Path) -> dict[str, Any]:
-    payload = json.loads(prompts_path.read_text(encoding="utf-8"))
+    payload = safe_json.load_json(prompts_path, {})
+    if not isinstance(payload, dict):
+        raise ValueError(f"Invalid prompts file at {prompts_path}: expected object payload")
     books = payload.get("books")
     if not isinstance(books, list):
         raise ValueError(f"Invalid prompts file at {prompts_path}: missing 'books' list")
@@ -1131,16 +1825,19 @@ def _model_to_directory(model: str) -> str:
     return model.strip().lower().replace("/", "__").replace(" ", "_")
 
 
-def _append_failures(path: Path, failed_results: list[GenerationResult]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+def _error_kind(error_message: str | None) -> str:
+    text = (error_message or "").lower()
+    if "429" in text or "rate" in text:
+        return "rate_limit"
+    if "timeout" in text or "timed out" in text:
+        return "timeout"
+    if "key" in text or "credential" in text or "auth" in text:
+        return "auth"
+    return "provider_error"
 
-    if path.exists():
-        try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            payload = {}
-    else:
-        payload = {}
+
+def _append_failures(path: Path, failed_results: list[GenerationResult]) -> None:
+    payload = safe_json.load_json(path, {})
 
     existing = payload.get("failures") if isinstance(payload, dict) else None
     if not isinstance(existing, list):
@@ -1156,7 +1853,9 @@ def _append_failures(path: Path, failed_results: list[GenerationResult]) -> None
                 "model": result.model,
                 "provider": result.provider,
                 "prompt": result.prompt,
+                "error_kind": _error_kind(result.error),
                 "error": result.error,
+                "retries": result.attempts,
             }
         )
 
@@ -1164,21 +1863,54 @@ def _append_failures(path: Path, failed_results: list[GenerationResult]) -> None
         "updated_at": timestamp,
         "failures": existing,
     }
-    path.write_text(json.dumps(output, indent=2, ensure_ascii=False), encoding="utf-8")
+    safe_json.atomic_write_json(path, output)
+
+
+def retry_failures(*, failures_path: Path, output_dir: Path, resume: bool = False) -> list[GenerationResult]:
+    """Retry only failed generation rows from failure log."""
+    payload = safe_json.load_json(failures_path, {})
+    failures = payload.get("failures", []) if isinstance(payload, dict) else []
+    if not isinstance(failures, list):
+        failures = []
+
+    results: list[GenerationResult] = []
+    seen: set[tuple[int, int, str]] = set()
+    for row in failures:
+        if not isinstance(row, dict):
+            continue
+        book = _safe_int(row.get("book_number"), 0)
+        variant = _safe_int(row.get("variant"), 0)
+        model = str(row.get("model", ""))
+        provider = str(row.get("provider", "")) or config.get_config().resolve_model_provider(model)
+        prompt = str(row.get("prompt", ""))
+        if book <= 0 or variant <= 0 or not model or not prompt:
+            continue
+        key = (book, variant, model)
+        if key in seen:
+            continue
+        seen.add(key)
+        output_path = output_dir / str(book) / _model_to_directory(model) / f"variant_{variant}.png"
+        results.append(
+            _generate_one(
+                book_number=book,
+                variant=variant,
+                prompt=prompt,
+                negative_prompt="",
+                model=model,
+                provider=provider,
+                output_path=output_path,
+                resume=resume,
+            )
+        )
+
+    return _sort_results(results)
 
 
 def _append_generation_plan(path: Path, plan_rows: list[dict[str, Any]]) -> None:
     if not plan_rows:
         return
 
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if path.exists():
-        try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            payload = {}
-    else:
-        payload = {}
+    payload = safe_json.load_json(path, {})
 
     existing = payload.get("items") if isinstance(payload, dict) else None
     if not isinstance(existing, list):
@@ -1189,11 +1921,18 @@ def _append_generation_plan(path: Path, plan_rows: list[dict[str, Any]]) -> None
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "items": existing,
     }
-    path.write_text(json.dumps(output, indent=2, ensure_ascii=False), encoding="utf-8")
+    safe_json.atomic_write_json(path, output)
 
 
 def _sort_results(results: list[GenerationResult]) -> list[GenerationResult]:
     return sorted(results, key=lambda item: (item.book_number, item.model, item.variant, item.image_path is None))
+
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def _parse_books_arg(raw: str | None) -> list[int] | None:

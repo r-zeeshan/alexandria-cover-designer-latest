@@ -35,6 +35,18 @@
   <main class="layout">
     <aside class="card">
       <h2>Controls</h2>
+      <details class="how-it-works">
+        <summary>How Cover Generation Works</summary>
+        <ol>
+          <li><strong>Select a book</strong> from catalog or Google Drive source.</li>
+          <li><strong>Choose prompt source</strong> (template, AI, library, or custom).</li>
+          <li><strong>Optionally enrich</strong> metadata and generate smart prompts.</li>
+          <li><strong>Review/edit prompt</strong> in the editor before generation.</li>
+          <li><strong>Select one or more models</strong> (Gemini Flash is usually cheapest).</li>
+          <li><strong>Click Generate</strong>; each variant gets a distinct style directive + seed.</li>
+          <li><strong>Review outputs</strong>, inspect prompt text, and download per variant ZIP.</li>
+        </ol>
+      </details>
 
       <div class="section-header">Source</div>
       <label>Cover Source</label>
@@ -56,6 +68,7 @@
         <select id="driveCoverSelect"></select>
         <div id="driveCoverStatus" class="status">Drive covers not loaded.</div>
       </div>
+      <div id="driveOutputInfo" class="status"></div>
 
       <hr class="section-divider" />
       <div class="section-header">Provider &amp; Models</div>
@@ -70,26 +83,41 @@
       </div>
       <div id="providerConnectivityList" class="status"></div>
 
-      <label>Models</label>
+      <label>
+        Models
+        <span class="help-tip" data-tip="Select one or more models. Use low-cost models for fast iteration and premium models for final-quality passes.">?</span>
+      </label>
       <div class="row u-mb-6">
         <button id="selectAllModels" type="button">Select All</button>
         <button id="clearModels" type="button" class="secondary">Clear</button>
       </div>
       <div class="models" id="modelsBox"></div>
+      <div class="model-info-panel" id="modelInfoPanel"></div>
 
       <hr class="section-divider" />
       <div class="section-header">Generation</div>
-      <label>Variations Per Model</label>
+      <label>
+        Variations Per Model
+        <span class="help-tip" data-tip="How many variants each selected model should generate. Each variant receives additional prompt variation and a unique generation seed.">?</span>
+      </label>
       <input id="variationCount" type="number" min="1" step="1" value="5" />
 
-      <label>Prompt Source</label>
+      <label>
+        Prompt Source
+        <span class="help-tip" data-tip="Template: default catalog prompt. AI-Generated: intelligent prompts for this book. Library: a saved prompt template. Custom: keep manual text exactly as written.">?</span>
+      </label>
       <select id="promptSource">
         <option value="template">Template</option>
         <option value="ai_generated">AI-Generated</option>
+        <option value="library">Library</option>
+        <option value="custom">Custom</option>
       </select>
 
-      <label>Prompt</label>
-      <textarea id="promptEditor" rows="7"></textarea>
+      <label>
+        Prompt
+        <span class="help-tip" data-tip="The medallion-scene prompt sent to the image model. You can edit this directly before clicking Generate.">?</span>
+      </label>
+      <textarea id="promptEditor" rows="7" placeholder="Your prompt appears here after selecting a book and source. You can edit it before generation."></textarea>
       <div id="promptQuality" class="status">Prompt quality: n/a</div>
 
       <div class="row u-mt-10">
@@ -100,8 +128,8 @@
       <hr class="section-divider" />
       <div class="section-header">AI Tools</div>
       <div class="row u-mt-8">
-        <button id="enrichBookBtn" type="button" class="ghost">Enrich This Book</button>
-        <button id="generateSmartPromptsBtn" type="button" class="ghost">Generate Smart Prompts</button>
+        <button id="enrichBookBtn" type="button" class="ghost" title="Analyze this title and infer richer themes, setting, and motifs to improve prompts.">Enrich This Book</button>
+        <button id="generateSmartPromptsBtn" type="button" class="ghost" title="Generate multiple intelligent prompt variants for this title and pick the strongest one.">Generate Smart Prompts</button>
       </div>
 
       <label class="u-mt-12">Book Enrichment</label>
@@ -112,7 +140,10 @@
 
       <hr class="section-divider" />
       <div class="section-header">Style &amp; Library</div>
-      <label>Style Anchors</label>
+      <label>
+        Style Anchors
+        <span class="help-tip" data-tip="Style anchors bias tone and rendering style. Combine anchors to steer aesthetic direction.">?</span>
+      </label>
       <div id="anchorChips" class="chips"></div>
 
       <label class="u-mt-12">Prompt Library</label>
@@ -135,6 +166,7 @@
         <div class="row u-mb-8">
           <button id="toggleOverlayBtn" class="ghost" type="button">Show Fit Overlay</button>
           <button id="openCompareBtn" type="button">Compare Selected</button>
+          <button id="downloadWinnerBtn" class="btn-download-winner picker-hidden" type="button">⬇ Download Picked Cover (ZIP)</button>
         </div>
         <div id="resultStatus" class="status">No generation started.</div>
         <div id="heartbeatPanel" class="heartbeat-panel"></div>
@@ -218,6 +250,10 @@
       modelSelection: new Set(),
       modelSelectionTouched: false,
       heartbeat: null,
+      modelCosts: {},
+      modelCompare: [],
+      recommendedModel: '',
+      driveOutputFolderId: '',
     };
 
     /* ─── Toast Notification System ─── */
@@ -283,6 +319,8 @@
       app.selectedProvider = 'all';
       app.defaultVariantsPerModel = Number(data.default_variants_per_model || 5);
       app.maxGenerationVariants = Math.max(app.defaultVariantsPerModel, Number(data.max_generation_variants || 20));
+      app.modelCosts = data.model_costs || {};
+      app.driveOutputFolderId = String(data.gdrive_output_folder_id || '');
       app.modelSelectionTouched = false;
       app.modelSelection = new Set(app.models);
 
@@ -296,6 +334,8 @@
       qs('promptSource').value = app.promptSource;
       bindEvents();
       await refreshProviderConnectivity({ force: false, silent: false });
+      await loadModelCompare();
+      renderModelInfoPanel();
       await loadDriveCovers({ silent: true });
       applyCoverSource();
       setStatus(`Ready. Catalog: ${app.catalog}. Choose a book and generate.`);
@@ -349,6 +389,10 @@
     function renderCoverPickers() {
       qs('coverSourceSelect').value = app.coverSource;
       qs('refreshDriveCoversBtn').style.display = app.coverSource === 'drive' ? '' : 'none';
+      const driveInfo = qs('driveOutputInfo');
+      driveInfo.textContent = app.driveOutputFolderId
+        ? `Picked covers sync target: Google Drive folder ${app.driveOutputFolderId}.`
+        : 'Google Drive output folder is not configured.';
     }
 
     function applyCoverSource() {
@@ -397,16 +441,19 @@
       const statusNode = qs('driveCoverStatus');
       if (!selected) {
         statusNode.textContent = 'No Drive cover selected.';
+        renderWinnerDownloadButton(null);
         return;
       }
       const book = Number(selected.book_number || 0);
       if (book <= 0) {
         statusNode.textContent = 'Selected cover does not map to a catalog book number.';
+        renderWinnerDownloadButton(null);
         return;
       }
       const bookExists = app.books.some(row => Number(row.number) === book);
       if (!bookExists) {
         statusNode.textContent = `Mapped to book ${book}, but it is not available in this catalog scope.`;
+        renderWinnerDownloadButton(null);
         return;
       }
       qs('bookSelect').value = String(book);
@@ -509,6 +556,7 @@
       syncModelSelection();
       if (!models.length) {
         box.innerHTML = '<em>No models for provider.</em>';
+        renderModelInfoPanel();
         return;
       }
       box.innerHTML = models.map(m => {
@@ -528,6 +576,69 @@
           renderHeartbeat();
         });
       });
+      renderModelInfoPanel();
+    }
+
+    async function loadModelCompare() {
+      try {
+        const res = await fetch(`/api/analytics/models/compare?${catalogQuery()}`);
+        const data = await res.json();
+        if (!res.ok || !data.ok) return false;
+        app.modelCompare = Array.isArray(data.models) ? data.models : [];
+        app.recommendedModel = String(data.recommended_model || '');
+        return true;
+      } catch (err) {
+        return false;
+      }
+    }
+
+    function renderModelInfoPanel() {
+      const node = qs('modelInfoPanel');
+      if (!node) return;
+      const selected = selectedModels();
+      const rowsRaw = Array.isArray(app.modelCompare) ? app.modelCompare : [];
+      const rows = rowsRaw.filter(row => selected.includes(String(row.model || '')));
+      const fallbackRows = selected.map(model => ({
+        model,
+        avg_cost_per_variant: Number(app.modelCosts[model] || 0),
+        avg_generation_time_seconds: 0,
+        avg_quality: 0,
+      }));
+      const displayRows = rows.length ? rows : fallbackRows;
+      if (!displayRows.length) {
+        node.innerHTML = '<div class="model-info-header">Model Pricing &amp; Speed</div><div class="status">Select model(s) to see cost/speed guidance.</div>';
+        return;
+      }
+
+      let cheapest = displayRows[0];
+      displayRows.forEach(row => {
+        if (Number(row.avg_cost_per_variant || 999) < Number(cheapest.avg_cost_per_variant || 999)) cheapest = row;
+      });
+      const recommended = app.recommendedModel && displayRows.some(row => String(row.model || '') === app.recommendedModel)
+        ? app.recommendedModel
+        : String(cheapest.model || '');
+
+      node.innerHTML = `
+        <div class="model-info-header">Model Pricing &amp; Speed</div>
+        <table class="model-info-table">
+          <thead>
+            <tr><th>Model</th><th>Cost/img</th><th>Speed</th><th>Quality</th></tr>
+          </thead>
+          <tbody>
+            ${displayRows.map(row => {
+              const model = String(row.model || '');
+              const cheapestClass = model === String(cheapest.model || '') ? ' class="model-cheapest"' : '';
+              const cost = Number(row.avg_cost_per_variant || app.modelCosts[model] || 0);
+              const speed = Number(row.avg_generation_time_seconds || 0);
+              const quality = Number(row.avg_quality || 0);
+              const qualityLabel = quality >= 85 ? 'Great' : quality >= 70 ? 'Good' : quality > 0 ? 'Fair' : 'n/a';
+              const speedLabel = speed > 0 ? `~${Math.max(1, Math.round(speed))}s` : 'n/a';
+              return `<tr${cheapestClass}><td>${escapeHtml(model)}</td><td>$${cost.toFixed(4)}</td><td>${speedLabel}</td><td>${qualityLabel}</td></tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+        <p class="model-recommendation">Recommended now: ${escapeHtml(recommended)}. Cheapest now: ${escapeHtml(String(cheapest.model || 'n/a'))}.</p>
+      `;
     }
 
     function syncModelSelection() {
@@ -604,7 +715,10 @@
           const item = app.promptLibrary.find(p => p.id === btn.dataset.id);
           if (!item) return;
           const book = currentBook();
+          app.promptSource = 'library';
+          qs('promptSource').value = app.promptSource;
           qs('promptEditor').value = (item.prompt_template || '').replace('{title}', book.title);
+          qs('promptQuality').textContent = 'Prompt quality: n/a (library mode)';
         });
       });
     }
@@ -686,8 +800,16 @@
         qs('promptQuality').textContent = `Prompt quality: overall ${Number(quality.overall || 0).toFixed(3)} · specificity ${Number(quality.specificity || 0).toFixed(3)} · visual ${Number(quality.visual_richness || 0).toFixed(3)} · compliance ${Number(quality.constraint_compliance || 0).toFixed(3)}`;
         return;
       }
-      qs('promptEditor').value = book.default_prompt || `Classical medallion illustration for ${book.title}`;
-      qs('promptQuality').textContent = 'Prompt quality: n/a (template mode)';
+      if (app.promptSource === 'template') {
+        qs('promptEditor').value = book.default_prompt || `Classical medallion illustration for ${book.title}`;
+        qs('promptQuality').textContent = 'Prompt quality: n/a (template mode)';
+        return;
+      }
+      if (app.promptSource === 'library') {
+        qs('promptQuality').textContent = 'Prompt quality: n/a (library mode)';
+        return;
+      }
+      qs('promptQuality').textContent = 'Prompt quality: n/a (custom mode)';
     }
 
     function onBookChange() {
@@ -696,6 +818,7 @@
       renderEnrichmentPanel(book);
       renderSmartPromptList(book);
       applyPromptSource(book);
+      renderWinnerDownloadButton(book);
       loadHistory(book.number);
       if (app.coverSource !== 'drive' && book.local_cover_available === false) {
         qs('resultStatus').textContent = 'No local cover found for this title. Switch Cover Source to Google Drive to download on demand.';
@@ -717,6 +840,8 @@
       app.intelligentPromptsAvailable = Boolean(data.intelligent_prompts_available);
       app.enrichmentAvailable = Boolean(data.enrichment_available);
       app.promptPerformance = data.prompt_performance || app.promptPerformance || {};
+      app.modelCosts = data.model_costs || app.modelCosts || {};
+      app.driveOutputFolderId = String(data.gdrive_output_folder_id || app.driveOutputFolderId || '');
       app.selectedDriveCoverId = selectedDriveId;
       syncModelSelection();
 
@@ -730,6 +855,8 @@
       renderAnchors();
       renderLibrary();
       await refreshProviderConnectivity({ force: false, silent: true });
+      await loadModelCompare();
+      renderModelInfoPanel();
       await loadDriveCovers({ silent: true });
       applyCoverSource();
     }
@@ -1102,6 +1229,92 @@
       }
     }
 
+    function renderWinnerDownloadButton(book) {
+      const btn = qs('downloadWinnerBtn');
+      if (!btn) return;
+      const winnerVariant = Number(book && book.winner_variant ? book.winner_variant : 0);
+      btn.classList.toggle('picker-hidden', winnerVariant <= 0);
+      btn.dataset.book = String(book && book.number ? book.number : 0);
+      btn.dataset.variant = String(winnerVariant);
+      btn.title = winnerVariant > 0
+        ? `Winner selected: variant ${winnerVariant}. Download print-ready package.`
+        : 'No winner selected for this book yet.';
+    }
+
+    async function downloadVariant(book, variant, model, btn) {
+      if (!btnStartLoading(btn, 'Preparing...')) return;
+      try {
+        const params = new URLSearchParams({
+          book: String(book),
+          variant: String(variant),
+        });
+        if (model) params.set('model', String(model));
+        const resp = await fetch(`/api/variant-download?${params.toString()}&${catalogQuery()}`);
+        if (!resp.ok) {
+          const payload = await resp.json().catch(() => ({}));
+          throw new Error(payload.error || payload.message || `HTTP ${resp.status}`);
+        }
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `book_${book}_variant_${variant}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        btnStopLoading(btn, true);
+        showToast('Variant download ready.', 'success', 2200);
+      } catch (err) {
+        btnStopLoading(btn, false);
+        showToast('Download failed: ' + ((err && err.message) || err || 'unknown error'), 'error');
+      }
+    }
+
+    async function downloadWinner(bookNumber, btn) {
+      if (!bookNumber || Number(bookNumber) <= 0) return;
+      if (!btnStartLoading(btn, 'Preparing...')) return;
+      try {
+        const resp = await fetch(`/api/winner-download?book=${encodeURIComponent(bookNumber)}&${catalogQuery()}`);
+        if (!resp.ok) {
+          const payload = await resp.json().catch(() => ({}));
+          throw new Error(payload.error || payload.message || `HTTP ${resp.status}`);
+        }
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `book_${bookNumber}_winner.zip`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        btnStopLoading(btn, true);
+        showToast('Winner package download ready.', 'success', 2200);
+      } catch (err) {
+        btnStopLoading(btn, false);
+        showToast('Winner download failed: ' + ((err && err.message) || err || 'unknown error'), 'error');
+      }
+    }
+
+    function togglePromptPanel(btn) {
+      const root = btn && btn.closest('.img-card-prompt');
+      if (!root) return;
+      const expanded = root.classList.toggle('expanded');
+      btn.textContent = expanded ? 'Hide Prompt ▴' : 'Show Prompt ▾';
+    }
+
+    async function copyPromptToClipboard(btn, prompt) {
+      try {
+        await navigator.clipboard.writeText(String(prompt || ''));
+        btnStopLoading(btn, true);
+        showToast('Prompt copied.', 'success', 1800);
+      } catch (err) {
+        btnStopLoading(btn, false);
+        showToast('Prompt copy failed.', 'error');
+      }
+    }
+
     function renderResults() {
       app.compareSelections.clear();
       const root = qs('results');
@@ -1122,9 +1335,13 @@
         grouped[model].forEach((item, idx) => {
           const imagePath = item.composited_path || item.image_path;
           if (!imagePath) return;
-          const compareId = `${model}::${idx}`;
+          const compareId = `${model}::${Number(item.variant || item.variant_id || idx + 1)}::${idx}`;
           const overlayPath = item.fit_overlay_path || '';
           const stackClass = (app.fitOverlayEnabled && overlayPath) ? 'img-stack show-overlay' : 'img-stack';
+          const variantNumber = Number(item.variant || item.variant_id || idx + 1);
+          const promptText = String(item.prompt || '').trim();
+          const activeBook = currentBook();
+          const bookNumber = Number(item.book_number || (activeBook && activeBook.number) || 0);
           const card = document.createElement('div');
           card.className = 'img-card';
           card.innerHTML = `
@@ -1133,10 +1350,31 @@
               ${overlayPath ? `<img class="overlay" src="/${escapeHtml(overlayPath)}" alt="overlay" />` : ''}
             </div>
             <label><input type="checkbox" data-compare-id="${escapeHtml(compareId)}" data-path="${escapeHtml(imagePath)}" data-model="${escapeHtml(model)}" /> compare</label>
+            <div class="img-card-prompt">
+              <button type="button" class="prompt-toggle" data-prompt-toggle>Show Prompt ▾</button>
+              <div class="prompt-text">${escapeHtml(promptText || 'Prompt not available for this variant.')}</div>
+            </div>
+            <div class="img-card-actions">
+              <button type="button" class="btn-download" data-download-variant="${variantNumber}" data-download-model="${escapeHtml(model)}">⬇ Download</button>
+              <button type="button" class="btn-copy-prompt" data-copy-prompt>📋 Copy Prompt</button>
+            </div>
             <div class="meta">cost: $${Number(item.cost || 0).toFixed(3)} · ${Number(item.generation_time || 0).toFixed(2)}s</div>
           `;
           card.querySelector('img[data-zoom-path]').addEventListener('click', (e) => openZoom(e.target.getAttribute('data-zoom-path')));
           card.querySelector('input[data-compare-id]').addEventListener('change', handleCompareToggle);
+          const promptToggle = card.querySelector('[data-prompt-toggle]');
+          if (promptToggle) promptToggle.addEventListener('click', () => togglePromptPanel(promptToggle));
+          const copyBtn = card.querySelector('[data-copy-prompt]');
+          if (copyBtn) {
+            copyBtn.addEventListener('click', () => {
+              if (!btnStartLoading(copyBtn, 'Copying...')) return;
+              copyPromptToClipboard(copyBtn, promptText);
+            });
+          }
+          const downloadBtn = card.querySelector('[data-download-variant]');
+          if (downloadBtn) {
+            downloadBtn.addEventListener('click', () => downloadVariant(bookNumber, variantNumber, model, downloadBtn));
+          }
           images.appendChild(card);
         });
 
@@ -1595,6 +1833,11 @@
       });
       qs('libraryFilter').addEventListener('input', renderLibrary);
       qs('openCompareBtn').addEventListener('click', openCompareModal);
+      qs('downloadWinnerBtn').addEventListener('click', () => {
+        const btn = qs('downloadWinnerBtn');
+        const book = Number(btn.dataset.book || 0);
+        downloadWinner(book, btn);
+      });
       qs('closeCompareBtn').addEventListener('click', () => qs('compareModal').style.display = 'none');
       qs('compareModal').addEventListener('click', (e) => { if (e.target === qs('compareModal')) qs('compareModal').style.display = 'none'; });
       qs('zoomModal').addEventListener('click', () => qs('zoomModal').style.display = 'none');

@@ -1,0 +1,10 @@
+{
+  "models": {
+    "flux-2-pro": {
+      "style": "concise",
+      "prompt_template": "Iconic circular illustration for {title}, classical style, interior scene only, edge to edge, no text, no border, no frame.",
+      "updated_at": "2026-02-21T17:05:03.945868+00:00",
+      "average_score": 0.7922
+    }
+  }
+}

@@ -3,15 +3,20 @@
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
-logger = logging.getLogger(__name__)
+try:
+    from src import safe_json
+    from src.logger import get_logger
+except ModuleNotFoundError:  # pragma: no cover
+    import safe_json  # type: ignore
+    from logger import get_logger  # type: ignore
+
+logger = get_logger(__name__)
 
 DEFAULT_CATALOG_PATH = Path("config/book_catalog.json")
 DEFAULT_TEMPLATES_PATH = Path("config/prompt_templates.json")
@@ -19,6 +24,23 @@ DEFAULT_OUTPUT_PATH = Path("config/book_prompts.json")
 
 REQUIRED_PHRASE_COMPOSITION = "circular vignette composition"
 REQUIRED_PHRASE_TEXT = "no text, no letters, no words, no watermarks"
+REQUIRED_PHRASE_NO_FRAME = (
+    "no border, no frame, no decorative edge, no ornamental border, interior scene only, edge to edge"
+)
+
+VARIATION_DIRECTIVES = [
+    "",
+    "Use a warm palette with amber and antique gold tones.",
+    "Use a cool palette with deep blue and silver accents.",
+    "Emphasize dramatic chiaroscuro lighting and strong contrast.",
+    "Render with muted aged-canvas texture and restrained saturation.",
+    "Emphasize intricate fine detail and delicate linework.",
+    "Use rich jewel tones with emerald, ruby, and sapphire accents.",
+    "Render in a loose impressionistic brushwork style.",
+    "Use earthy sienna, umber, and ochre with naturalistic light.",
+    "Create a moody atmospheric composition with soft depth.",
+    "Use bold graphic silhouettes and high-contrast value shapes.",
+]
 
 
 @dataclass
@@ -112,6 +134,9 @@ def _ensure_prompt_constraints(prompt: str) -> str:
         low = prompt.lower()
     if REQUIRED_PHRASE_TEXT not in low:
         prompt += f", {REQUIRED_PHRASE_TEXT}"
+        low = prompt.lower()
+    if "no border" not in low and "no frame" not in low:
+        prompt += f", {REQUIRED_PHRASE_NO_FRAME}"
 
     while _word_count(prompt) < 40:
         prompt += ", warm cinematic atmosphere, balanced composition, intricate period detail"
@@ -120,6 +145,23 @@ def _ensure_prompt_constraints(prompt: str) -> str:
         prompt = " ".join(prompt.split()[:80]).rstrip(",")
 
     return prompt
+
+
+def enforce_prompt_constraints(prompt: str) -> str:
+    """Public wrapper used by runtime generation paths."""
+    return _ensure_prompt_constraints(prompt)
+
+
+def diversify_prompt(base_prompt: str, variant_index: int) -> str:
+    """Inject style variation directives so variants are meaningfully distinct."""
+    text = re.sub(r"\s+", " ", str(base_prompt or "")).strip()
+    if not text:
+        return text
+    token = max(0, int(variant_index) - 1)
+    directive = VARIATION_DIRECTIVES[token % len(VARIATION_DIRECTIVES)].strip()
+    if not directive:
+        return text
+    return f"{text} {directive}".strip()
 
 
 def _motif_for_book(book: dict[str, Any]) -> BookMotif:
@@ -440,6 +482,7 @@ def generate_prompts_for_book(book_entry: dict, templates: dict) -> list[BookPro
 
         prompt = cfg["template"].format(**format_kwargs)
         prompt = _strip_forbidden(prompt, book_entry["title"], book_entry["author"])
+        prompt = diversify_prompt(prompt, variant_id)
         prompt = _ensure_prompt_constraints(prompt)
 
         prompts.append(
@@ -462,11 +505,13 @@ def generate_prompts_for_book(book_entry: dict, templates: dict) -> list[BookPro
 
 def generate_all_prompts(catalog_path: Path, templates_path: Path) -> list[dict[str, Any]]:
     """Generate all prompt records for the full catalog."""
-    catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
-    templates = json.loads(templates_path.read_text(encoding="utf-8"))
+    catalog = safe_json.load_json(catalog_path, [])
+    templates = safe_json.load_json(templates_path, {})
 
     all_records: list[dict[str, Any]] = []
-    for book in catalog:
+    for book in catalog if isinstance(catalog, list) else []:
+        if not isinstance(book, dict):
+            continue
         variant_prompts = generate_prompts_for_book(book, templates)
         record = {
             "number": book["number"],
@@ -482,14 +527,13 @@ def generate_all_prompts(catalog_path: Path, templates_path: Path) -> list[dict[
 
 def save_prompts(prompts: list[dict[str, Any]], output_path: Path) -> None:
     """Save generated prompts as JSON."""
-    output_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "book_count": len(prompts),
         "variant_count_per_book": 5,
         "total_prompts": len(prompts) * 5,
         "books": prompts,
     }
-    output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    safe_json.atomic_write_json(output_path, payload)
     logger.info("Wrote %d prompts for %d books to %s", len(prompts) * 5, len(prompts), output_path)
 
 
