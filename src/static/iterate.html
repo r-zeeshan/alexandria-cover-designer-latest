@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="/src/static/iterate.css" />
 <title>Alexandria Iterate</title>
 </head>
-<body>
+<body class="iterate-page">
   <nav class="nav">
     <a class="active" href="/iterate">Iterate</a>
     <a href="/review">Review</a>
@@ -237,11 +237,12 @@
 
     /* ─── Button Loading State Helpers ─── */
     function btnStartLoading(btn, loadingText) {
-      if (!btn) return;
+      if (!btn || btn.classList.contains('btn-loading')) return false;
       btn._originalText = btn.textContent;
       btn.textContent = loadingText || btn.textContent;
       btn.classList.add('btn-loading');
       btn.disabled = true;
+      return true;
     }
 
     function btnStopLoading(btn, success = true) {
@@ -436,13 +437,18 @@
         if (data.error) {
           statusNode.textContent = `Drive error: ${data.error}`;
           if (!silent) setStatus('Google Drive cover list unavailable.');
-          return;
+          if (!silent) showToast(`Drive error: ${data.error}`, 'error');
+          return false;
         }
         statusNode.textContent = `Loaded ${count} cover item(s) from ${mode}.`;
+        if (!silent) showToast(`Loaded ${count} Drive cover item(s).`, 'success', 2200);
+        return true;
       } catch (error) {
         const message = (error && error.message) ? error.message : String(error || 'unknown error');
         statusNode.textContent = `Drive error: ${message}`;
         if (!silent) setStatus('Failed to load Google Drive covers.');
+        if (!silent) showToast(`Drive load failed: ${message}`, 'error');
+        return false;
       } finally {
         refreshBtn.disabled = false;
       }
@@ -552,7 +558,7 @@
         if (!res.ok || !data.ok) {
           app.providerConnectivityError = data.error || data.message || 'Connectivity check failed.';
           if (!silent) qs('providerStatus').textContent = app.providerConnectivityError;
-          return;
+          return false;
         }
         app.providerConnectivity = data.providers || {};
         app.providerConnectivityCheckedAt = data.checked_at || '';
@@ -560,9 +566,11 @@
         renderProviders();
         renderModels();
         renderProviderConnectivityStatus();
+        return true;
       } catch (error) {
         app.providerConnectivityError = (error && error.message) ? error.message : String(error || 'unknown error');
         if (!silent) qs('providerStatus').textContent = `Connectivity check failed: ${app.providerConnectivityError}`;
+        return false;
       }
     }
 
@@ -730,7 +738,7 @@
       const book = currentBook();
       if (!book) return;
       const btn = qs('enrichBookBtn');
-      btnStartLoading(btn, 'Enriching...');
+      if (!btnStartLoading(btn, 'Enriching...')) return;
       setStatus(`Enriching book ${book.number}...`);
       try {
         const res = await fetch(`/api/enrich-book?${catalogQuery()}`, {
@@ -759,7 +767,7 @@
       const book = currentBook();
       if (!book) return;
       const btn = qs('generateSmartPromptsBtn');
-      btnStartLoading(btn, 'Generating...');
+      if (!btnStartLoading(btn, 'Generating...')) return;
       setStatus(`Generating smart prompts for book ${book.number}...`);
       try {
         const res = await fetch(`/api/generate-smart-prompts?${catalogQuery()}`, {
@@ -831,7 +839,7 @@
       const variants = Number(qs('variationCount').value);
       const provider = qs('providerSelect').value || 'all';
       const genBtn = qs('generateBtn');
-      btnStartLoading(genBtn, 'Generating...');
+      if (!btnStartLoading(genBtn, 'Generating...')) return;
       updateHeartbeat({
         jobId: '',
         status: 'submitting',
@@ -849,7 +857,11 @@
         provider,
         error: '',
       });
-      if (!book) { btnStopLoading(genBtn, false); return; }
+      if (!book) {
+        btnStopLoading(genBtn, false);
+        showToast('No book selected.', 'error');
+        return;
+      }
       let targetBookNumber = Number(book.number || 0);
       if (app.coverSource === 'drive') {
         const mappedBook = Number(selectedCover && selectedCover.book_number ? selectedCover.book_number : 0);
@@ -857,12 +869,14 @@
           qs('resultStatus').textContent = 'Select a Google Drive cover first.';
           updateHeartbeat({ status: 'blocked', message: 'Select a Google Drive cover first.', error: '' });
           btnStopLoading(genBtn, false);
+          showToast('Select a Google Drive cover first.', 'error');
           return;
         }
         if (mappedBook <= 0) {
           qs('resultStatus').textContent = 'Selected Drive cover is not mapped to a catalog book number.';
           updateHeartbeat({ status: 'blocked', message: 'Selected Drive cover is not mapped to a catalog book number.', error: '' });
           btnStopLoading(genBtn, false);
+          showToast('Selected Drive cover is not mapped to a catalog book number.', 'error');
           return;
         }
         const inScope = app.books.some(row => Number(row.number) === mappedBook);
@@ -870,6 +884,7 @@
           qs('resultStatus').textContent = `Selected Drive cover maps to book ${mappedBook}, which is outside the current catalog scope.`;
           updateHeartbeat({ status: 'blocked', message: `Drive cover maps to out-of-scope book ${mappedBook}.`, error: '' });
           btnStopLoading(genBtn, false);
+          showToast(`Drive cover maps to out-of-scope book ${mappedBook}.`, 'error');
           return;
         }
         targetBookNumber = mappedBook;
@@ -878,6 +893,7 @@
         qs('resultStatus').textContent = 'Select at least one model.';
         updateHeartbeat({ status: 'blocked', message: 'Select at least one model.', error: '' });
         btnStopLoading(genBtn, false);
+        showToast('Select at least one model.', 'error');
         return;
       }
       const payload = {
@@ -896,65 +912,81 @@
         async: true,
       };
 
-      qs('resultStatus').textContent = 'Generating...';
-      const res = await fetch(`/api/generate?${catalogQuery()}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        qs('resultStatus').textContent = data.error || data.message || 'Generation request failed.';
+      try {
+        qs('resultStatus').textContent = 'Generating...';
+        const res = await fetch(`/api/generate?${catalogQuery()}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+          qs('resultStatus').textContent = data.error || data.message || 'Generation request failed.';
+          updateHeartbeat({
+            status: 'failed',
+            stage: 'request',
+            message: data.message || 'Generation request failed.',
+            error: data.error || data.message || 'request failed',
+            lastUpdateAt: new Date().toISOString(),
+          });
+          btnStopLoading(genBtn, false);
+          showToast(data.error || 'Generation failed.', 'error');
+          return;
+        }
+
+        if (data.results && data.results.length) {
+          app.latestResults = data.results || [];
+          renderResults();
+          loadHistory(book.number);
+          qs('resultStatus').textContent = data.message || 'Generation complete.';
+          updateHeartbeat({
+            status: 'completed',
+            stage: 'complete',
+            message: data.message || 'Generation complete.',
+            attempts: 1,
+            maxAttempts: 1,
+            lastUpdateAt: new Date().toISOString(),
+            error: '',
+          });
+          btnStopLoading(genBtn, true);
+          showToast('Generation complete!', 'success');
+          return;
+        }
+
+        const job = data.job || {};
+        if (!job.id) {
+          qs('resultStatus').textContent = 'Generation job queued but no job id returned.';
+          updateHeartbeat({
+            status: 'queued',
+            stage: 'queue',
+            message: 'Generation queued, but job id was not returned.',
+            lastUpdateAt: new Date().toISOString(),
+          });
+          btnStopLoading(genBtn, false);
+          showToast('Generation queued but no job id was returned.', 'error');
+          return;
+        }
+        updateHeartbeat({
+          jobId: String(job.id),
+          status: String(job.status || 'queued'),
+          stage: inferJobStage(job),
+          message: `Job ${job.id} queued.`,
+          attempts: Number(job.attempts || 0),
+          maxAttempts: Number(job.max_attempts || 0),
+          lastUpdateAt: String(job.updated_at || new Date().toISOString()),
+        });
+        await pollGenerationJob(job.id, Number(book.number));
+      } catch (err) {
+        const message = String((err && err.message) || err || 'request error');
+        qs('resultStatus').textContent = 'Generation request failed before queueing.';
         updateHeartbeat({
           status: 'failed',
           stage: 'request',
-          message: data.message || 'Generation request failed.',
-          error: data.error || data.message || 'request failed',
+          message: 'Generation request failed before queueing.',
+          error: message,
           lastUpdateAt: new Date().toISOString(),
         });
         btnStopLoading(genBtn, false);
-        showToast(data.error || 'Generation failed.', 'error');
-        return;
+        showToast(`Generation request failed: ${message}`, 'error');
       }
-
-      if (data.results && data.results.length) {
-        app.latestResults = data.results || [];
-        renderResults();
-        loadHistory(book.number);
-        qs('resultStatus').textContent = data.message || 'Generation complete.';
-        updateHeartbeat({
-          status: 'completed',
-          stage: 'complete',
-          message: data.message || 'Generation complete.',
-          attempts: 1,
-          maxAttempts: 1,
-          lastUpdateAt: new Date().toISOString(),
-          error: '',
-        });
-        btnStopLoading(genBtn, true);
-        showToast('Generation complete!', 'success');
-        return;
-      }
-
-      const job = data.job || {};
-      if (!job.id) {
-        qs('resultStatus').textContent = 'Generation job queued but no job id returned.';
-        updateHeartbeat({
-          status: 'queued',
-          stage: 'queue',
-          message: 'Generation queued, but job id was not returned.',
-          lastUpdateAt: new Date().toISOString(),
-        });
-        return;
-      }
-      updateHeartbeat({
-        jobId: String(job.id),
-        status: String(job.status || 'queued'),
-        stage: inferJobStage(job),
-        message: `Job ${job.id} queued.`,
-        attempts: Number(job.attempts || 0),
-        maxAttempts: Number(job.max_attempts || 0),
-        lastUpdateAt: String(job.updated_at || new Date().toISOString()),
-      });
-      await pollGenerationJob(job.id, Number(book.number));
     }
 
     async function pollGenerationJob(jobId, bookNumber) {
@@ -962,12 +994,21 @@
       const startedAt = Date.now();
       const timeoutMs = 30 * 60 * 1000;
       while (Date.now() - startedAt < timeoutMs) {
-        const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}?${catalogQuery()}`);
-        const data = await res.json();
-        if (!res.ok || !data.ok) {
-          qs('resultStatus').textContent = data.error || 'Job polling failed.';
+        let data = {};
+        try {
+          const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}?${catalogQuery()}`);
+          data = await res.json();
+          if (!res.ok || !data.ok) {
+            qs('resultStatus').textContent = data.error || 'Job polling failed.';
+            btnStopLoading(genBtn, false);
+            showToast('Job polling failed.', 'error');
+            return;
+          }
+        } catch (err) {
+          const message = String((err && err.message) || err || 'Job polling failed.');
+          qs('resultStatus').textContent = message;
           btnStopLoading(genBtn, false);
-          showToast('Job polling failed.', 'error');
+          showToast(message, 'error');
           return;
         }
 
@@ -1035,7 +1076,7 @@
 
     async function testConnection() {
       const btn = qs('testConnectionBtn');
-      btnStartLoading(btn, 'Testing...');
+      if (!btnStartLoading(btn, 'Testing...')) return;
       qs('providerStatus').textContent = 'Testing...';
       try {
         const provider = qs('providerSelect').value || 'all';
@@ -1043,14 +1084,21 @@
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider, catalog: app.catalog }),
         });
         const data = await res.json();
+        if (!res.ok || !data.ok) {
+          const message = data.error || data.message || 'Connection test failed.';
+          qs('providerStatus').textContent = message;
+          btnStopLoading(btn, false);
+          showToast(message, 'error');
+          return;
+        }
         const rows = (data.report && data.report.providers) || [];
         qs('providerStatus').textContent = rows.map(r => `${r.provider}: ${r.status}`).join(' | ') || 'No provider results.';
-        await refreshProviderConnectivity({ force: true, silent: false });
-        btnStopLoading(btn, true);
-        showToast('Connection test complete.', 'success');
+        const connectivityOk = await refreshProviderConnectivity({ force: true, silent: false });
+        btnStopLoading(btn, connectivityOk);
+        showToast(connectivityOk ? 'Connection test complete.' : (app.providerConnectivityError || 'Provider connectivity check failed.'), connectivityOk ? 'success' : 'error');
       } catch (err) {
         btnStopLoading(btn, false);
-        showToast('Connection test failed.', 'error');
+        showToast(`Connection test failed: ${String((err && err.message) || err || 'unknown error')}`, 'error');
       }
     }
 
@@ -1101,11 +1149,19 @@
     async function loadWeakBooks() {
       const threshold = Number(qs('weakThreshold').value || 0.75);
       qs('weakStatus').textContent = 'Loading weak books...';
-      const res = await fetch(`/api/weak-books?threshold=${encodeURIComponent(threshold)}&${catalogQuery()}`);
-      const data = await res.json();
-      app.weakBooks = data.books || [];
-      renderWeakBooks();
-      qs('weakStatus').textContent = `Found ${app.weakBooks.length} weak books below ${threshold.toFixed(2)}.`;
+      try {
+        const res = await fetch(`/api/weak-books?threshold=${encodeURIComponent(threshold)}&${catalogQuery()}`);
+        const data = await res.json();
+        app.weakBooks = data.books || [];
+        renderWeakBooks();
+        qs('weakStatus').textContent = `Found ${app.weakBooks.length} weak books below ${threshold.toFixed(2)}.`;
+        showToast(`Loaded ${app.weakBooks.length} weak book(s).`, 'success', 2200);
+      } catch (err) {
+        const message = String((err && err.message) || err || 'Failed to load weak books.');
+        qs('weakStatus').textContent = message;
+        showToast(message, 'error');
+        throw err;
+      }
     }
 
     function renderWeakBooks() {
@@ -1139,8 +1195,24 @@
         `;
       }).join('');
 
-      root.querySelectorAll('[data-regen-book]').forEach(btn => btn.addEventListener('click', () => regenerateBook(Number(btn.dataset.regenBook), false)));
-      root.querySelectorAll('[data-accept-book]').forEach(btn => btn.addEventListener('click', () => regenerateBook(Number(btn.dataset.acceptBook), true)));
+      root.querySelectorAll('[data-regen-book]').forEach(btn => btn.addEventListener('click', async () => {
+        if (!btnStartLoading(btn, 'Re-generating...')) return;
+        try {
+          const ok = await regenerateBook(Number(btn.dataset.regenBook), false);
+          btnStopLoading(btn, ok);
+        } catch (err) {
+          btnStopLoading(btn, false);
+        }
+      }));
+      root.querySelectorAll('[data-accept-book]').forEach(btn => btn.addEventListener('click', async () => {
+        if (!btnStartLoading(btn, 'Applying...')) return;
+        try {
+          const ok = await regenerateBook(Number(btn.dataset.acceptBook), true);
+          btnStopLoading(btn, ok);
+        } catch (err) {
+          btnStopLoading(btn, false);
+        }
+      }));
       root.querySelectorAll('[data-keep-book]').forEach(btn => btn.addEventListener('click', () => keepCurrent(Number(btn.dataset.keepBook))));
     }
 
@@ -1154,22 +1226,33 @@
         auto_accept: Boolean(autoAccept),
         threshold: Number(qs('weakThreshold').value || 0.75),
       };
-      const res = await fetch(`/api/regenerate?${catalogQuery()}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        qs('weakStatus').textContent = data.error || 'Re-generation failed.';
-        return;
-      }
+      try {
+        const res = await fetch(`/api/regenerate?${catalogQuery()}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+          const message = data.error || 'Re-generation failed.';
+          qs('weakStatus').textContent = message;
+          showToast(message, 'error');
+          return false;
+        }
 
-      const resultRes = await fetch(`/api/regeneration-results?book=${book}&${catalogQuery()}`);
-      const resultData = await resultRes.json();
-      const first = (resultData.results || [])[0];
-      if (first) app.regenResults[book] = first;
-      renderWeakBooks();
-      qs('weakStatus').textContent = `Re-generation finished for book ${book}.`;
-      loadWeakBooks();
+        const resultRes = await fetch(`/api/regeneration-results?book=${book}&${catalogQuery()}`);
+        const resultData = await resultRes.json();
+        const first = (resultData.results || [])[0];
+        if (first) app.regenResults[book] = first;
+        renderWeakBooks();
+        qs('weakStatus').textContent = `Re-generation finished for book ${book}.`;
+        showToast(`Re-generation finished for book ${book}.`, 'success', 2200);
+        await loadWeakBooks();
+        return true;
+      } catch (err) {
+        const message = String((err && err.message) || err || 'Re-generation failed.');
+        qs('weakStatus').textContent = message;
+        showToast(message, 'error');
+        return false;
+      }
     }
 
     function keepCurrent(book) {
@@ -1181,15 +1264,20 @@
     async function regenerateAllWeakBooks() {
       if (!app.weakBooks.length) {
         qs('weakStatus').textContent = 'No weak books loaded.';
-        return;
+        return false;
       }
       let done = 0;
+      let allOk = true;
       for (const row of app.weakBooks) {
         done += 1;
         qs('weakStatus').textContent = `Batch re-generation ${done}/${app.weakBooks.length} (book ${row.book})...`;
-        await regenerateBook(Number(row.book), false);
+        const ok = await regenerateBook(Number(row.book), false);
+        if (!ok) allOk = false;
       }
-      qs('weakStatus').textContent = `Batch re-generation complete (${app.weakBooks.length} books).`;
+      qs('weakStatus').textContent = allOk
+        ? `Batch re-generation complete (${app.weakBooks.length} books).`
+        : `Batch re-generation completed with failures (${app.weakBooks.length} books).`;
+      return allOk;
     }
 
     function switchTab(name) {
@@ -1275,7 +1363,7 @@
       const book = currentBook();
       if (!book) return;
       const btn = qs('savePromptBtn');
-      btnStartLoading(btn, 'Saving...');
+      if (!btnStartLoading(btn, 'Saving...')) return;
       try {
         const payload = {
           catalog: app.catalog,
@@ -1448,9 +1536,16 @@
         applyCoverSource();
       });
       qs('refreshDriveCoversBtn').addEventListener('click', async () => {
-        await loadDriveCovers();
-        if (app.coverSource === 'drive') {
-          applyCoverSource();
+        const btn = qs('refreshDriveCoversBtn');
+        if (!btnStartLoading(btn, 'Loading...')) return;
+        try {
+          const ok = await loadDriveCovers({ silent: false });
+          if (app.coverSource === 'drive') {
+            applyCoverSource();
+          }
+          btnStopLoading(btn, ok);
+        } catch (e) {
+          btnStopLoading(btn, false);
         }
       });
       qs('driveCoverSelect').addEventListener('change', () => onDriveCoverChange({ silent: false }));
@@ -1479,12 +1574,14 @@
       qs('testConnectionBtn').addEventListener('click', testConnection);
       qs('providerRecheckBtn').addEventListener('click', async () => {
         const btn = qs('providerRecheckBtn');
-        btnStartLoading(btn, 'Checking...');
+        if (!btnStartLoading(btn, 'Checking...')) return;
         try {
-          await refreshProviderConnectivity({ force: true, silent: false });
-          btnStopLoading(btn, true);
+          const ok = await refreshProviderConnectivity({ force: true, silent: false });
+          btnStopLoading(btn, ok);
+          showToast(ok ? 'Provider connectivity refreshed.' : (app.providerConnectivityError || 'Provider connectivity check failed.'), ok ? 'success' : 'error', 2200);
         } catch (e) {
           btnStopLoading(btn, false);
+          showToast('Provider connectivity check failed.', 'error');
         }
       });
       qs('enrichBookBtn').addEventListener('click', enrichCurrentBook);
@@ -1507,13 +1604,19 @@
       qs('tabWeak').addEventListener('click', () => switchTab('weak'));
       qs('loadWeakBtn').addEventListener('click', async () => {
         const btn = qs('loadWeakBtn');
-        btnStartLoading(btn, 'Loading...');
+        if (!btnStartLoading(btn, 'Loading...')) return;
         try { await loadWeakBooks(); btnStopLoading(btn, true); } catch (e) { btnStopLoading(btn, false); }
       });
       qs('regenAllWeakBtn').addEventListener('click', async () => {
         const btn = qs('regenAllWeakBtn');
-        btnStartLoading(btn, 'Re-generating...');
-        try { await regenerateAllWeakBooks(); btnStopLoading(btn, true); } catch (e) { btnStopLoading(btn, false); }
+        if (!btnStartLoading(btn, 'Re-generating...')) return;
+        try {
+          const ok = await regenerateAllWeakBooks();
+          btnStopLoading(btn, ok);
+          if (!ok) showToast('Some weak-book re-generations failed.', 'error');
+        } catch (e) {
+          btnStopLoading(btn, false);
+        }
       });
 
       document.addEventListener('keydown', (event) => {
