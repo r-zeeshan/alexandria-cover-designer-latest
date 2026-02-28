@@ -564,6 +564,16 @@ body.iterate-page .tabs button.active:hover:not(:disabled):not(.btn-loading) {
   line-height: 1.35;
 }
 
+.heartbeat-stall-note {
+  margin-top: 6px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  background: rgba(120, 85, 20, 0.24);
+  color: #f4d58a;
+  font-size: 12px;
+}
+
 .heartbeat-grid {
   margin-top: 8px;
   display: grid;

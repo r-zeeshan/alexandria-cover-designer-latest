@@ -16,7 +16,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import urlparse
 
 import numpy as np
@@ -1022,6 +1022,7 @@ def generate_all_models(
     resume: bool = True,
     dry_run: bool = False,
     provider_override: str | None = None,
+    cancel_checker: Callable[[str, int], bool] | None = None,
 ) -> list[GenerationResult]:
     """Fire ALL models concurrently for the same prompt."""
     runtime = config.get_config()
@@ -1046,6 +1047,34 @@ def generate_all_models(
         provider = provider.lower()
 
         for variant in range(1, variants_per_model + 1):
+            if callable(cancel_checker):
+                try:
+                    if bool(cancel_checker(model, variant)):
+                        logger.info(
+                            "Skipping cancelled generation for book %s model %s variant %s",
+                            book_number,
+                            model,
+                            variant,
+                        )
+                        results.append(
+                            GenerationResult(
+                                book_number=book_number,
+                                variant=variant,
+                                prompt=prompt,
+                                model=model,
+                                image_path=None,
+                                success=False,
+                                error="Cancelled before generation started",
+                                generation_time=0.0,
+                                cost=0.0,
+                                provider=provider,
+                                skipped=True,
+                            )
+                        )
+                        continue
+                except Exception as exc:
+                    logger.debug("cancel_checker failed for %s v%s: %s", model, variant, exc)
+
             image_path = model_dir / f"variant_{variant}.png"
             diversified_prompt = _diversify_prompt_for_model_variant(
                 prompt=prompt,
@@ -1355,6 +1384,7 @@ def generate_single_book(
     library_prompt_id: str | None = None,
     resume: bool = True,
     dry_run: bool = False,
+    cancel_checker: Callable[[str, int], bool] | None = None,
 ) -> list[GenerationResult]:
     """Primary single-cover entry point for iterative generation (D19)."""
     runtime = config.get_config()
@@ -1400,6 +1430,7 @@ def generate_single_book(
         resume=resume,
         dry_run=dry_run,
         provider_override=provider_override,
+        cancel_checker=cancel_checker,
     )
 
 

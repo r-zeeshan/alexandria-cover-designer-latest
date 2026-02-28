@@ -317,6 +317,7 @@
       notifications: [],
       resultsByKey: new Map(),
       zoomCache: new Map(),
+      heartbeatRenderTimer: null,
       dismissedResults: new Set(),
     };
 
@@ -441,6 +442,24 @@
 
     function nowIso() {
       return new Date().toISOString();
+    }
+
+    function startHeartbeatAutoRefresh() {
+      stopHeartbeatAutoRefresh();
+      app.heartbeatRenderTimer = window.setInterval(() => {
+        const hb = app.heartbeat || {};
+        const status = String(hb.status || '');
+        if (['submitting', 'queued', 'running', 'stream-stalled', 'polling'].includes(status)) {
+          renderHeartbeat();
+        }
+      }, 1000);
+    }
+
+    function stopHeartbeatAutoRefresh() {
+      if (app.heartbeatRenderTimer) {
+        try { clearInterval(app.heartbeatRenderTimer); } catch (_) {}
+        app.heartbeatRenderTimer = null;
+      }
     }
 
     function resultKey(item) {
@@ -653,6 +672,7 @@
         applyVariationLimits();
         qs('promptSource').value = app.promptSource;
         bindEvents();
+        startHeartbeatAutoRefresh();
         applyMode();
         applyCoverSource();
         setStatus(`Ready. Catalog: ${app.catalog}. Choose a book and generate.`);
@@ -1602,11 +1622,21 @@
           attempts: Number(job.attempts || 0),
           maxAttempts: Number(job.max_attempts || 0),
           lastUpdateAt: String(job.updated_at || new Date().toISOString()),
+          stalled: false,
         });
         app.latestJobId = String(job.id);
         qs('runSummaryBanner').classList.add('picker-hidden');
         const streamed = await streamGenerationJob(job.id, Number(book.number), String(data.event_url || ''), genBtn);
         if (!streamed) {
+          qs('resultStatus').textContent = 'Live stream stalled; polling job status...';
+          updateHeartbeat({
+            status: 'polling',
+            stage: 'poll',
+            message: `Live stream stalled for job ${job.id}; polling status every 1.2s.`,
+            lastUpdateAt: new Date().toISOString(),
+            stalled: true,
+          });
+          showToast('Live stream stalled. Switched to polling mode.', 'info', 2200);
           await pollGenerationJob(job.id, Number(book.number), genBtn);
         }
       } catch (err) {
@@ -1657,9 +1687,16 @@
       app.jobEventSource = source;
       let terminal = false;
       let sawEvent = false;
+      let settled = false;
+      let lastEventAt = Date.now();
+      const streamStallMs = 15000;
 
       return await new Promise((resolve) => {
         const settle = (handled) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeoutHandle);
+          clearInterval(stallHandle);
           closeJobEventStream();
           resolve(Boolean(handled));
         };
@@ -1667,9 +1704,24 @@
         const timeoutHandle = setTimeout(() => {
           if (!sawEvent && !terminal) settle(false);
         }, 8000);
+        const stallHandle = setInterval(() => {
+          if (terminal || settled) return;
+          const idleMs = Date.now() - lastEventAt;
+          if (idleMs < streamStallMs) return;
+          updateHeartbeat({
+            jobId: String(jobId),
+            status: 'stream-stalled',
+            stage: 'stream',
+            message: `No live updates for ${humanDuration(Math.floor(idleMs / 1000))}; switching to polling.`,
+            lastUpdateAt: new Date().toISOString(),
+            stalled: true,
+          });
+          settle(false);
+        }, 3000);
 
         source.addEventListener('ready', (evt) => {
           sawEvent = true;
+          lastEventAt = Date.now();
           const payload = _eventPayload(evt);
           updateHeartbeat({
             jobId: String(payload.job_id || jobId),
@@ -1677,11 +1729,13 @@
             stage: 'queue',
             message: `Connected to live stream for job ${jobId}.`,
             lastUpdateAt: String(payload.timestamp || new Date().toISOString()),
+            stalled: false,
           });
         });
 
         source.addEventListener('job_progress', (evt) => {
           sawEvent = true;
+          lastEventAt = Date.now();
           const payload = _eventPayload(evt);
           const progress = Math.round(Number(payload.progress || 0) * 100);
           const status = String(payload.status || 'running');
@@ -1694,12 +1748,14 @@
             message,
             attempts: Number(payload.attempt_number || 0),
             lastUpdateAt: String(payload.timestamp || new Date().toISOString()),
+            stalled: false,
           });
           renderHeartbeat();
         });
 
         source.addEventListener('variant_complete', (evt) => {
           sawEvent = true;
+          lastEventAt = Date.now();
           const payload = _eventPayload(evt);
           const variant = Number(payload.variant || 0);
           const model = String(payload.model || 'model');
@@ -1753,6 +1809,7 @@
             stage: 'generate',
             message,
             lastUpdateAt: new Date().toISOString(),
+            stalled: false,
           });
           renderRunSummaryBanner();
         });
@@ -1787,6 +1844,7 @@
             message: String((result && result.message) || 'Generation complete.'),
             lastUpdateAt: String(payload.timestamp || new Date().toISOString()),
             error: '',
+            stalled: false,
           });
           Object.keys(app.modelProgress || {}).forEach(modelName => {
             const row = app.modelProgress[modelName];
@@ -1818,6 +1876,7 @@
             message: `Job ${status}: ${message}`,
             lastUpdateAt: String(payload.timestamp || new Date().toISOString()),
             error: message,
+            stalled: false,
           });
           btnStopLoading(genBtn, false);
           showToast(`Generation ${status}: ${message}`, 'error');
@@ -2692,6 +2751,7 @@
         variants: Number(qs('variationCount').value || 0),
         provider: String(qs('providerSelect').value || app.selectedProvider || 'all'),
         error: '',
+        stalled: false,
       };
       renderHeartbeat();
     }
@@ -2709,7 +2769,7 @@
       const hb = app.heartbeat || {};
       const status = String(hb.status || 'idle');
       const isIdle = status === 'idle';
-      const isActive = ['submitting', 'queued', 'running'].includes(status);
+      const isActive = ['submitting', 'queued', 'running', 'polling', 'stream-stalled'].includes(status);
       const isCompleted = status === 'completed';
       const isFailed = ['failed', 'cancelled', 'timeout', 'blocked'].includes(status);
 
@@ -2731,6 +2791,8 @@
       const updatedAt = hb.lastUpdateAt ? Date.parse(String(hb.lastUpdateAt)) : NaN;
       const elapsed = Number.isFinite(startedAt) ? formatElapsed(now - startedAt) : '-';
       const sinceUpdate = Number.isFinite(updatedAt) ? formatElapsed(now - updatedAt) : '-';
+      const staleSeconds = Number.isFinite(updatedAt) ? Math.max(0, Math.floor((now - updatedAt) / 1000)) : 0;
+      const isStalled = Boolean(hb.stalled) || (isActive && staleSeconds >= 20);
       const attemptsText = Number(hb.maxAttempts || 0) > 0
         ? `${Number(hb.attempts || 0)}/${Number(hb.maxAttempts || 0)}`
         : String(Number(hb.attempts || 0));
@@ -2755,6 +2817,7 @@
       node.innerHTML = `
         <div class="heartbeat-title">Heartbeat</div>
         <div class="heartbeat-message">${escapeHtml(String(hb.message || 'No generation started.'))}</div>
+        ${isStalled ? `<div class="heartbeat-stall-note">No update for ${escapeHtml(String(sinceUpdate))}. Auto-recovery is checking job status.</div>` : ''}
         <div class="heartbeat-grid">
           <div><strong>Status</strong><span>${escapeHtml(String(hb.status || '-'))}</span></div>
           <div><strong>Stage</strong><span>${escapeHtml(String(hb.stage || '-'))}</span></div>
@@ -3016,7 +3079,10 @@
           }
         }
       });
-      window.addEventListener('beforeunload', closeJobEventStream);
+      window.addEventListener('beforeunload', () => {
+        closeJobEventStream();
+        stopHeartbeatAutoRefresh();
+      });
     }
 
     init();
