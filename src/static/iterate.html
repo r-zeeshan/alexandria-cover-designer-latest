@@ -52,7 +52,7 @@
       <div id="quickControls" class="quick-controls">
         <label>Book</label>
         <select id="quickBookSelect"></select>
-        <label class="u-mt-12">Recommended Models</label>
+        <label class="u-mt-12">Models (Recommended First)</label>
         <div id="quickModelsBox" class="quick-models"></div>
         <div class="row u-mt-10">
           <button id="quickGenerateBtn" type="button" title="Enter">Generate</button>
@@ -727,7 +727,7 @@
       }
     }
 
-    function recommendedQuickModels() {
+    function quickModeModelOrder() {
       const rows = Array.isArray(app.modelCompare) ? app.modelCompare : [];
       const preferred = rows
         .slice()
@@ -736,7 +736,11 @@
         .filter(Boolean);
       const fallback = (app.models || []).slice();
       const merged = preferred.concat(fallback).filter((token, idx, arr) => token && arr.indexOf(token) === idx);
-      return merged.slice(0, 3);
+      return merged;
+    }
+
+    function recommendedQuickModels() {
+      return quickModeModelOrder().slice(0, 3);
     }
 
     function applyModeRecommendations() {
@@ -756,19 +760,20 @@
       }
       const box = qs('quickModelsBox');
       if (!box) return;
-      const top = recommendedQuickModels();
-      app.quickModels = top;
-      if (!top.length) {
-        box.innerHTML = '<em>No recommended models yet.</em>';
+      const ordered = quickModeModelOrder();
+      app.quickModels = recommendedQuickModels();
+      if (!ordered.length) {
+        box.innerHTML = '<em>No models available yet.</em>';
         return;
       }
-      box.innerHTML = top.map(model => {
+      box.innerHTML = ordered.map(model => {
         const checked = app.modelSelection.has(model);
         const cost = Number(app.modelCosts[model] || 0);
+        const recommended = app.quickModels.includes(model);
         return `
           <label>
             <input type="checkbox" data-quick-model="${escapeHtml(model)}" ${checked ? 'checked' : ''} />
-            <span>${escapeHtml(model)}</span>
+            <span>${escapeHtml(model)}${recommended ? ' [recommended]' : ''}</span>
             <small>$${cost.toFixed(4)}</small>
           </label>
         `;
@@ -781,6 +786,8 @@
           if (input.checked) app.modelSelection.add(model);
           else app.modelSelection.delete(model);
           renderModels();
+          loadCostProjection();
+          renderHeartbeat();
         });
       });
     }
