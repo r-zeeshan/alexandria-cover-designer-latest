@@ -159,6 +159,38 @@ def test_validate_drive_cover_request_uses_hint_and_rejects_mismatch(monkeypatch
     assert called["list"] == 0
 
 
+def test_validate_catalog_cover_request_rejects_missing_local_cover(monkeypatch: pytest.MonkeyPatch):
+    runtime = SimpleNamespace()
+    monkeypatch.setattr(qr, "_local_cover_available", lambda **_kwargs: False)
+    ok, error = qr._validate_catalog_cover_request(
+        runtime=runtime,  # type: ignore[arg-type]
+        book=12,
+        cover_source="catalog",
+    )
+    assert ok is False
+    assert "No local cover is available for book 12" in error
+
+
+def test_validate_catalog_cover_request_allows_drive_or_available_catalog(monkeypatch: pytest.MonkeyPatch):
+    runtime = SimpleNamespace()
+    monkeypatch.setattr(qr, "_local_cover_available", lambda **_kwargs: True)
+
+    ok_catalog, error_catalog = qr._validate_catalog_cover_request(
+        runtime=runtime,  # type: ignore[arg-type]
+        book=4,
+        cover_source="catalog",
+    )
+    ok_drive, error_drive = qr._validate_catalog_cover_request(
+        runtime=runtime,  # type: ignore[arg-type]
+        book=4,
+        cover_source="drive",
+    )
+    assert ok_catalog is True
+    assert error_catalog == ""
+    assert ok_drive is True
+    assert error_drive == ""
+
+
 def test_validate_drive_cover_request_lookup_success_and_missing(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     runtime = SimpleNamespace(
         gdrive_source_folder_id="source-folder",

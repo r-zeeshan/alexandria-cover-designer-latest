@@ -7639,6 +7639,23 @@ def serve_review_webapp(
                         status=HTTPStatus.BAD_REQUEST,
                         endpoint=path,
                     )
+                valid_catalog_source, catalog_source_error = _validate_catalog_cover_request(
+                    runtime=runtime_req,
+                    book=book,
+                    cover_source=cover_source,
+                )
+                if not valid_catalog_source:
+                    return self._send_error(
+                        code="MISSING_LOCAL_COVER",
+                        message=catalog_source_error or "No local catalog cover is available for this title.",
+                        details={
+                            "book": int(book),
+                            "cover_source": cover_source,
+                            "suggested_cover_source": "drive",
+                        },
+                        status=HTTPStatus.BAD_REQUEST,
+                        endpoint=path,
+                    )
 
                 if async_mode:
                     requested_dry_run = bool(body.get("dry_run", False))
@@ -8944,6 +8961,24 @@ def _validate_drive_cover_request(
     if resolved_book != int(book):
         return False, f"Selected Drive cover maps to book {resolved_book}, but requested book is {book}"
     return True, ""
+
+
+def _validate_catalog_cover_request(
+    *,
+    runtime: config.Config,
+    book: int,
+    cover_source: str,
+) -> tuple[bool, str]:
+    source = str(cover_source or "catalog").strip().lower() or "catalog"
+    if source != "catalog":
+        return True, ""
+    if _local_cover_available(runtime=runtime, book_number=int(book)):
+        return True, ""
+    return (
+        False,
+        f"No local cover is available for book {int(book)}. "
+        "Switch Cover Source to Google Drive and pick a Drive cover first.",
+    )
 
 
 def _drive_credentials_mode(

@@ -57,6 +57,7 @@
         <div class="row u-mt-10">
           <button id="quickGenerateBtn" type="button" title="Enter">Generate</button>
         </div>
+        <div class="status">Need prompt/source controls? Switch to Advanced mode.</div>
       </div>
 
       <div id="advancedControlsWrap">
@@ -1223,6 +1224,12 @@
       return app.books.find(b => Number(b.number) === id) || app.books[0];
     }
 
+    function localCoverAvailable(bookNumber) {
+      const row = app.books.find(b => Number(b.number) === Number(bookNumber));
+      if (!row) return false;
+      return row.local_cover_available !== false;
+    }
+
     function currentSmartPrompts(book) {
       const row = (book && Array.isArray(book.smart_prompts)) ? book.smart_prompts : [];
       return row.filter(item => item && item.prompt);
@@ -1539,6 +1546,20 @@
         updateHeartbeat({ status: 'blocked', message: 'Select at least one model.', error: '' });
         btnStopLoading(genBtn, false);
         showToast('Select at least one model.', 'error');
+        return;
+      }
+      if (app.coverSource === 'catalog' && !localCoverAvailable(targetBookNumber)) {
+        const message = `No local cover is available for book ${targetBookNumber}. Switch Cover Source to Google Drive and pick a Drive cover first.`;
+        qs('resultStatus').textContent = message;
+        updateHeartbeat({
+          status: 'blocked',
+          stage: 'preflight',
+          message,
+          error: '',
+          lastUpdateAt: new Date().toISOString(),
+        });
+        btnStopLoading(genBtn, false);
+        showToast(message, 'error');
         return;
       }
       const payload = {
@@ -2793,6 +2814,9 @@
       const sinceUpdate = Number.isFinite(updatedAt) ? formatElapsed(now - updatedAt) : '-';
       const staleSeconds = Number.isFinite(updatedAt) ? Math.max(0, Math.floor((now - updatedAt) / 1000)) : 0;
       const isStalled = Boolean(hb.stalled) || (isActive && staleSeconds >= 20);
+      const stageToken = String(hb.stage || '').toLowerCase();
+      const queueWaitSeconds = Number.isFinite(startedAt) ? Math.max(0, Math.floor((now - startedAt) / 1000)) : 0;
+      const showQueueAdvisory = isActive && stageToken.includes('queue') && queueWaitSeconds >= 15;
       const attemptsText = Number(hb.maxAttempts || 0) > 0
         ? `${Number(hb.attempts || 0)}/${Number(hb.maxAttempts || 0)}`
         : String(Number(hb.attempts || 0));
@@ -2818,6 +2842,7 @@
         <div class="heartbeat-title">Heartbeat</div>
         <div class="heartbeat-message">${escapeHtml(String(hb.message || 'No generation started.'))}</div>
         ${isStalled ? `<div class="heartbeat-stall-note">No update for ${escapeHtml(String(sinceUpdate))}. Auto-recovery is checking job status.</div>` : ''}
+        ${showQueueAdvisory ? '<div class="heartbeat-stall-note">Waiting for the first provider response. First image can take 30-120s depending on model/provider load.</div>' : ''}
         <div class="heartbeat-grid">
           <div><strong>Status</strong><span>${escapeHtml(String(hb.status || '-'))}</span></div>
           <div><strong>Stage</strong><span>${escapeHtml(String(hb.stage || '-'))}</span></div>
