@@ -7,9 +7,12 @@ import socket
 import subprocess
 import sys
 import time
+import uuid
 from typing import Any
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
+
+from PIL import Image
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -97,6 +100,12 @@ def test_api_contract_get_endpoints_status_and_content_type():
             "/api/version",
             "/api/health",
             "/api/metrics",
+            "/api/models",
+            "/api/providers",
+            "/api/catalog",
+            "/api/templates",
+            "/api/stats",
+            "/api/config",
             "/api/catalogs",
             "/api/books?limit=5&offset=0",
             "/api/review-data?limit=5&offset=0",
@@ -145,6 +154,9 @@ def test_api_contract_get_endpoints_status_and_content_type():
             assert isinstance(payload.get("success"), bool), path
 
         with urlopen(f"{base_url}/api/docs", timeout=15) as response:
+            assert int(getattr(response, "status", 200)) == 200
+            assert "text/html" in str(response.headers.get("Content-Type", "")).lower()
+        with urlopen(f"{base_url}/docs", timeout=15) as response:
             assert int(getattr(response, "status", 200)) == 200
             assert "text/html" in str(response.headers.get("Content-Type", "")).lower()
     finally:
@@ -304,4 +316,76 @@ def test_api_contract_export_validate_endpoint_shapes():
         assert isinstance(payload.get("platforms"), dict)
         assert isinstance(payload.get("request_id"), str)
     finally:
+        _stop_server(process)
+
+
+def test_api_contract_prompt31_endpoints_shapes_and_secret_safety():
+    process, base_url = _start_server()
+    try:
+        checks = {
+            "/api/models": ("models", "total"),
+            "/api/providers": ("providers",),
+            "/api/catalog": ("catalogs", "total_books"),
+            "/api/templates?genre=thriller": ("templates", "total"),
+            "/api/stats": ("total_generations", "total_cost_usd"),
+            "/api/config": ("active_models", "feature_flags"),
+        }
+        for path, required_keys in checks.items():
+            status, payload, content_type = _request_json(base_url, path)
+            assert status == 200, path
+            assert "application/json" in content_type.lower(), path
+            assert payload.get("ok") is True, path
+            for key in required_keys:
+                assert key in payload, (path, key)
+
+        cfg_status, cfg_payload, _ = _request_json(base_url, "/api/config")
+        assert cfg_status == 200
+        serialized = json.dumps(cfg_payload).lower()
+        for forbidden in ("api_key", "sk-", "openrouter_api_key", "openai_api_key", "google_api_key"):
+            assert forbidden not in serialized
+    finally:
+        _stop_server(process)
+
+
+def test_api_contract_validate_cover_endpoint_and_invalid_template_rejection():
+    process, base_url = _start_server()
+    temp_file = PROJECT_ROOT / "tmp" / f"contract_print_{uuid.uuid4().hex}.jpg"
+    temp_file.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        image = Image.new("RGB", (1200, 1800), color=(24, 38, 66))
+        image.save(temp_file, format="JPEG", dpi=(300, 300))
+
+        status, payload, content_type = _request_json(
+            base_url,
+            "/api/validate/cover",
+            method="POST",
+            payload={"file_path": str(temp_file.relative_to(PROJECT_ROOT)), "distributor": "all"},
+        )
+        assert status == 200
+        assert "application/json" in content_type.lower()
+        assert payload.get("ok") is True
+        assert payload.get("distributor") == "all"
+        assert isinstance(payload.get("results"), dict)
+        assert "ingram_spark" in payload.get("results", {})
+
+        bad_status, bad_payload, _ = _request_json(
+            base_url,
+            "/api/generate?catalog=classics",
+            method="POST",
+            payload={
+                "book": 1,
+                "models": ["openrouter/google/gemini-2.5-flash-image"],
+                "variants": 1,
+                "cover_source": "drive",
+                "template_id": "does-not-exist",
+                "prompt_source": "template",
+                "dry_run": True,
+            },
+        )
+        assert bad_status == 400
+        assert bad_payload.get("ok") is False
+        assert bad_payload.get("error_code") == "INVALID_TEMPLATE_ID"
+    finally:
+        if temp_file.exists():
+            temp_file.unlink()
         _stop_server(process)

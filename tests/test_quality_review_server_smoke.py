@@ -133,6 +133,12 @@ def test_quality_review_server_primary_routes_smoke():
             "/api/version",
             "/api/health",
             "/api/metrics",
+            "/api/models",
+            "/api/providers",
+            "/api/catalog",
+            "/api/templates",
+            "/api/stats",
+            "/api/config",
             "/api/performance/summary",
             "/api/providers/runtime",
             "/api/workers",
@@ -183,6 +189,7 @@ def test_quality_review_server_primary_routes_smoke():
             "/api/cache/stats",
             "/api/catalogs",
             "/api/docs",
+            "/docs",
         ]
 
         for path in pages + apis:

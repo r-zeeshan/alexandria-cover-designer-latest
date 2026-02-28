@@ -63,14 +63,17 @@ try:
     from src import gdrive_sync
     from src import image_generator
     from src import intelligent_prompter
+    from src import genre_intelligence
     from src import job_store
     from src import mockup_generator
+    from src import print_validator
     from src import repository
     from src import safe_json
     from src import security
     from src import social_card_generator
     from src import similarity_detector
     from src import state_store
+    from src import template_registry
     from src import thumbnail_server
     from src.logger import get_logger
     from src import pipeline as pipeline_runner
@@ -97,14 +100,17 @@ except ModuleNotFoundError:  # pragma: no cover
     import gdrive_sync  # type: ignore
     import image_generator  # type: ignore
     import intelligent_prompter  # type: ignore
+    import genre_intelligence  # type: ignore
     import job_store  # type: ignore
     import mockup_generator  # type: ignore
+    import print_validator  # type: ignore
     import repository  # type: ignore
     import safe_json  # type: ignore
     import security  # type: ignore
     import social_card_generator  # type: ignore
     import similarity_detector  # type: ignore
     import state_store  # type: ignore
+    import template_registry  # type: ignore
     import thumbnail_server  # type: ignore
     from logger import get_logger  # type: ignore
     import pipeline as pipeline_runner  # type: ignore
@@ -179,6 +185,59 @@ _JOB_CANCELLED_MODELS_LOCK = threading.Lock()
 _SLOW_REQUEST_LOG: list[dict[str, Any]] = []
 _SLOW_REQUEST_LOG_LOCK = threading.Lock()
 _SLOW_REQUEST_THRESHOLD_SECONDS = 5.0
+_PRINT_VALIDATOR_LOCK = threading.Lock()
+_PRINT_VALIDATOR_INSTANCE: print_validator.PrintValidator | None = None
+
+
+def _budget_presets_for_runtime(runtime: config.Config) -> list[dict[str, Any]]:
+    model_cost = {model: runtime.get_model_cost(model) for model in runtime.all_models}
+    return [
+        {
+            "id": "cheapest",
+            "name": "Cheapest",
+            "description": "Fast smoke tests, quick iteration",
+            "models": ["openrouter/google/gemini-2.5-flash-image"],
+            "estimated_cost_per_image_usd": round(model_cost.get("openrouter/google/gemini-2.5-flash-image", 0.003), 6),
+        },
+        {
+            "id": "balanced",
+            "name": "Balanced",
+            "description": "Good quality at reasonable cost",
+            "models": [
+                "openrouter/google/gemini-2.5-flash-image",
+                "openrouter/openai/gpt-5-image-mini",
+            ],
+            "estimated_cost_per_image_usd": round(
+                model_cost.get("openrouter/google/gemini-2.5-flash-image", 0.003)
+                + model_cost.get("openrouter/openai/gpt-5-image-mini", 0.012),
+                6,
+            ),
+        },
+        {
+            "id": "premium",
+            "name": "Premium",
+            "description": "Best quality, all top models",
+            "models": [
+                "openrouter/google/gemini-2.5-flash-image",
+                "openrouter/openai/gpt-5-image",
+                "fal/fal-ai/flux-2-pro",
+            ],
+            "estimated_cost_per_image_usd": round(
+                model_cost.get("openrouter/google/gemini-2.5-flash-image", 0.003)
+                + model_cost.get("openrouter/openai/gpt-5-image", 0.04)
+                + model_cost.get("fal/fal-ai/flux-2-pro", 0.045),
+                6,
+            ),
+        },
+    ]
+
+
+def _print_validator_instance() -> print_validator.PrintValidator:
+    global _PRINT_VALIDATOR_INSTANCE
+    with _PRINT_VALIDATOR_LOCK:
+        if _PRINT_VALIDATOR_INSTANCE is None:
+            _PRINT_VALIDATOR_INSTANCE = print_validator.PrintValidator()
+        return _PRINT_VALIDATOR_INSTANCE
 
 
 def _sync_generation_allowed(*, worker_mode: str | None = None) -> bool:
@@ -1882,6 +1941,12 @@ def _execute_generation_payload(
     models = payload.get("models", [])
     variants = _safe_int(payload.get("variants"), 5)
     prompt = str(payload.get("prompt", ""))
+    prompt_source = str(payload.get("prompt_source", payload.get("promptSource", "template")) or "template").strip().lower() or "template"
+    template_id = str(payload.get("template_id", payload.get("templateId", "")) or "").strip()
+    compose_prompt = bool(payload.get("compose_prompt", True))
+    template_ok, _template_details = _validate_template_id(runtime=runtime, template_id=template_id)
+    if not template_ok:
+        raise ValueError(f"Unknown template_id: {template_id}")
     provider = str(payload.get("provider", "")).strip().lower()
     library_prompt_id = str(payload.get("library_prompt_id", "")).strip()
     cover_source = str(payload.get("cover_source", "catalog")).strip().lower() or "catalog"
@@ -1907,6 +1972,25 @@ def _execute_generation_payload(
     active_models = models or runtime.all_models
     if not active_models:
         raise ValueError("No models available for generation")
+
+    composed_prompt_payload: dict[str, Any] = {}
+    if compose_prompt:
+        book_row = _book_row_for_number(runtime=runtime, book_number=book)
+        if book_row is not None:
+            default_prompt = ""
+            variants_payload = book_row.get("variants", [])
+            if isinstance(variants_payload, list) and variants_payload:
+                first_variant = variants_payload[0]
+                if isinstance(first_variant, dict):
+                    default_prompt = str(first_variant.get("prompt", "")).strip()
+            composed_prompt_payload = _compose_prompt_for_book(
+                runtime=runtime,
+                book=book_row,
+                base_prompt=str(prompt or default_prompt or f"Classical medallion illustration for {book_row.get('title', f'Book {book}')}"),
+                template_id=template_id,
+            )
+            if prompt_source == "template" or not str(prompt).strip():
+                prompt = str(composed_prompt_payload.get("prompt", prompt)).strip()
 
     dry_run = forced_dry_run or (not runtime.has_any_api_key())
     job_id = str(payload.get("job_id", "")).strip()
@@ -2073,6 +2157,7 @@ def _execute_generation_payload(
             ) from exc
     if not dry_run:
         serialized = _hydrate_serialized_result_paths(runtime=runtime, rows=serialized)
+        _attach_print_validation_to_rows(runtime=runtime, rows=serialized)
     if job_id:
         for row in serialized:
             if not isinstance(row, dict):
@@ -2162,6 +2247,10 @@ def _execute_generation_payload(
         "dry_run": dry_run,
         "resume_used": resumed_from_checkpoint,
         "stages": stage_snapshot,
+        "prompt_source": prompt_source,
+        "template_id": template_id or None,
+        "composed_prompt": str(composed_prompt_payload.get("prompt", "")).strip() or None,
+        "inferred_genre": str(composed_prompt_payload.get("genre", "")).strip() or None,
     }
 
 
@@ -3205,6 +3294,9 @@ def write_iterate_data(*, runtime: config.Config | None = None, prompts_path: Pa
     smart_payload = _load_json(intelligent_prompts_path, {"books": []})
     enriched_catalog = _load_json(enriched_catalog_path, [])
     prompt_performance = _load_json(_prompt_performance_path_for_runtime(runtime), {"patterns": {}})
+    template_rows = _template_rows_for_runtime(runtime=runtime)
+    budget_presets = _budget_presets_for_runtime(runtime)
+    default_template_id = str(template_rows[0].get("id", "heritage_classic")).strip() if template_rows else "heritage_classic"
 
     smart_by_book: dict[int, dict[str, Any]] = {}
     smart_books = smart_payload.get("books", []) if isinstance(smart_payload, dict) else []
@@ -3245,12 +3337,36 @@ def write_iterate_data(*, runtime: config.Config | None = None, prompts_path: Pa
         smart_variants = smart_row.get("variants", []) if isinstance(smart_row, dict) else []
         winner_row = winner_map.get(str(number), {})
         winner_variant = _safe_int(winner_row.get("winner") if isinstance(winner_row, dict) else winner_row, 0)
+        composed = _compose_prompt_for_book(
+            runtime=runtime,
+            book={
+                "number": number,
+                "title": book.get("title", ""),
+                "author": book.get("author", ""),
+                "genre": book.get("genre", ""),
+                "enrichment": enriched_by_book.get(number, {}),
+            },
+            base_prompt=str(default_prompt or f"Classical medallion illustration for {book.get('title', '')}"),
+            template_id=default_template_id,
+        )
         books.append(
             {
                 "number": number,
                 "title": book.get("title", ""),
                 "author": book.get("author", ""),
                 "default_prompt": default_prompt,
+                "default_template_id": default_template_id,
+                "genre": composed.get("genre", "literary_fiction"),
+                "inferred_genre_source": composed.get("genre_source", "default"),
+                "composed_prompt": composed.get("prompt", default_prompt),
+                "prompt_components": {
+                    "base": composed.get("base", ""),
+                    "template": composed.get("template", ""),
+                    "genre_modifier": composed.get("genre_modifier", ""),
+                    "genre": composed.get("genre", ""),
+                    "title_keywords": composed.get("title_keywords", []),
+                    "negative": composed.get("negative", ""),
+                },
                 "enrichment": enriched_by_book.get(number, {}),
                 "smart_prompts": smart_variants if isinstance(smart_variants, list) else [],
                 "local_cover_available": _local_cover_available(runtime=runtime, book_number=number),
@@ -3280,12 +3396,361 @@ def write_iterate_data(*, runtime: config.Config | None = None, prompts_path: Pa
         "gdrive_output_folder_id": str(runtime.gdrive_output_folder_id or ""),
         "default_cover_source": _default_cover_source_for_runtime(runtime),
         "local_input_covers_available": _has_local_input_covers(runtime=runtime),
+        "templates": template_rows,
+        "default_template_id": default_template_id,
+        "budget_presets": budget_presets,
     }
 
     iterate_path = _iterate_data_path_for_runtime(runtime)
     iterate_path.parent.mkdir(parents=True, exist_ok=True)
     safe_json.atomic_write_json(iterate_path, payload)
     return iterate_path
+
+
+def _catalog_books_payload(path: Path) -> list[dict[str, Any]]:
+    payload = _load_json(path, [])
+    if not isinstance(payload, list):
+        return []
+    return [row for row in payload if isinstance(row, dict)]
+
+
+def _template_rows_for_runtime(*, runtime: config.Config, genre: str = "") -> list[dict[str, Any]]:
+    return template_registry.list_templates(
+        genre=str(genre or "").strip().lower(),
+        config_dir=runtime.config_dir,
+    )
+
+
+def _template_for_id(*, runtime: config.Config, template_id: str) -> dict[str, Any] | None:
+    token = str(template_id or "").strip()
+    if not token:
+        return None
+    return template_registry.get_template(template_id=token, config_dir=runtime.config_dir)
+
+
+def _template_for_genre(*, runtime: config.Config, genre: str) -> dict[str, Any] | None:
+    token = str(genre or "").strip().lower()
+    if not token:
+        return None
+    templates = _template_rows_for_runtime(runtime=runtime)
+    for row in templates:
+        genres = row.get("genres", [])
+        if not isinstance(genres, list):
+            continue
+        normalized = {str(item).strip().lower() for item in genres if str(item).strip()}
+        if token in normalized:
+            return row
+    return None
+
+
+def _validate_template_id(*, runtime: config.Config, template_id: str) -> tuple[bool, dict[str, Any]]:
+    token = str(template_id or "").strip()
+    if not token:
+        return True, {}
+    template = _template_for_id(runtime=runtime, template_id=token)
+    if template is not None:
+        return True, {"template": template}
+    supported = [str(row.get("id", "")).strip() for row in _template_rows_for_runtime(runtime=runtime) if str(row.get("id", "")).strip()]
+    return False, {"template_id": token, "supported_template_ids": supported}
+
+
+def _genre_prompt_payload(*, runtime: config.Config) -> dict[str, Any]:
+    return genre_intelligence.load_genre_prompts(config_dir=runtime.config_dir)
+
+
+def _book_row_for_number(*, runtime: config.Config, book_number: int) -> dict[str, Any] | None:
+    books = _catalog_books_payload(runtime.book_catalog_path)
+    for row in books:
+        if _safe_int(row.get("number"), 0) == int(book_number):
+            return row
+    return None
+
+
+def _compose_prompt_for_book(
+    *,
+    runtime: config.Config,
+    book: dict[str, Any],
+    base_prompt: str,
+    template_id: str = "",
+) -> dict[str, Any]:
+    prompts = _genre_prompt_payload(runtime=runtime)
+    enrichment = book.get("enrichment", {}) if isinstance(book.get("enrichment"), dict) else {}
+    inferred = genre_intelligence.infer_genre(
+        title=str(book.get("title", "")),
+        author=str(book.get("author", "")),
+        metadata_genre=str(enrichment.get("genre", "") or book.get("genre", "")),
+        prompts=prompts,
+    )
+    inferred_genre = str(inferred.get("genre", "literary_fiction") or "literary_fiction")
+    templates = _template_rows_for_runtime(runtime=runtime)
+    selected_template = None
+    requested_template = str(template_id or "").strip()
+    if requested_template:
+        selected_template = _template_for_id(runtime=runtime, template_id=requested_template)
+        if selected_template is None:
+            raise ValueError(f"Unknown template_id: {requested_template}")
+    if selected_template is None:
+        selected_template = _template_for_genre(runtime=runtime, genre=inferred_genre)
+    if selected_template is None and templates:
+        selected_template = templates[0]
+
+    positive, negative = genre_intelligence.genre_modifiers_for(inferred_genre, prompts=prompts)
+    keywords = genre_intelligence.extract_title_keywords(title=str(book.get("title", "")), limit=6)
+    composed = genre_intelligence.compose_prompt(
+        base_style_prompt=str(base_prompt or "").strip(),
+        template_modifier=str((selected_template or {}).get("prompt_modifier", "")).strip(),
+        genre_modifier=positive,
+        title_keywords=keywords,
+        negative_prompt="text, letters, words, watermark, signature",
+        genre_negative_modifier=negative,
+    )
+    composed["genre_modifier"] = composed.get("genre", "")
+    composed["genre"] = inferred_genre
+    composed["genre_source"] = str(inferred.get("source", "default"))
+    composed["genre_keywords"] = inferred.get("matched_keywords", [])
+    composed["template_id"] = str((selected_template or {}).get("id", "")).strip()
+    composed["template_name"] = str((selected_template or {}).get("name", "")).strip()
+    return composed
+
+
+def _api_models_payload(*, runtime: config.Config) -> dict[str, Any]:
+    quality_payload = _quality_by_model_payload(runtime=runtime)
+    rows = quality_payload.get("models", []) if isinstance(quality_payload, dict) else []
+    stats_by_model: dict[str, dict[str, Any]] = {}
+    if isinstance(rows, list):
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            token = str(row.get("model", "")).strip()
+            if token:
+                stats_by_model[token] = row
+
+    known_models = list(runtime.all_models)
+    for key in runtime.model_provider_map.keys():
+        token = str(key).strip()
+        if not token or token in known_models:
+            continue
+        if "/" not in token:
+            continue
+        known_models.append(token)
+    known_models = sorted({token for token in known_models if str(token).strip()})
+
+    out: list[dict[str, Any]] = []
+    for model in known_models:
+        stats = stats_by_model.get(model, {})
+        provider = str(stats.get("provider", runtime.resolve_model_provider(model))).strip() or runtime.resolve_model_provider(model)
+        count = _safe_int(stats.get("count"), 0)
+        failure_rate_percent = _safe_float(stats.get("failure_rate_percent"), 0.0)
+        success_rate = max(0.0, min(1.0, 1.0 - (failure_rate_percent / 100.0 if count > 0 else 0.0)))
+        out.append(
+            {
+                "id": model,
+                "provider": provider,
+                "status": "active" if model in runtime.all_models else "disabled",
+                "avg_cost_usd": round(_safe_float(stats.get("avg_cost_per_variant"), runtime.get_model_cost(model)), 6),
+                "avg_generation_time_s": round(_safe_float(stats.get("avg_generation_time_seconds"), 0.0), 4),
+                "success_rate": round(success_rate, 6),
+                "total_generations": int(count),
+            }
+        )
+    out.sort(key=lambda row: str(row.get("id", "")))
+    return {"models": out, "total": len(out)}
+
+
+def _api_providers_payload(*, runtime: config.Config) -> dict[str, Any]:
+    runtime_rows = _provider_runtime_payload(runtime=runtime)
+    records = _load_generation_records(runtime=runtime)
+    since = datetime.now(timezone.utc) - timedelta(hours=24)
+
+    count_by_provider: dict[str, dict[str, int]] = {}
+    for row in records:
+        if not isinstance(row, dict):
+            continue
+        provider = str(row.get("provider", "")).strip().lower()
+        if not provider:
+            provider = runtime.resolve_model_provider(str(row.get("model", "")))
+        ts = _safe_iso_datetime(str(row.get("timestamp", "")))
+        if ts and ts < since:
+            continue
+        bucket = count_by_provider.setdefault(provider, {"requests": 0, "errors": 0})
+        bucket["requests"] += 1
+        status_token = str(row.get("status", "")).strip().lower()
+        if status_token:
+            failed = status_token not in {"success", "completed"}
+        else:
+            failed = not bool(row.get("success", True))
+        if failed:
+            bucket["errors"] += 1
+
+    rows: list[dict[str, Any]] = []
+    for provider in sorted(set(list(runtime.provider_keys.keys()) + list(runtime_rows.keys()))):
+        runtime_row = runtime_rows.get(provider, {})
+        model_list = [model for model in runtime.all_models if runtime.resolve_model_provider(model) == provider]
+        counts = count_by_provider.get(provider, {})
+        rows.append(
+            {
+                "name": provider,
+                "status": str(runtime_row.get("status", "inactive")),
+                "circuit_breaker": str(runtime_row.get("circuit_state", "closed")),
+                "error_count_24h": int(counts.get("errors", runtime_row.get("errors_today", 0) or 0)),
+                "request_count_24h": int(counts.get("requests", runtime_row.get("requests_today", 0) or 0)),
+                "models": model_list,
+            }
+        )
+    return {"providers": rows}
+
+
+def _api_catalog_payload(*, runtime: config.Config) -> dict[str, Any]:
+    rows: list[dict[str, Any]] = []
+    total_books = 0
+    for item in catalog_registry.list_catalogs():
+        stats = catalog_registry.stats_for_catalog(item.catalog_id)
+        book_count = _safe_int(stats.get("book_count", item.book_count), item.book_count)
+        rows.append(
+            {
+                "name": item.catalog_id,
+                "book_count": book_count,
+                "covers_generated": _safe_int(stats.get("processed_count"), 0),
+                "winners_selected": _safe_int(stats.get("winner_count"), 0),
+            }
+        )
+        total_books += max(0, int(book_count))
+    rows.sort(key=lambda row: str(row.get("name", "")))
+    return {"catalogs": rows, "total_books": int(total_books), "active_catalog": runtime.catalog_id}
+
+
+def _api_templates_payload(*, runtime: config.Config, genre: str = "") -> dict[str, Any]:
+    rows = _template_rows_for_runtime(runtime=runtime, genre=genre)
+    return {
+        "templates": rows,
+        "total": len(rows),
+        "genre_filter": str(genre or "").strip().lower() or None,
+    }
+
+
+def _api_stats_payload(*, runtime: config.Config) -> dict[str, Any]:
+    records = _load_generation_records(runtime=runtime)
+    total_generations = len(records)
+    total_cost_usd = round(sum(_safe_float(row.get("cost"), 0.0) for row in records if isinstance(row, dict)), 6)
+    budget_status = _budget_status_for_runtime(runtime)
+    avg_generation_time = (
+        round(
+            sum(
+                _safe_float(
+                    row.get("generation_time", row.get("duration", 0.0)),
+                    0.0,
+                )
+                for row in records
+                if isinstance(row, dict)
+            )
+            / max(1, total_generations),
+            4,
+        )
+        if total_generations
+        else 0.0
+    )
+    avg_quality = (
+        round(
+            sum(_safe_float(row.get("quality_score"), 0.0) for row in records if isinstance(row, dict)) / max(1, total_generations),
+            6,
+        )
+        if total_generations
+        else 0.0
+    )
+    models_used: dict[str, int] = {}
+    for row in records:
+        if not isinstance(row, dict):
+            continue
+        model = str(row.get("model", "")).strip()
+        if not model:
+            continue
+        models_used[model] = models_used.get(model, 0) + 1
+
+    model_compare = _quality_by_model_payload(runtime=runtime)
+    top_rated = str(model_compare.get("recommended_model", "")).strip() if isinstance(model_compare, dict) else ""
+    return {
+        "total_generations": int(total_generations),
+        "total_cost_usd": total_cost_usd,
+        "budget_remaining_usd": round(_safe_float(budget_status.get("remaining_usd"), runtime.max_cost_usd), 6),
+        "budget_limit_usd": round(_safe_float(budget_status.get("limit_usd"), runtime.max_cost_usd), 6),
+        "avg_generation_time_s": avg_generation_time,
+        "avg_quality_score": avg_quality,
+        "models_used": models_used,
+        "top_rated_model": top_rated or None,
+    }
+
+
+def _api_config_payload(*, runtime: config.Config) -> dict[str, Any]:
+    provider_runtime = _provider_runtime_payload(runtime=runtime)
+    provider_status = {
+        provider: {
+            "status": str(row.get("status", "inactive")),
+            "models": [model for model in runtime.all_models if runtime.resolve_model_provider(model) == provider],
+        }
+        for provider, row in provider_runtime.items()
+    }
+    return {
+        "catalog": runtime.catalog_id,
+        "active_models": runtime.all_models,
+        "providers": provider_status,
+        "budget": {
+            "max_cost_usd": float(runtime.max_cost_usd),
+            "state": _budget_status_for_runtime(runtime).get("state", "ok"),
+        },
+        "quality_thresholds": {
+            "min_quality_score": float(runtime.min_quality_score),
+            "composite_max_invalid_variants": int(runtime.composite_max_invalid_variants),
+        },
+        "drive": {
+            "connected": bool(runtime.gdrive_source_folder_id and runtime.gdrive_output_folder_id),
+            "source_folder_id": bool(str(runtime.gdrive_source_folder_id).strip()),
+            "output_folder_id": bool(str(runtime.gdrive_output_folder_id).strip()),
+            "default_cover_source": _default_cover_source_for_runtime(runtime),
+        },
+        "worker": _worker_runtime_status(),
+        "feature_flags": {
+            "sync_generation_allowed": _sync_generation_allowed(),
+            "use_sqlite": bool(runtime.use_sqlite),
+            "enrichment_enabled": True,
+            "template_registry_enabled": True,
+            "print_validation_enabled": True,
+            "genre_intelligence_enabled": True,
+            "budget_presets_enabled": True,
+        },
+    }
+
+
+def _attach_print_validation_to_rows(*, runtime: config.Config, rows: list[dict[str, Any]]) -> None:
+    validator = _print_validator_instance()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        if not bool(row.get("success", True)):
+            continue
+        composited_token = str(row.get("composited_path", "") or "").strip()
+        image_token = str(row.get("image_path", "") or "").strip()
+        source_path = _project_path_if_exists(composited_token) or _project_path_if_exists(image_token)
+        if source_path is None:
+            continue
+        try:
+            with Image.open(source_path) as image:
+                validation = validator.validate_for_all_distributors(image, [], source_path)
+            summary = {
+                "passed_all": all(bool(item.get("passed")) for item in validation.values()),
+                "errors_total": sum(len(item.get("errors", [])) for item in validation.values()),
+                "warnings_total": sum(len(item.get("warnings", [])) for item in validation.values()),
+            }
+            row["print_validation"] = validation
+            row["print_validation_summary"] = summary
+        except Exception as exc:
+            row["print_validation"] = {
+                "error": str(exc),
+            }
+            row["print_validation_summary"] = {
+                "passed_all": False,
+                "errors_total": 1,
+                "warnings_total": 0,
+            }
 
 
 def _ab_tests_path_for_runtime(runtime: config.Config) -> Path:
@@ -4458,7 +4923,7 @@ def serve_review_webapp(
                     allowed_roots=[runtime_req.output_dir, runtime_req.tmp_dir],
                     cache_control="no-store",
                 )
-            if path == "/api/docs":
+            if path in {"/api/docs", "/docs"}:
                 html = _build_api_docs_html()
                 data = html.encode("utf-8")
                 self.send_response(HTTPStatus.OK)
@@ -4469,6 +4934,19 @@ def serve_review_webapp(
                 return
             if path == "/api/version":
                 return self._send_json({"ok": True, "version": "2.0.0"})
+            if path == "/api/models":
+                return _cache_and_send({"ok": True, **_api_models_payload(runtime=runtime_req)})
+            if path == "/api/providers":
+                return _cache_and_send({"ok": True, **_api_providers_payload(runtime=runtime_req)})
+            if path == "/api/catalog":
+                return _cache_and_send({"ok": True, **_api_catalog_payload(runtime=runtime_req)})
+            if path == "/api/templates":
+                genre_filter = str(query.get("genre", [""])[0] or "").strip().lower()
+                return _cache_and_send({"ok": True, **_api_templates_payload(runtime=runtime_req, genre=genre_filter)})
+            if path == "/api/stats":
+                return _cache_and_send({"ok": True, **_api_stats_payload(runtime=runtime_req)})
+            if path == "/api/config":
+                return _cache_and_send({"ok": True, **_api_config_payload(runtime=runtime_req)})
             if path == "/api/catalogs":
                 return _cache_and_send(_catalogs_payload_with_stats(active_catalog=runtime_req.catalog_id))
             if path.startswith("/api/catalogs/"):
@@ -6390,6 +6868,18 @@ def serve_review_webapp(
                         endpoint=path,
                     )
                 prompt = str(body.get("prompt", ""))
+                prompt_source = str(body.get("promptSource", body.get("prompt_source", "template")) or "template").strip().lower() or "template"
+                template_id = str(body.get("template_id", body.get("templateId", "")) or "").strip()
+                compose_prompt = bool(body.get("compose_prompt", True))
+                template_ok, template_details = _validate_template_id(runtime=runtime_req, template_id=template_id)
+                if not template_ok:
+                    return self._send_error(
+                        code="INVALID_TEMPLATE_ID",
+                        message=f"Unknown template_id: {template_id}",
+                        details=template_details,
+                        status=HTTPStatus.BAD_REQUEST,
+                        endpoint=path,
+                    )
                 provider = str(body.get("provider", "all")).strip().lower() or "all"
                 cover_source = str(body.get("cover_source", "catalog")).strip().lower() or "catalog"
                 if cover_source not in {"catalog", "drive"}:
@@ -6422,6 +6912,24 @@ def serve_review_webapp(
                         status=HTTPStatus.BAD_REQUEST,
                         endpoint=path,
                     )
+                composed_prompt_payload: dict[str, Any] = {}
+                if compose_prompt:
+                    book_row = _book_row_for_number(runtime=runtime_req, book_number=book)
+                    if book_row is not None:
+                        default_prompt = ""
+                        variants_payload = book_row.get("variants", [])
+                        if isinstance(variants_payload, list) and variants_payload:
+                            first_variant = variants_payload[0]
+                            if isinstance(first_variant, dict):
+                                default_prompt = str(first_variant.get("prompt", "")).strip()
+                        composed_prompt_payload = _compose_prompt_for_book(
+                            runtime=runtime_req,
+                            book=book_row,
+                            base_prompt=str(prompt or default_prompt or f"Classical medallion illustration for {book_row.get('title', f'Book {book}')}"),
+                            template_id=template_id,
+                        )
+                        if prompt_source == "template" or not str(prompt).strip():
+                            prompt = str(composed_prompt_payload.get("prompt", prompt)).strip()
                 idempotency_key = str(body.get("idempotency_key", "")).strip() or _generation_idempotency_key(
                     catalog_id=runtime_req.catalog_id,
                     book=book,
@@ -6449,6 +6957,13 @@ def serve_review_webapp(
                         dry_run=bool(body.get("dry_run", False)),
                         idempotency_key=idempotency_key,
                         max_attempts=max(1, _safe_int(body.get("max_attempts"), 3)),
+                        metadata={
+                            "prompt_source": prompt_source,
+                            "template_id": template_id,
+                            "composed_prompt": str(composed_prompt_payload.get("prompt", "")).strip(),
+                            "prompt_components": composed_prompt_payload,
+                            "inferred_genre": str(composed_prompt_payload.get("genre", "")).strip(),
+                        },
                     )
                 except job_store.IdempotencyConflictError as exc:
                     return self._send_error(
@@ -6475,6 +6990,10 @@ def serve_review_webapp(
                         "job": job.to_dict(),
                         "poll_url": f"/api/jobs/{job.id}",
                         "event_url": f"/api/events/job/{job.id}",
+                        "prompt_source": prompt_source,
+                        "template_id": template_id or None,
+                        "composed_prompt": str(composed_prompt_payload.get("prompt", "")).strip() or None,
+                        "inferred_genre": str(composed_prompt_payload.get("genre", "")).strip() or None,
                     }
                 )
 
@@ -7849,11 +8368,100 @@ def serve_review_webapp(
                     _provider_connectivity_cache.pop(str(runtime_req.catalog_id), None)
                 return self._send_json({"ok": True, "report": report})
 
+            if path == "/api/validate/cover":
+                distributor = str(body.get("distributor", "ingram_spark") or "ingram_spark").strip().lower()
+                file_token = str(body.get("file_path", body.get("image_path", "")) or "").strip()
+                text_elements = body.get("text_elements", [])
+                if not isinstance(text_elements, list):
+                    text_elements = []
+
+                if not file_token:
+                    return self._send_error(
+                        code="FILE_PATH_REQUIRED",
+                        message="file_path is required",
+                        status=HTTPStatus.BAD_REQUEST,
+                        endpoint=path,
+                    )
+
+                file_path = Path(file_token)
+                if not file_path.is_absolute():
+                    file_path = PROJECT_ROOT / file_path
+                try:
+                    safe_path = security.sanitize_path(file_path, PROJECT_ROOT)
+                except Exception:
+                    return self._send_error(
+                        code="PATH_NOT_ALLOWED",
+                        message="Requested file path is not allowed",
+                        details={"file_path": file_token},
+                        status=HTTPStatus.FORBIDDEN,
+                        endpoint=path,
+                    )
+
+                if not safe_path.exists() or not safe_path.is_file():
+                    return self._send_error(
+                        code="FILE_NOT_FOUND",
+                        message="cover file not found",
+                        details={"file_path": str(safe_path)},
+                        status=HTTPStatus.NOT_FOUND,
+                        endpoint=path,
+                    )
+
+                validator = _print_validator_instance()
+                try:
+                    with Image.open(safe_path) as cover_image:
+                        if distributor == "all":
+                            payload = validator.validate_for_all_distributors(cover_image, text_elements, safe_path)
+                            return self._send_json(
+                                {
+                                    "ok": True,
+                                    "file_path": _to_project_relative(safe_path),
+                                    "distributor": "all",
+                                    "results": payload,
+                                    "passed": all(bool(row.get("passed")) for row in payload.values() if isinstance(row, dict)),
+                                }
+                            )
+                        result = validator.validate_all(cover_image, text_elements, safe_path, distributor)
+                        return self._send_json(
+                            {
+                                "ok": True,
+                                "file_path": _to_project_relative(safe_path),
+                                **result,
+                            }
+                        )
+                except KeyError:
+                    return self._send_error(
+                        code="UNKNOWN_DISTRIBUTOR",
+                        message=f"Unknown distributor: {distributor}",
+                        details={"supported": sorted(_print_validator_instance().specs.keys())},
+                        status=HTTPStatus.BAD_REQUEST,
+                        endpoint=path,
+                    )
+                except Exception as exc:
+                    return self._send_error(
+                        code="PRINT_VALIDATION_FAILED",
+                        message=str(exc),
+                        details={"file_path": str(safe_path), "distributor": distributor},
+                        status=HTTPStatus.INTERNAL_SERVER_ERROR,
+                        endpoint=path,
+                    )
+
             if path == "/api/generate":
                 book = int(body.get("book", 0))
                 models = list(body.get("models", [])) if isinstance(body.get("models", []), list) else []
                 variants = int(body.get("variants", 5))
                 prompt = str(body.get("prompt", ""))
+                prompt_source = str(body.get("promptSource", body.get("prompt_source", "template")) or "template").strip().lower() or "template"
+                template_id = str(body.get("template_id", body.get("templateId", "")) or "").strip()
+                compose_prompt = bool(body.get("compose_prompt", True))
+                template_ok, template_details = _validate_template_id(runtime=runtime_req, template_id=template_id)
+                if not template_ok:
+                    return self._send_error(
+                        code="INVALID_TEMPLATE_ID",
+                        message=f"Unknown template_id: {template_id}",
+                        details=template_details,
+                        status=HTTPStatus.BAD_REQUEST,
+                        endpoint=path,
+                    )
                 provider = str(body.get("provider", "")).strip().lower()
                 cover_source = str(body.get("cover_source", "catalog")).strip().lower() or "catalog"
                 if cover_source not in {"catalog", "drive"}:
@@ -7925,6 +8533,25 @@ def serve_review_webapp(
                         status=HTTPStatus.BAD_REQUEST,
                         endpoint=path,
                     )
+                composed_prompt_payload: dict[str, Any] = {}
+                if compose_prompt:
+                    book_row = _book_row_for_number(runtime=runtime_req, book_number=book)
+                    if book_row is not None:
+                        default_prompt = ""
+                        variants_payload = book_row.get("variants", [])
+                        if isinstance(variants_payload, list) and variants_payload:
+                            first_variant = variants_payload[0]
+                            if isinstance(first_variant, dict):
+                                default_prompt = str(first_variant.get("prompt", "")).strip()
+                        composed_prompt_payload = _compose_prompt_for_book(
+                            runtime=runtime_req,
+                            book=book_row,
+                            base_prompt=str(prompt or default_prompt or f"Classical medallion illustration for {book_row.get('title', f'Book {book}')}")
+                            .strip(),
+                            template_id=template_id,
+                        )
+                        if prompt_source == "template" or not str(prompt).strip():
+                            prompt = str(composed_prompt_payload.get("prompt", prompt)).strip()
                 active_models = [str(item).strip() for item in models if str(item).strip()]
                 if not active_models:
                     return self._send_error(
@@ -7982,6 +8609,13 @@ def serve_review_webapp(
                             dry_run=requested_dry_run,
                             idempotency_key=idempotency_key,
                             max_attempts=max(1, int(body.get("max_attempts", 3))),
+                            metadata={
+                                "prompt_source": prompt_source,
+                                "template_id": template_id,
+                                "composed_prompt": str(composed_prompt_payload.get("prompt", "")).strip(),
+                                "prompt_components": composed_prompt_payload,
+                                "inferred_genre": str(composed_prompt_payload.get("genre", "")).strip(),
+                            },
                         )
                     except job_store.IdempotencyConflictError as exc:
                         return self._send_error(
@@ -7998,6 +8632,10 @@ def serve_review_webapp(
                         "idempotency_key": idempotency_key,
                         "poll_url": f"/api/jobs/{job.id}",
                         "event_url": f"/api/events/job/{job.id}",
+                        "prompt_source": prompt_source,
+                        "template_id": template_id or None,
+                        "composed_prompt": str(composed_prompt_payload.get("prompt", "")).strip() or None,
+                        "inferred_genre": str(composed_prompt_payload.get("genre", "")).strip() or None,
                     }
                     batch_token = str((job.payload or {}).get("batch_id", "")).strip() if isinstance(job.payload, dict) else ""
                     if batch_token:
@@ -8058,9 +8696,11 @@ def serve_review_webapp(
                             "prompt": prompt,
                             "provider": provider or "all",
                             "cover_source": cover_source,
-                    "selected_cover_id": selected_cover_id,
-                    "library_prompt_id": library_prompt_id,
-                    "drive_folder_id": drive_folder_id,
+                            "selected_cover_id": selected_cover_id,
+                            "template_id": template_id,
+                            "prompt_source": prompt_source,
+                            "library_prompt_id": library_prompt_id,
+                            "drive_folder_id": drive_folder_id,
                             "input_folder_id": input_folder_id,
                             "credentials_path": credentials_path,
                             "dry_run": bool(body.get("dry_run", False)),
@@ -10836,6 +11476,7 @@ def _load_generation_records(*, runtime: config.Config | None = None) -> list[di
                 "similar_to_book": _safe_int(row.get("similar_to_book"), 0),
                 "similarity_warning": str(row.get("similarity_warning", "")),
                 "error": row.get("error"),
+                "print_validation": row.get("print_validation", {}) if isinstance(row.get("print_validation"), dict) else {},
             }
         )
 
@@ -10874,6 +11515,7 @@ def _load_generation_records(*, runtime: config.Config | None = None) -> list[di
                 "similar_to_book": 0,
                 "similarity_warning": "",
                 "error": None,
+                "print_validation": {},
             }
         )
 
@@ -11857,6 +12499,12 @@ def _build_api_docs_html() -> str:
         ("GET", "/similarity", "Similarity UI", "-", "-", "Cross-book similarity heatmap, alerts, and clusters."),
         ("GET", "/mockups", "Mockup UI", "-", "-", "Mockup gallery and generation controls."),
         ("GET", "/api/version", "API version", "-", "{\"version\":\"2.0.0\"}", "Current application version."),
+        ("GET", "/api/models", "Model registry", "-", "{\"models\":[...],\"total\":13}", "List all known models with provider, cost, speed, and success stats."),
+        ("GET", "/api/providers", "Provider health", "-", "{\"providers\":[...]}", "Provider-level health, circuit state, and 24h request/error counters."),
+        ("GET", "/api/catalog", "Catalog overview", "-", "{\"catalogs\":[...],\"total_books\":99}", "Catalog list with generated/winner counts."),
+        ("GET", "/api/templates", "Template registry", "genre", "{\"templates\":[...],\"total\":10}", "List style templates with optional genre filtering."),
+        ("GET", "/api/stats", "Usage stats", "-", "{\"total_generations\":150,...}", "Aggregate generation/cost/quality usage statistics."),
+        ("GET", "/api/config", "Runtime config", "-", "{\"active_models\":[...],\"drive\":{...}}", "Non-sensitive runtime config and feature flags."),
         ("GET", "/api/catalogs", "Catalog list", "-", "{\"catalogs\":[...],\"active_catalog\":\"classics\"}", "Available catalogs for selector dropdowns."),
         ("GET", "/api/health", "Health check", "-", "{\"status\":\"ok\",...}", "Runtime health and config status."),
         ("GET", "/api/metrics", "Runtime metrics", "-", "{\"cache\":{...},\"errors\":{...},\"jobs\":{...}}", "Operational counters, error metrics, queue state, and worker service telemetry."),
@@ -11942,6 +12590,7 @@ def _build_api_docs_html() -> str:
         ("POST", "/api/save-prompt", "Save prompt", "{\"name\":\"...\",\"prompt_template\":\"...\"}", "{\"ok\":true,\"prompt_id\":\"...\"}", "Save prompt into prompt library."),
         ("POST", "/api/providers/reset", "Reset provider runtime", "{\"provider\":\"all|openai|...\"}", "{\"ok\":true}", "Reset provider circuit/rate-limit/runtime counters."),
         ("POST", "/api/test-connection", "Test provider keys", "{\"provider\":\"all|openai|...\"}", "{\"ok\":true,\"report\":{...}}", "Validate provider connectivity."),
+        ("POST", "/api/validate/cover", "Validate print readiness", "{\"file_path\":\"Output Covers/.../cover.jpg\",\"distributor\":\"ingram_spark\"}", "{\"ok\":true,\"passed\":true}", "Validate one cover against distributor print specs."),
         ("POST", "/api/generate", "Generate variants", "{\"book\":2,\"models\":[...],\"variants\":5,\"prompt\":\"...\",\"async\":true,\"dry_run\":false}", "{\"ok\":true,\"job\":{...}}", "Queue async generation job (idempotent). Sync mode (async=false) is disabled by default unless ALLOW_SYNC_GENERATION=1."),
         ("POST", "/api/batch-generate", "Create batch generation", "{\"books\":[1,2,3],\"models\":[...],\"variants\":5,\"budgetUsd\":25}", "{\"ok\":true,\"batchId\":\"...\"}", "Queue multiple book jobs under one batch id with budget controls."),
         ("POST", "/api/batch-generate/{batchId}/pause", "Pause batch", "{\"reason\":\"manual\"}", "{\"ok\":true,\"status\":\"paused\"}", "Pause queued jobs in a batch."),

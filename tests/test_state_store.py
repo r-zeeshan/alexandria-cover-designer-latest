@@ -48,6 +48,35 @@ def test_append_and_list_generation_records(tmp_path: Path):
     assert len(payload["items"]) == 2
 
 
+def test_append_and_load_print_validation_payload(tmp_path: Path):
+    store = StateStore(tmp_path / "state.sqlite3")
+    rows = [
+        {
+            "book_number": 2,
+            "variant": 1,
+            "model": "openrouter/google/gemini-2.5-flash-image",
+            "prompt": "A whale and a storm",
+            "provider": "openrouter",
+            "success": True,
+            "generation_time": 2.0,
+            "cost": 0.003,
+            "timestamp": "2026-02-28T00:00:00+00:00",
+            "print_validation": {
+                "ingram_spark": {"passed": False, "errors": [{"type": "bleed"}], "warnings": []},
+                "kdp": {"passed": True, "errors": [], "warnings": []},
+            },
+        }
+    ]
+    inserted = store.append_generation_records(catalog_id="classics", records=rows)
+    assert inserted == 1
+    listed = store.list_generation_records(catalog_id="classics", limit=5)
+    assert len(listed) == 1
+    print_validation = listed[0].get("print_validation", {})
+    assert isinstance(print_validation, dict)
+    assert "ingram_spark" in print_validation
+    assert bool(print_validation["kdp"]["passed"]) is True
+
+
 def test_append_generation_records_dedupes_by_job_id(tmp_path: Path):
     store = StateStore(tmp_path / "state.sqlite3")
     rows = [

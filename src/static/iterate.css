@@ -53,6 +53,14 @@ body.iterate-page { margin: 0; font-family: Georgia, "Times New Roman", serif; b
 header { padding: 14px 18px; border-bottom: 1px solid var(--line); }
 h1 { margin: 0; color: var(--gold); font-size: 22px; }
 .status { color: var(--muted); font-size: 13px; margin-top: 6px; transition: color 0.2s; }
+.prompt-composition {
+  border: 1px dashed rgba(196, 163, 82, 0.35);
+  border-radius: 8px;
+  padding: 8px;
+  background: rgba(16, 28, 52, 0.5);
+  color: var(--text);
+  line-height: 1.4;
+}
 
 /* ─── LAYOUT ─── */
 .layout { display: grid; grid-template-columns: 380px 1fr; gap: 14px; padding: 14px; }
@@ -79,6 +87,14 @@ body.iterate-page button.mode-active {
 .quick-models {
   display: grid;
   gap: 8px;
+}
+.preset-toggle {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.preset-toggle button {
+  width: 100%;
 }
 .quick-models label {
   text-transform: none;
@@ -335,6 +351,34 @@ body.iterate-page #generateBtn.btn-loading {
 .img-card img:hover { transform: scale(1.03); box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
 .img-card label { font-size: 12px; margin: 6px 0 2px; display: flex; align-items: center; justify-content: center; gap: 4px; cursor: pointer; text-transform: none; letter-spacing: 0; font-weight: normal; color: var(--text); }
 .img-card .meta { font-size: 11px; color: var(--muted); }
+.img-card .meta.meta-print { margin-top: 4px; }
+.print-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(245, 230, 200, 0.2);
+  font-size: 11px;
+}
+.print-badge-pass {
+  background: rgba(52, 211, 153, 0.12);
+  border-color: rgba(52, 211, 153, 0.35);
+  color: #9af2cf;
+}
+.print-badge-warn {
+  background: rgba(251, 191, 36, 0.12);
+  border-color: rgba(251, 191, 36, 0.35);
+  color: #f4d58a;
+}
+.print-badge-fail {
+  background: rgba(248, 113, 113, 0.12);
+  border-color: rgba(248, 113, 113, 0.35);
+  color: #f7b5b5;
+}
+.print-badge-unknown {
+  background: rgba(96, 165, 250, 0.1);
+  border-color: rgba(96, 165, 250, 0.25);
+  color: #b7d7ff;
+}
 .img-card-prompt {
   margin-top: 4px;
   text-align: left;

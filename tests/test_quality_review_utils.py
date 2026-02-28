@@ -1267,6 +1267,13 @@ def test_api_docs_include_catalog_routes():
     assert "/catalogs" in html
     assert "/api/generate-catalog" in html
     assert "/api/jobs/{id}" in html
+    assert "/api/models" in html
+    assert "/api/providers" in html
+    assert "/api/catalog" in html
+    assert "/api/templates" in html
+    assert "/api/stats" in html
+    assert "/api/config" in html
+    assert "/api/validate/cover" in html
     assert "/api/metrics" in html
     assert "/api/providers/runtime" in html
     assert "/api/workers" in html
@@ -1296,6 +1303,25 @@ def test_execute_generation_payload_validates_variants_cap(tmp_path: Path, monke
                 "prompt": "test",
                 "provider": "all",
                 "dry_run": True,
+            }
+        )
+
+
+def test_execute_generation_payload_rejects_unknown_template_id(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    cfg = _build_runtime_for_startup_checks(tmp_path)
+    cfg = replace(cfg, max_generation_variants=12)
+    monkeypatch.setattr(qr.config, "get_config", lambda *_args, **_kwargs: cfg)
+    with pytest.raises(ValueError, match="Unknown template_id"):
+        qr._execute_generation_payload(
+            {
+                "catalog": "classics",
+                "book": 1,
+                "models": ["openrouter/flux-2-pro"],
+                "variants": 1,
+                "prompt": "test",
+                "provider": "all",
+                "dry_run": True,
+                "template_id": "not-real-template",
             }
         )
 

@@ -89,6 +89,7 @@ class StateStore:
                     distinctiveness_score REAL NOT NULL DEFAULT 0,
                     timestamp TEXT NOT NULL,
                     fit_overlay_path TEXT,
+                    print_validation_json TEXT,
                     job_id TEXT NOT NULL DEFAULT '',
                     created_at TEXT NOT NULL
                 )
@@ -120,6 +121,8 @@ class StateStore:
             }
             if "job_id" not in columns:
                 conn.execute("ALTER TABLE generation_records ADD COLUMN job_id TEXT NOT NULL DEFAULT ''")
+            if "print_validation_json" not in columns:
+                conn.execute("ALTER TABLE generation_records ADD COLUMN print_validation_json TEXT")
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_generation_records_catalog_job "
                 "ON generation_records(catalog_id, job_id, book_number, variant, model, provider, dry_run)"
@@ -250,9 +253,10 @@ class StateStore:
                         distinctiveness_score,
                         timestamp,
                         fit_overlay_path,
+                        print_validation_json,
                         job_id,
                         created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         str(catalog_id),
@@ -273,6 +277,7 @@ class StateStore:
                         float(row.get("distinctiveness_score", 0.0) or 0.0),
                         str(row.get("timestamp", "") or now),
                         row.get("fit_overlay_path"),
+                        _as_json(row.get("print_validation", {})) if isinstance(row.get("print_validation", {}), dict) else None,
                         job_token,
                         now,
                     ),
@@ -329,6 +334,7 @@ class StateStore:
                     "distinctiveness_score": float(row["distinctiveness_score"] or 0.0),
                     "timestamp": str(row["timestamp"] or ""),
                     "fit_overlay_path": row["fit_overlay_path"],
+                    "print_validation": _from_json(row["print_validation_json"], {}),
                     "job_id": str(row["job_id"] or ""),
                 }
             )

@@ -58,6 +58,13 @@
         </div>
         <label class="u-mt-12">Models (Recommended First)</label>
         <div id="quickModelsBox" class="quick-models"></div>
+        <label class="u-mt-12">Budget Preset</label>
+        <div id="presetToggle" class="preset-toggle">
+          <button id="presetCheapest" type="button" data-preset="cheapest" class="secondary">Cheapest</button>
+          <button id="presetBalanced" type="button" data-preset="balanced" class="secondary">Balanced</button>
+          <button id="presetPremium" type="button" data-preset="premium" class="secondary">Premium</button>
+        </div>
+        <div id="presetStatus" class="status">Preset-driven model selection is available in Quick mode.</div>
         <div class="row u-mt-10">
           <button id="quickGenerateBtn" type="button" title="Enter">Generate</button>
         </div>
@@ -132,6 +139,16 @@
       </label>
       <input id="variationCount" type="number" min="1" step="1" value="5" />
 
+      <label class="u-mt-12">
+        Template
+        <span class="help-tip" data-tip="Template adds a style modifier that changes composition, typography direction, and visual tone.">?</span>
+      </label>
+      <div class="row">
+        <select id="templateSelect"></select>
+        <select id="templateGenreFilter" title="Filter templates by genre"></select>
+      </div>
+      <div id="templateStatus" class="status">Template loading...</div>
+
       <label>
         Prompt Source
         <span class="help-tip" data-tip="Template: default catalog prompt. AI-Generated: intelligent prompts for this book. Library: a saved prompt template. Custom: keep manual text exactly as written.">?</span>
@@ -149,6 +166,7 @@
       </label>
       <textarea id="promptEditor" rows="7" placeholder="Your prompt appears here after selecting a book and source. You can edit it before generation."></textarea>
       <div id="promptQuality" class="status">Prompt quality: n/a</div>
+      <div id="promptComposition" class="status prompt-composition">Prompt composition details appear here.</div>
 
       <div class="row u-mt-10">
         <button id="generateBtn" type="button">Generate</button>
@@ -307,6 +325,11 @@
       modelCosts: {},
       modelCompare: [],
       recommendedModel: '',
+      templates: [],
+      selectedTemplateId: '',
+      templateGenreFilter: '',
+      budgetPresets: [],
+      selectedBudgetPreset: 'balanced',
       driveOutputFolderId: '',
       uiMode: 'quick',
       quickModels: [],
@@ -740,6 +763,19 @@
         app.defaultVariantsPerModel = Number(data.default_variants_per_model || 5);
         app.maxGenerationVariants = Math.max(app.defaultVariantsPerModel, Number(data.max_generation_variants || 20));
         app.modelCosts = data.model_costs || {};
+        app.templates = Array.isArray(data.templates) ? data.templates : [];
+        app.selectedTemplateId = String(data.default_template_id || (app.templates[0] && app.templates[0].id) || '').trim();
+        app.budgetPresets = Array.isArray(data.budget_presets) ? data.budget_presets : [];
+        if (!app.budgetPresets.length) {
+          app.budgetPresets = [
+            { id: 'cheapest', name: 'Cheapest', models: ['openrouter/google/gemini-2.5-flash-image'], estimated_cost_per_image_usd: 0.003, description: 'Fast smoke tests, quick iteration' },
+            { id: 'balanced', name: 'Balanced', models: ['openrouter/google/gemini-2.5-flash-image', 'openrouter/openai/gpt-5-image-mini'], estimated_cost_per_image_usd: 0.015, description: 'Good quality at reasonable cost' },
+            { id: 'premium', name: 'Premium', models: ['openrouter/google/gemini-2.5-flash-image', 'openrouter/openai/gpt-5-image', 'fal/fal-ai/flux-2-pro'], estimated_cost_per_image_usd: 0.088, description: 'Best quality, all top models' },
+          ];
+        }
+        app.selectedBudgetPreset = app.budgetPresets.some(row => String(row.id).toLowerCase() === 'balanced')
+          ? 'balanced'
+          : String((app.budgetPresets[0] && app.budgetPresets[0].id) || 'cheapest').toLowerCase();
         app.driveOutputFolderId = String(data.gdrive_output_folder_id || '');
         app.defaultCoverSource = (data.default_cover_source === 'drive') ? 'drive' : 'catalog';
         app.coverSource = app.defaultCoverSource;
@@ -753,7 +789,9 @@
         renderProviders();
         renderModels();
         renderQuickControls();
+        renderPresetToggle();
         renderAnchors();
+        renderTemplateControls();
         renderLibrary();
         if (app.requestedPromptId) {
           const loaded = applyLibraryPrompt(app.requestedPromptId, { silent: true });
@@ -767,6 +805,7 @@
         qs('promptSource').value = app.promptSource;
         bindEvents();
         startHeartbeatAutoRefresh();
+        applyBudgetPreset(app.selectedBudgetPreset, { user: false, silent: true });
         applyMode();
         applyCoverSource();
         await refreshCoverPreview({ silent: true });
@@ -824,6 +863,145 @@
       field.title = `Allowed range: 1-${max}`;
     }
 
+    function presetById(presetId) {
+      const token = String(presetId || '').trim().toLowerCase();
+      return (app.budgetPresets || []).find(row => String(row.id || '').trim().toLowerCase() === token) || null;
+    }
+
+    function renderPresetToggle() {
+      const rows = Array.isArray(app.budgetPresets) ? app.budgetPresets : [];
+      const statusNode = qs('presetStatus');
+      ['presetCheapest', 'presetBalanced', 'presetPremium'].forEach(id => {
+        const node = qs(id);
+        if (!node) return;
+        const token = String(node.getAttribute('data-preset') || '').trim().toLowerCase();
+        const active = token === String(app.selectedBudgetPreset || '').trim().toLowerCase();
+        node.classList.toggle('mode-active', active);
+        node.classList.toggle('secondary', !active);
+      });
+      const preset = presetById(app.selectedBudgetPreset);
+      if (!preset) {
+        if (statusNode) statusNode.textContent = 'Preset-driven model selection is available in Quick mode.';
+        return;
+      }
+      const cost = Number(preset.estimated_cost_per_image_usd || 0);
+      const models = Array.isArray(preset.models) ? preset.models.length : 0;
+      if (statusNode) statusNode.textContent = `${preset.name}: ${preset.description || ''} (${models} model(s), ~$${cost.toFixed(4)}/image).`;
+    }
+
+    function applyBudgetPreset(presetId, { user = true, silent = false } = {}) {
+      const preset = presetById(presetId);
+      if (!preset) return false;
+      const models = Array.isArray(preset.models) ? preset.models : [];
+      const available = models.filter(model => (app.models || []).includes(model));
+      if (!available.length) {
+        if (!silent) showToast(`Preset ${preset.name} has no models available in this deployment.`, 'error');
+        return false;
+      }
+      app.selectedBudgetPreset = String(preset.id || '').trim().toLowerCase();
+      app.modelSelectionTouched = Boolean(user);
+      app.modelSelection = new Set(available);
+      renderPresetToggle();
+      renderModels();
+      renderQuickControls();
+      loadCostProjection();
+      renderHeartbeat();
+      if (!silent) showToast(`Preset applied: ${preset.name}.`, 'success', 1600);
+      return true;
+    }
+
+    function templateRowsFiltered() {
+      const rows = Array.isArray(app.templates) ? app.templates : [];
+      const token = String(app.templateGenreFilter || '').trim().toLowerCase();
+      if (!token) return rows;
+      const filtered = rows.filter(row => {
+        const genres = Array.isArray(row.genres) ? row.genres : [];
+        return genres.map(item => String(item || '').trim().toLowerCase()).includes(token);
+      });
+      return filtered.length ? filtered : rows;
+    }
+
+    function currentTemplate() {
+      const rows = templateRowsFiltered();
+      return rows.find(row => String(row.id || '') === String(app.selectedTemplateId || '')) || rows[0] || null;
+    }
+
+    function renderTemplateControls() {
+      const templateSelect = qs('templateSelect');
+      const genreSelect = qs('templateGenreFilter');
+      const statusNode = qs('templateStatus');
+      if (!templateSelect || !genreSelect || !statusNode) return;
+
+      const templates = Array.isArray(app.templates) ? app.templates : [];
+      const allGenres = Array.from(
+        new Set(
+          templates.flatMap(row => (Array.isArray(row.genres) ? row.genres : []))
+            .map(item => String(item || '').trim().toLowerCase())
+            .filter(Boolean)
+        )
+      ).sort();
+
+      const genreOptions = ['<option value=\"\">All Genres</option>']
+        .concat(allGenres.map(genre => `<option value=\"${escapeHtml(genre)}\">${escapeHtml(genre)}</option>`));
+      genreSelect.innerHTML = genreOptions.join('');
+      genreSelect.value = allGenres.includes(String(app.templateGenreFilter || '').toLowerCase()) ? app.templateGenreFilter : '';
+      app.templateGenreFilter = genreSelect.value || '';
+
+      const filtered = templateRowsFiltered();
+      if (!filtered.length) {
+        templateSelect.innerHTML = '<option value=\"\">No templates available</option>';
+        statusNode.textContent = 'No template registry loaded.';
+        return;
+      }
+      if (!filtered.some(row => String(row.id || '') === String(app.selectedTemplateId || ''))) {
+        app.selectedTemplateId = String(filtered[0].id || '');
+      }
+      templateSelect.innerHTML = filtered.map(row => `<option value=\"${escapeHtml(row.id)}\">${escapeHtml(row.name || row.id)}</option>`).join('');
+      templateSelect.value = app.selectedTemplateId;
+      const selected = currentTemplate();
+      const genres = selected && Array.isArray(selected.genres) ? selected.genres.join(', ') : 'n/a';
+      statusNode.textContent = selected
+        ? `${selected.description || ''} Genres: ${genres}.`
+        : 'No template selected.';
+    }
+
+    function composePromptForBook(book, { basePromptOverride = '' } = {}) {
+      const template = currentTemplate();
+      const components = (book && typeof book.prompt_components === 'object' && book.prompt_components) ? book.prompt_components : {};
+      const fallbackBase = `Classical medallion illustration for ${book && book.title ? book.title : 'this title'}`;
+      const basePrompt = String(basePromptOverride || components.base || book && book.default_prompt || fallbackBase).trim();
+      const templateModifier = String((template && template.prompt_modifier) || components.template || '').trim();
+      const genreModifier = String(components.genre_modifier || '').trim();
+      const genre = String((book && book.genre) || components.genre || 'literary_fiction').trim();
+      const titleKeywords = Array.isArray(components.title_keywords) ? components.title_keywords : [];
+      const negative = String(components.negative || 'text, letters, words, watermark, signature').trim();
+      const positiveParts = [basePrompt, templateModifier, genreModifier, titleKeywords.join(', ')].filter(Boolean);
+      const positivePrompt = positiveParts.join(', ');
+      const prompt = negative ? `${positivePrompt}, avoid: ${negative}` : positivePrompt;
+      return {
+        prompt,
+        basePrompt,
+        templateModifier,
+        genreModifier,
+        genre,
+        titleKeywords,
+        negative,
+      };
+    }
+
+    function renderPromptComposition(book, composed) {
+      const node = qs('promptComposition');
+      if (!node) return;
+      const details = composed || composePromptForBook(book || currentBook() || {});
+      node.innerHTML = [
+        `<strong>Composed Prompt:</strong> genre <code>${escapeHtml(details.genre || 'literary_fiction')}</code>`,
+        `<span>base: ${escapeHtml(shortPrompt(details.basePrompt || ''))}</span>`,
+        `<span>template: ${escapeHtml(shortPrompt(details.templateModifier || 'n/a'))}</span>`,
+        `<span>genre: ${escapeHtml(shortPrompt(details.genreModifier || 'n/a'))}</span>`,
+        `<span>keywords: ${escapeHtml((details.titleKeywords || []).join(', ') || 'n/a')}</span>`,
+      ].join('<br>');
+    }
+
     function visibleModels() {
       const provider = app.selectedProvider || 'all';
       return provider === 'all' ? app.models : (app.providerModels[provider] || []);
@@ -861,11 +1039,23 @@
     function applyModeRecommendations() {
       const top = recommendedQuickModels();
       app.quickModels = top;
+      const preset = presetById(app.selectedBudgetPreset);
+      if (!app.modelSelectionTouched && preset && Array.isArray(preset.models) && preset.models.length) {
+        const available = preset.models.filter(model => (app.models || []).includes(model));
+        if (available.length) {
+          app.modelSelection = new Set(available);
+          renderModels();
+          renderQuickControls();
+          renderPresetToggle();
+          return;
+        }
+      }
       if (!app.modelSelectionTouched) {
         app.modelSelection = new Set(top);
       }
       renderModels();
       renderQuickControls();
+      renderPresetToggle();
     }
 
     function renderQuickControls() {
@@ -905,6 +1095,7 @@
           renderHeartbeat();
         });
       });
+      renderPresetToggle();
     }
 
     function applyMode() {
@@ -1219,8 +1410,10 @@
       }
       if (!app.modelSelectionTouched) {
         next.clear();
+        const preset = presetById(app.selectedBudgetPreset);
+        const presetModels = preset && Array.isArray(preset.models) ? preset.models : [];
         const recommended = recommendedQuickModels();
-        const seedModels = recommended.length ? recommended : (app.models || []).slice(0, 3);
+        const seedModels = presetModels.length ? presetModels : (recommended.length ? recommended : (app.models || []).slice(0, 3));
         seedModels.forEach(model => {
           const provider = modelProvider(model);
           if (provider && providerDisabled(provider)) return;
@@ -1286,6 +1479,7 @@
       qs('promptSource').value = app.promptSource;
       qs('promptEditor').value = compiledPrompt;
       qs('promptQuality').textContent = 'Prompt quality: n/a (library mode)';
+      renderPromptComposition(book, composePromptForBook(book, { basePromptOverride: compiledPrompt }));
       if (!silent) showToast(`Loaded library prompt: ${item.name || token}.`, 'success', 1800);
       return true;
     }
@@ -1387,15 +1581,19 @@
       if (app.promptSource === 'ai_generated' && smart.length) {
         app.selectedLibraryPromptId = '';
         const top = smart.slice().sort((a, b) => Number((b.quality || {}).overall || 0) - Number((a.quality || {}).overall || 0))[0];
-        qs('promptEditor').value = top.prompt || (book.default_prompt || '');
+        const composed = composePromptForBook(book, { basePromptOverride: top.prompt || (book.default_prompt || '') });
+        qs('promptEditor').value = composed.prompt || (top.prompt || (book.default_prompt || ''));
         const quality = top.quality || {};
         qs('promptQuality').textContent = `Prompt quality: overall ${Number(quality.overall || 0).toFixed(3)} · specificity ${Number(quality.specificity || 0).toFixed(3)} · visual ${Number(quality.visual_richness || 0).toFixed(3)} · compliance ${Number(quality.constraint_compliance || 0).toFixed(3)}`;
+        renderPromptComposition(book, composed);
         return;
       }
       if (app.promptSource === 'template') {
         app.selectedLibraryPromptId = '';
-        qs('promptEditor').value = book.default_prompt || `Classical medallion illustration for ${book.title}`;
+        const composed = composePromptForBook(book, { basePromptOverride: book.default_prompt || `Classical medallion illustration for ${book.title}` });
+        qs('promptEditor').value = composed.prompt || (book.default_prompt || `Classical medallion illustration for ${book.title}`);
         qs('promptQuality').textContent = 'Prompt quality: n/a (template mode)';
+        renderPromptComposition(book, composed);
         return;
       }
       if (app.promptSource === 'library') {
@@ -1403,10 +1601,12 @@
           applyLibraryPrompt(app.selectedLibraryPromptId, { silent: true });
         }
         qs('promptQuality').textContent = 'Prompt quality: n/a (library mode)';
+        renderPromptComposition(book, composePromptForBook(book, { basePromptOverride: qs('promptEditor').value }));
         return;
       }
       app.selectedLibraryPromptId = '';
       qs('promptQuality').textContent = 'Prompt quality: n/a (custom mode)';
+      renderPromptComposition(book, composePromptForBook(book, { basePromptOverride: qs('promptEditor').value }));
     }
 
     function onBookChange() {
@@ -1443,6 +1643,10 @@
       app.enrichmentAvailable = Boolean(data.enrichment_available);
       app.promptPerformance = data.prompt_performance || app.promptPerformance || {};
       app.modelCosts = data.model_costs || app.modelCosts || {};
+      app.templates = Array.isArray(data.templates) ? data.templates : app.templates;
+      const defaultTemplate = String(data.default_template_id || '').trim();
+      if (defaultTemplate) app.selectedTemplateId = defaultTemplate;
+      app.budgetPresets = Array.isArray(data.budget_presets) ? data.budget_presets : app.budgetPresets;
       app.driveOutputFolderId = String(data.gdrive_output_folder_id || app.driveOutputFolderId || '');
       app.defaultCoverSource = (data.default_cover_source === 'drive') ? 'drive' : (app.defaultCoverSource || 'catalog');
       if (!['catalog', 'drive'].includes(String(app.coverSource || '').toLowerCase())) {
@@ -1459,7 +1663,9 @@
       renderProviders();
       renderModels();
       renderQuickControls();
+      renderPresetToggle();
       renderAnchors();
+      renderTemplateControls();
       renderLibrary();
       await refreshProviderConnectivity({ force: false, silent: true });
       await loadModelCompare();
@@ -1665,8 +1871,11 @@
         models,
         variants,
         prompt: qs('promptEditor').value,
+        prompt_source: app.promptSource || 'template',
         provider,
         cover_source: app.coverSource,
+        template_id: app.selectedTemplateId || '',
+        compose_prompt: true,
         selected_cover_id: selectedCover ? String(selectedCover.id || '') : '',
         selected_cover_book_number: selectedCover ? Number(selectedCover.book_number || 0) : 0,
         selected_cover: selectedCover || null,
@@ -2400,6 +2609,23 @@
       node.classList.remove('picker-hidden');
     }
 
+    function printValidationBadge(item) {
+      const summary = (item && typeof item.print_validation_summary === 'object' && item.print_validation_summary)
+        ? item.print_validation_summary
+        : null;
+      if (!summary) return '<span class="print-badge print-badge-unknown">print: n/a</span>';
+      const passedAll = Boolean(summary.passed_all);
+      const errors = Number(summary.errors_total || 0);
+      const warnings = Number(summary.warnings_total || 0);
+      if (passedAll && errors === 0) {
+        return `<span class="print-badge print-badge-pass">print: pass${warnings > 0 ? ` (${warnings} warn)` : ''}</span>`;
+      }
+      if (errors > 0) {
+        return `<span class="print-badge print-badge-fail">print: ${errors} error${errors === 1 ? '' : 's'}${warnings > 0 ? `, ${warnings} warn` : ''}</span>`;
+      }
+      return `<span class="print-badge print-badge-warn">print: ${warnings} warning${warnings === 1 ? '' : 's'}</span>`;
+    }
+
     function renderResults() {
       app.compareSelections.clear();
       const root = qs('results');
@@ -2431,6 +2657,7 @@
           const previewUrl = `/api/thumbnail?path=${encodeURIComponent(imagePath)}&size=large`;
           const thumbUrl = `/api/thumbnail?path=${encodeURIComponent(imagePath)}&size=small`;
           const quality = Number(item.quality_score || 0);
+          const printBadge = printValidationBadge(item);
           const card = document.createElement('div');
           card.className = 'img-card';
           card.innerHTML = `
@@ -2457,6 +2684,7 @@
               <button type="button" class="btn-copy-prompt" data-copy-prompt>📋 Copy Prompt</button>
             </div>
             <div class="meta">quality: ${quality > 0 ? quality.toFixed(2) : 'n/a'} · cost: $${Number(item.cost || 0).toFixed(3)} · ${Number(item.generation_time || 0).toFixed(2)}s</div>
+            <div class="meta meta-print">${printBadge}</div>
           `;
           const imgNode = card.querySelector('img[data-full-url]');
           if (imgNode) {
@@ -3021,6 +3249,15 @@
         qs('bookSelect').value = String(event.target.value || '');
         onBookChange();
       });
+      ['presetCheapest', 'presetBalanced', 'presetPremium'].forEach(id => {
+        const node = qs(id);
+        if (!node) return;
+        node.addEventListener('click', () => {
+          const token = String(node.getAttribute('data-preset') || '').trim().toLowerCase();
+          if (!token) return;
+          applyBudgetPreset(token, { user: true, silent: false });
+        });
+      });
       qs('quickGenerateBtn').addEventListener('click', () => generate(qs('quickGenerateBtn')));
       qs('notificationBell').addEventListener('click', () => toggleNotifications());
       qs('notificationCloseBtn').addEventListener('click', () => toggleNotifications(false));
@@ -3053,9 +3290,22 @@
       });
       qs('driveCoverSelect').addEventListener('change', () => onDriveCoverChange({ silent: false }));
       qs('bookSelect').addEventListener('change', onBookChange);
+      qs('templateSelect').addEventListener('change', (event) => {
+        app.selectedTemplateId = String(event.target.value || '').trim();
+        renderTemplateControls();
+        applyPromptSource(currentBook());
+      });
+      qs('templateGenreFilter').addEventListener('change', (event) => {
+        app.templateGenreFilter = String(event.target.value || '').trim().toLowerCase();
+        renderTemplateControls();
+        applyPromptSource(currentBook());
+      });
       qs('promptSource').addEventListener('change', (event) => {
         app.promptSource = event.target.value || 'template';
         applyPromptSource(currentBook());
+      });
+      qs('promptEditor').addEventListener('input', () => {
+        renderPromptComposition(currentBook(), composePromptForBook(currentBook() || {}, { basePromptOverride: qs('promptEditor').value }));
       });
       qs('providerSelect').addEventListener('change', (event) => { app.selectedProvider = event.target.value || 'all'; renderModels(); });
       qs('variationCount').addEventListener('input', () => {
