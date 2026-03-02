@@ -11,6 +11,7 @@ import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 STATIC_DIR = PROJECT_ROOT / "src" / "static"
+DESIGN_REVISION_TOKEN = "20260302-designlock"
 
 
 def _html_files() -> list[Path]:
@@ -38,7 +39,9 @@ def test_static_html_has_no_inline_style_attributes():
 
 def test_static_html_imports_shared_css_first():
     offenders = []
-    shared_marker = '<link rel="stylesheet" href="/src/static/shared.css" />'
+    shared_marker_pattern = re.compile(
+        r'^<link rel="stylesheet" href="/src/static/shared\.css(?:\?v=[^"]+)?" />$'
+    )
     link_pattern = re.compile(r"<link rel=\"stylesheet\" href=\"[^\"]+\" />")
 
     for path in _html_files():
@@ -47,7 +50,7 @@ def test_static_html_imports_shared_css_first():
         if not links:
             offenders.append(str(path))
             continue
-        if links[0] != shared_marker:
+        if not shared_marker_pattern.match(links[0]):
             offenders.append(str(path))
     assert offenders == []
 
@@ -99,3 +102,21 @@ def test_iterate_html_keeps_cover_source_selector_outside_quick_controls():
     assert advanced_start > quick_start
     quick_block = iterate_html[quick_start:advanced_start]
     assert "coverSourceSelect" not in quick_block
+
+
+def test_static_html_uses_current_design_revision_token():
+    offenders = []
+    for path in _html_files():
+        text = path.read_text(encoding="utf-8")
+        if DESIGN_REVISION_TOKEN not in text:
+            offenders.append(str(path))
+    assert offenders == []
+
+
+def test_shared_css_contains_non_overridable_design_lock():
+    shared_css = (STATIC_DIR / "shared.css").read_text(encoding="utf-8")
+    assert "DESIGN LOCK: enforce the new sidebar-first UX" in shared_css
+    assert "body .nav {" in shared_css
+    assert "position: fixed !important;" in shared_css
+    assert "body > header," in shared_css
+    assert "margin-left: 252px !important;" in shared_css

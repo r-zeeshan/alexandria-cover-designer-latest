@@ -23,6 +23,445 @@ except ModuleNotFoundError:  # pragma: no cover
 
 logger = get_logger(__name__)
 
+DETECTION_ANALYSIS_W = 420
+DETECTION_COARSE_STEP = 4
+DETECTION_FINE_STEP = 1
+DETECTION_OPENING_RATIO = 0.758
+DETECTION_OPENING_MIN = 300
+DETECTION_OPENING_MAX = 430
+OPENING_SAFETY_INSET_PX = 6
+INNER_FEATHER_PX = 8
+RING_WIDTH_PX = 14
+RING_BEADS = 72
+MIN_OPENING_MARGIN_PX = 72
+
+_GEOMETRY_CACHE: dict[str, dict[str, int]] = {}
+
+
+def _clip(value: float) -> float:
+    return max(0.0, min(1.0, float(value)))
+
+
+def _dynamic_opening_bounds(width: int, height: int) -> tuple[int, int]:
+    base = min(int(width), int(height))
+    if base >= 1800:
+        return DETECTION_OPENING_MIN, DETECTION_OPENING_MAX
+    return max(16, int(round(base * 0.12))), max(24, int(round(base * 0.46)))
+
+
+def _geometry_cache_key(cover_path: Path) -> str:
+    try:
+        stat = cover_path.stat()
+        return f"{cover_path.resolve()}::{int(stat.st_mtime)}::{int(stat.st_size)}"
+    except Exception:
+        return str(cover_path.resolve())
+
+
+def _ring_samples(count: int) -> list[tuple[float, float]]:
+    out: list[tuple[float, float]] = []
+    for idx in range(max(8, int(count))):
+        angle = (idx / float(max(8, int(count)))) * np.pi * 2.0
+        out.append((float(np.cos(angle)), float(np.sin(angle))))
+    return out
+
+
+_COARSE_RING_SAMPLES = _ring_samples(96)
+_FINE_RING_SAMPLES = _ring_samples(180)
+
+
+def _sample_map(channel: np.ndarray, x: float, y: float) -> float:
+    h, w = channel.shape[:2]
+    ix = int(np.clip(round(float(x)), 0, w - 1))
+    iy = int(np.clip(round(float(y)), 0, h - 1))
+    return float(channel[iy, ix])
+
+
+def _score_ring(
+    *,
+    warm_map: np.ndarray,
+    sat_map: np.ndarray,
+    contrast_map: np.ndarray,
+    center_x: float,
+    center_y: float,
+    radius: float,
+    samples: list[tuple[float, float]],
+    include_contrast: bool,
+) -> float:
+    if radius < 8:
+        return float("-inf")
+    warm_vals: list[float] = []
+    sat_vals: list[float] = []
+    contrast_vals: list[float] = []
+    for cos_a, sin_a in samples:
+        px = center_x + (radius * cos_a)
+        py = center_y + (radius * sin_a)
+        warm_vals.append(_sample_map(warm_map, px, py))
+        sat_vals.append(_sample_map(sat_map, px, py))
+        if include_contrast:
+            contrast_vals.append(_sample_map(contrast_map, px, py))
+
+    ring_warm = float(np.mean(warm_vals)) if warm_vals else float("-inf")
+    ring_sat = float(np.mean(sat_vals)) if sat_vals else 0.0
+    ring_contrast = float(np.mean(contrast_vals)) if contrast_vals else 0.0
+    if include_contrast:
+        return ring_warm + (0.24 * ring_sat) + (0.60 * ring_contrast)
+    return ring_warm + (0.26 * ring_sat)
+
+
+def _detect_medallion_geometry(*, cover: Image.Image, region: Region) -> dict[str, int]:
+    rgb = np.array(cover.convert("RGB"), dtype=np.float32)
+    h, w = rgb.shape[:2]
+    if h <= 0 or w <= 0:
+        return {
+            "center_x": int(region.center_x),
+            "center_y": int(region.center_y),
+            "outer_radius": int(region.radius),
+            "score": int(-1e9),
+        }
+
+    scale = min(1.0, float(DETECTION_ANALYSIS_W) / float(max(h, w)))
+    if scale < 0.999:
+        scan_w = max(1, int(round(w * scale)))
+        scan_h = max(1, int(round(h * scale)))
+        scan = np.array(cover.resize((scan_w, scan_h), Image.LANCZOS).convert("RGB"), dtype=np.float32)
+    else:
+        scan = rgb
+        scan_h, scan_w = h, w
+
+    r = scan[..., 0]
+    g = scan[..., 1]
+    b = scan[..., 2]
+    warm_map = (r - b) + (0.45 * (g - b))
+    sat_map = np.maximum(np.maximum(r, g), b) - np.minimum(np.minimum(r, g), b)
+    gray = (0.299 * r) + (0.587 * g) + (0.114 * b)
+    dx = np.abs(np.diff(gray, axis=1))
+    dy = np.abs(np.diff(gray, axis=0))
+    contrast_map = np.pad(dx, ((0, 0), (0, 1)), mode="constant") + np.pad(dy, ((0, 1), (0, 0)), mode="constant")
+
+    cx0 = float((region.center_x or int(round(w * 0.76))) * scale)
+    cy0 = float((region.center_y or int(round(h * 0.58))) * scale)
+    r0 = float((region.radius or int(round(min(w, h) * 0.19))) * scale)
+
+    search_x = max(18, int(round(scan_w * 0.045)))
+    search_y = max(18, int(round(scan_h * 0.045)))
+    coarse_r_min = max(24, int(round(r0 * 0.84)))
+    coarse_r_max = min(int(round(min(scan_w, scan_h) * 0.49)), int(round(r0 * 1.18)))
+    if coarse_r_max <= coarse_r_min:
+        coarse_r_max = coarse_r_min + 24
+
+    best = {"score": float("-inf"), "cx": int(round(cx0)), "cy": int(round(cy0)), "r": int(round(r0))}
+    for cy in range(max(12, int(round(cy0)) - search_y), min(scan_h - 12, int(round(cy0)) + search_y + 1), DETECTION_COARSE_STEP):
+        for cx in range(max(12, int(round(cx0)) - search_x), min(scan_w - 12, int(round(cx0)) + search_x + 1), DETECTION_COARSE_STEP):
+            for radius in range(coarse_r_min, coarse_r_max + 1, DETECTION_COARSE_STEP):
+                score = _score_ring(
+                    warm_map=warm_map,
+                    sat_map=sat_map,
+                    contrast_map=contrast_map,
+                    center_x=float(cx),
+                    center_y=float(cy),
+                    radius=float(radius),
+                    samples=_COARSE_RING_SAMPLES,
+                    include_contrast=True,
+                )
+                if score > float(best["score"]):
+                    best = {"score": score, "cx": cx, "cy": cy, "r": radius}
+
+    fine_best = dict(best)
+    fine_r_min = max(20, int(best["r"]) - 14)
+    fine_r_max = min(int(round(min(scan_w, scan_h) * 0.50)), int(best["r"]) + 14)
+    for cy in range(max(10, int(best["cy"]) - 8), min(scan_h - 10, int(best["cy"]) + 9), DETECTION_FINE_STEP):
+        for cx in range(max(10, int(best["cx"]) - 8), min(scan_w - 10, int(best["cx"]) + 9), DETECTION_FINE_STEP):
+            for radius in range(fine_r_min, fine_r_max + 1, DETECTION_FINE_STEP):
+                score = _score_ring(
+                    warm_map=warm_map,
+                    sat_map=sat_map,
+                    contrast_map=contrast_map,
+                    center_x=float(cx),
+                    center_y=float(cy),
+                    radius=float(radius),
+                    samples=_FINE_RING_SAMPLES,
+                    include_contrast=False,
+                )
+                if score > float(fine_best["score"]):
+                    fine_best = {"score": score, "cx": cx, "cy": cy, "r": radius}
+
+    inv = 1.0 / max(1e-6, scale)
+    center_x = int(round(float(fine_best["cx"]) * inv))
+    center_y = int(round(float(fine_best["cy"]) * inv))
+    outer_radius = int(round(float(fine_best["r"]) * inv))
+    return {
+        "center_x": center_x,
+        "center_y": center_y,
+        "outer_radius": outer_radius,
+        "score": int(round(float(fine_best["score"]) * 1000.0)),
+    }
+
+
+def _resolve_medallion_geometry(*, cover: Image.Image, cover_path: Path, region: Region) -> dict[str, int]:
+    fallback_outer = int(max(20, region.radius))
+    fallback_opening = int(max(20, round(fallback_outer * DETECTION_OPENING_RATIO)))
+    fallback_opening = min(fallback_opening, max(20, fallback_outer - MIN_OPENING_MARGIN_PX))
+    fallback = {
+        "center_x": int(region.center_x),
+        "center_y": int(region.center_y),
+        "outer_radius": fallback_outer,
+        "opening_radius": fallback_opening,
+    }
+    try:
+        key = _geometry_cache_key(cover_path)
+        if key in _GEOMETRY_CACHE:
+            return dict(_GEOMETRY_CACHE[key])
+        detected = _detect_medallion_geometry(cover=cover, region=region)
+        detected_cx = int(detected.get("center_x", fallback["center_x"]))
+        detected_cy = int(detected.get("center_y", fallback["center_y"]))
+        detected_outer = int(max(20, detected.get("outer_radius", fallback_outer)))
+
+        use_detected = True
+        if region.center_x > 0 and region.center_y > 0 and region.radius > 0:
+            offset = float(np.sqrt(((detected_cx - region.center_x) ** 2) + ((detected_cy - region.center_y) ** 2)))
+            max_offset = max(32.0, float(region.radius) * 0.34)
+            if offset > max_offset:
+                use_detected = False
+
+        outer = detected_outer if use_detected else fallback_outer
+        center_x = detected_cx if use_detected else fallback["center_x"]
+        center_y = detected_cy if use_detected else fallback["center_y"]
+        min_open, max_open = _dynamic_opening_bounds(*cover.size)
+        opening = int(np.clip(round(outer * DETECTION_OPENING_RATIO), min_open, max_open))
+        opening = min(opening, max(20, int(outer) - MIN_OPENING_MARGIN_PX))
+        payload = {
+            "center_x": int(center_x),
+            "center_y": int(center_y),
+            "outer_radius": int(outer),
+            "opening_radius": int(opening),
+        }
+        _GEOMETRY_CACHE[key] = dict(payload)
+        logger.info(
+            "Medallion geometry detected",
+            extra={
+                "cover": str(cover_path),
+                "center_x": payload["center_x"],
+                "center_y": payload["center_y"],
+                "outer_radius": payload["outer_radius"],
+                "opening_radius": payload["opening_radius"],
+            },
+        )
+        return payload
+    except Exception as exc:
+        logger.warning("Falling back to configured medallion geometry for %s: %s", cover_path, exc)
+        return fallback
+
+
+def _sample_cover_background(*, cover: Image.Image, center_x: int, center_y: int, outer_radius: int) -> tuple[int, int, int]:
+    rgb = np.array(cover.convert("RGB"), dtype=np.float32)
+    h, w = rgb.shape[:2]
+    yy, xx = np.ogrid[:h, :w]
+    dist = np.sqrt((xx - float(center_x)) ** 2 + (yy - float(center_y)) ** 2)
+    band_inner = max(12.0, float(outer_radius) * 1.42)
+    band_outer = min(float(max(h, w)), float(outer_radius) * 1.92)
+    band = (dist >= band_inner) & (dist <= band_outer)
+    if np.any(band):
+        pixels = rgb[band]
+        sat = pixels.max(axis=1) - pixels.min(axis=1)
+        dark = pixels.mean(axis=1) < 135
+        cool = pixels[:, 2] >= (pixels[:, 0] - 6)
+        keep = (sat < 95) & dark & cool
+        if np.any(keep):
+            pixels = pixels[keep]
+        if pixels.size:
+            med = np.median(pixels, axis=0)
+            return (int(np.clip(med[0], 0, 255)), int(np.clip(med[1], 0, 255)), int(np.clip(med[2], 0, 255)))
+    edge_strip = np.concatenate(
+        [
+            rgb[: max(1, h // 14), :, :].reshape(-1, 3),
+            rgb[max(0, h - max(1, h // 14)) :, :, :].reshape(-1, 3),
+            rgb[:, : max(1, w // 14), :].reshape(-1, 3),
+            rgb[:, max(0, w - max(1, w // 14)) :, :].reshape(-1, 3),
+        ],
+        axis=0,
+    )
+    med = np.median(edge_strip, axis=0)
+    return (int(np.clip(med[0], 0, 255)), int(np.clip(med[1], 0, 255)), int(np.clip(med[2], 0, 255)))
+
+
+def _find_energy_center(image: Image.Image) -> tuple[float, float]:
+    gray = np.array(image.convert("L"), dtype=np.float32)
+    if gray.size == 0:
+        return 0.5, 0.5
+    gx = np.abs(np.diff(gray, axis=1))
+    gy = np.abs(np.diff(gray, axis=0))
+    energy = np.pad(gx, ((0, 0), (0, 1)), mode="constant") + np.pad(gy, ((0, 1), (0, 0)), mode="constant")
+    kernel = np.array([[1, 2, 1], [2, 4, 2], [1, 2, 1]], dtype=np.float32) / 16.0
+    padded = np.pad(energy, 1, mode="edge")
+    blurred = (
+        padded[:-2, :-2] * kernel[0, 0]
+        + padded[:-2, 1:-1] * kernel[0, 1]
+        + padded[:-2, 2:] * kernel[0, 2]
+        + padded[1:-1, :-2] * kernel[1, 0]
+        + padded[1:-1, 1:-1] * kernel[1, 1]
+        + padded[1:-1, 2:] * kernel[1, 2]
+        + padded[2:, :-2] * kernel[2, 0]
+        + padded[2:, 1:-1] * kernel[2, 1]
+        + padded[2:, 2:] * kernel[2, 2]
+    )
+    total = float(blurred.sum())
+    if total <= 1e-6:
+        return 0.5, 0.5
+    h, w = blurred.shape[:2]
+    ys = np.arange(h, dtype=np.float32)
+    xs = np.arange(w, dtype=np.float32)
+    cx = float((blurred.sum(axis=0) * xs).sum() / total) / max(1.0, float(w))
+    cy = float((blurred.sum(axis=1) * ys).sum() / total) / max(1.0, float(h))
+    return float(np.clip(cx, 0.0, 1.0)), float(np.clip(cy, 0.0, 1.0))
+
+
+def _detect_foreground_bbox_norm(image: Image.Image) -> dict[str, float] | None:
+    rgba = np.array(image.convert("RGBA"), dtype=np.uint8)
+    h, w = rgba.shape[:2]
+    if h <= 0 or w <= 0:
+        return None
+
+    alpha = rgba[..., 3]
+    if int(alpha.min()) < 20:
+        fg = alpha > 32
+    else:
+        border = max(4, int(min(h, w) * 0.03))
+        border_pixels = np.concatenate(
+            [
+                rgba[:border, :, :3].reshape(-1, 3),
+                rgba[h - border :, :, :3].reshape(-1, 3),
+                rgba[:, :border, :3].reshape(-1, 3),
+                rgba[:, w - border :, :3].reshape(-1, 3),
+            ],
+            axis=0,
+        ).astype(np.float32)
+        bg = border_pixels.mean(axis=0)
+        rgb = rgba[..., :3].astype(np.float32)
+        diff = np.abs(rgb[..., 0] - bg[0]) + np.abs(rgb[..., 1] - bg[1]) + np.abs(rgb[..., 2] - bg[2])
+        sat = rgb.max(axis=2) - rgb.min(axis=2)
+        fg = (diff > 54.0) | ((sat > 30.0) & (diff > 32.0))
+
+    ys, xs = np.where(fg)
+    if ys.size <= 0 or xs.size <= 0:
+        return None
+    min_x, max_x = int(xs.min()), int(xs.max())
+    min_y, max_y = int(ys.min()), int(ys.max())
+    box_w = max_x - min_x + 1
+    box_h = max_y - min_y + 1
+    area = float(box_w * box_h) / float(max(1, w * h))
+    if area >= 0.78:
+        return None
+    return {
+        "x": float(min_x) / float(w),
+        "y": float(min_y) / float(h),
+        "w": float(box_w) / float(w),
+        "h": float(box_h) / float(h),
+        "box_area": area,
+    }
+
+
+def _smart_square_crop(image: Image.Image) -> Image.Image:
+    src = image.convert("RGBA")
+    img_w, img_h = src.size
+    if img_w <= 1 or img_h <= 1:
+        return src
+
+    box = _detect_foreground_bbox_norm(src)
+    if box is not None:
+        box_cx = (float(box["x"]) + (float(box["w"]) / 2.0)) * img_w
+        box_cy = (float(box["y"]) + (float(box["h"]) / 2.0)) * img_h
+        box_w = max(1.0, float(box["w"]) * img_w)
+        box_h = max(1.0, float(box["h"]) * img_h)
+        area = float(box.get("box_area", 1.0))
+        margin = 0.48 if area < 0.18 else (0.36 if area < 0.35 else 0.28)
+        src_w = box_w * (1.0 + margin * 2.0)
+        src_h = box_h * (1.0 + margin * 2.0)
+        side = max(src_w, src_h)
+        max_centered_side_x = max(16.0, min(float(img_w), 2.0 * min(float(box_cx), float(img_w - box_cx))))
+        max_centered_side_y = max(16.0, min(float(img_h), 2.0 * min(float(box_cy), float(img_h - box_cy))))
+        centered_cap = max(16.0, min(max_centered_side_x, max_centered_side_y))
+        side = min(float(min(img_w, img_h)), max(16.0, side), centered_cap)
+        left = int(round(box_cx - (side / 2.0)))
+        top = int(round(box_cy - (side / 2.0)))
+        left = max(0, min(img_w - int(round(side)), left))
+        top = max(0, min(img_h - int(round(side)), top))
+        right = min(img_w, left + int(round(side)))
+        bottom = min(img_h, top + int(round(side)))
+        return src.crop((left, top, right, bottom))
+
+    cx_norm, cy_norm = _find_energy_center(src)
+    side = min(img_w, img_h)
+    left = int(round((cx_norm * img_w) - (side / 2.0)))
+    top = int(round((cy_norm * img_h) - (side / 2.0)))
+    left = max(0, min(img_w - side, left))
+    top = max(0, min(img_h - side, top))
+    return src.crop((left, top, left + side, top + side))
+
+
+def _prepare_circle_illustration(*, illustration: Image.Image, target_diameter: int, fill_rgb: tuple[int, int, int]) -> Image.Image:
+    cropped = _smart_square_crop(illustration)
+    if cropped.mode != "RGBA":
+        cropped = cropped.convert("RGBA")
+    side = max(2, int(target_diameter))
+    resized = cropped.resize((side, side), Image.LANCZOS)
+
+    # Flatten transparency to avoid checkerboard/sticker artifacts leaking through.
+    flattened = Image.new("RGBA", (side, side), (int(fill_rgb[0]), int(fill_rgb[1]), int(fill_rgb[2]), 255))
+    flattened.alpha_composite(resized)
+    return flattened
+
+
+def _draw_gold_ring_pil(
+    *,
+    size: tuple[int, int],
+    center_x: int,
+    center_y: int,
+    radius: int,
+    ring_width: int,
+) -> Image.Image:
+    w, h = size
+    layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(layer, "RGBA")
+    outer = float(max(4, int(radius)))
+    width_px = max(2, int(ring_width))
+    for idx in range(width_px):
+        t = idx / float(max(1, width_px - 1))
+        brightness = 0.82 + (0.28 * (1.0 - abs((t * 2.0) - 1.0)))
+        red = int(np.clip(188 * brightness, 0, 255))
+        green = int(np.clip(150 * brightness, 0, 255))
+        blue = int(np.clip(74 * brightness, 0, 255))
+        alpha = int(np.clip(188 + (42 * (1.0 - t)), 0, 255))
+        rad = outer - idx
+        draw.ellipse(
+            (center_x - rad, center_y - rad, center_x + rad, center_y + rad),
+            outline=(red, green, blue, alpha),
+            width=1,
+        )
+
+    bead_radius = max(1, int(round(width_px * 0.16)))
+    bead_ring = outer + (width_px * 0.15)
+    for idx in range(RING_BEADS):
+        angle = (idx / float(RING_BEADS)) * np.pi * 2.0
+        bx = int(round(center_x + (np.cos(angle) * bead_ring)))
+        by = int(round(center_y + (np.sin(angle) * bead_ring)))
+        draw.ellipse(
+            (bx - bead_radius, by - bead_radius, bx + bead_radius, by + bead_radius),
+            fill=(236, 202, 130, 170),
+            outline=(120, 90, 40, 140),
+            width=1,
+        )
+    return layer
+
+
+def _build_cover_overlay_with_punch(*, cover: Image.Image, center_x: int, center_y: int, punch_radius: int) -> Image.Image:
+    overlay = cover.convert("RGBA").copy()
+    alpha = Image.new("L", cover.size, 255)
+    draw = ImageDraw.Draw(alpha)
+    r = max(4, int(punch_radius))
+    draw.ellipse((center_x - r, center_y - r, center_x + r, center_y + r), fill=0)
+    overlay.putalpha(alpha)
+    return overlay
+
 
 @dataclass(slots=True)
 class Region:
@@ -69,7 +508,7 @@ def composite_single(
     region: dict[str, Any],
     output_path: Path,
     feather_px: int = 15,
-    frame_overlap_px: int = 18,
+    frame_overlap_px: int = 24,
 ) -> Path:
     """Composite one illustration into a cover image."""
     runtime = config.get_config()
@@ -82,24 +521,32 @@ def composite_single(
 
     region_obj = _region_from_dict(region)
     cover_w, cover_h = cover.size
+    strict_window_mask = _load_global_compositing_mask((cover_w, cover_h))
 
-    full_overlay = Image.new("RGBA", (cover_w, cover_h), (0, 0, 0, 0))
+    validation_region = region_obj
+    composited_rgb: Image.Image
 
     if region_obj.region_type == "rectangle" and region_obj.rect_bbox is not None:
+        full_overlay = Image.new("RGBA", (cover_w, cover_h), (0, 0, 0, 0))
         x1, y1, x2, y2 = region_obj.rect_bbox
         target_w = max(1, x2 - x1)
         target_h = max(1, y2 - y1)
         resized = illustration.resize((target_w, target_h), Image.LANCZOS)
         resized = _color_match_illustration(cover=cover, illustration=resized, region=region_obj)
         full_overlay.paste(resized, (x1, y1))
-
         mask = _build_rect_feather_mask(
             width=cover_w,
             height=cover_h,
             bbox=(x1, y1, x2, y2),
             feather_px=feather_px,
         )
+        if strict_window_mask is not None:
+            mask = _combine_masks(mask, strict_window_mask)
+        full_overlay.putalpha(mask)
+        composited_rgb = Image.alpha_composite(cover.convert("RGBA"), full_overlay).convert("RGB")
     elif region_obj.region_type == "custom_mask" and region_obj.mask_path:
+        # Preserve explicit custom-mask behavior for non-medallion special cases.
+        full_overlay = Image.new("RGBA", (cover_w, cover_h), (0, 0, 0, 0))
         effective_radius = max(20, region_obj.radius - frame_overlap_px)
         diameter = effective_radius * 2
         resized = illustration.resize((diameter, diameter), Image.LANCZOS)
@@ -110,42 +557,78 @@ def composite_single(
             center_x=region_obj.center_x,
             center_y=region_obj.center_y,
         )
-
         mask = _load_custom_mask(region_obj.mask_path, cover.size)
+        if strict_window_mask is not None:
+            mask = _combine_masks(mask, strict_window_mask)
+        full_overlay.putalpha(mask)
+        composited_rgb = Image.alpha_composite(cover.convert("RGBA"), full_overlay).convert("RGB")
     else:
-        effective_radius = max(20, region_obj.radius - frame_overlap_px)
-        diameter = effective_radius * 2
-
-        resized = illustration.resize((diameter, diameter), Image.LANCZOS)
-        resized = _color_match_illustration(cover=cover, illustration=resized, region=region_obj)
-
-        _paste_centered(
-            canvas=full_overlay,
-            overlay=resized,
-            center_x=region_obj.center_x,
-            center_y=region_obj.center_y,
+        geometry = _resolve_medallion_geometry(cover=cover, cover_path=cover_path, region=region_obj)
+        opening_radius = max(20, int(geometry["opening_radius"]))
+        clip_radius = max(14, opening_radius - OPENING_SAFETY_INSET_PX)
+        fill_rgb = _sample_cover_background(
+            cover=cover,
+            center_x=int(geometry["center_x"]),
+            center_y=int(geometry["center_y"]),
+            outer_radius=int(geometry["outer_radius"]),
         )
 
-        mask = _build_circle_feather_mask(
+        canvas = Image.new("RGBA", (cover_w, cover_h), (*fill_rgb, 255))
+        prepared = _prepare_circle_illustration(
+            illustration=illustration,
+            target_diameter=clip_radius * 2,
+            fill_rgb=fill_rgb,
+        )
+        art_layer = Image.new("RGBA", (cover_w, cover_h), (0, 0, 0, 0))
+        _paste_centered(
+            canvas=art_layer,
+            overlay=prepared,
+            center_x=int(geometry["center_x"]),
+            center_y=int(geometry["center_y"]),
+        )
+        clip_mask = _build_circle_feather_mask(
             width=cover_w,
             height=cover_h,
-            center_x=region_obj.center_x,
-            center_y=region_obj.center_y,
-            radius=effective_radius,
-            feather_px=feather_px,
+            center_x=int(geometry["center_x"]),
+            center_y=int(geometry["center_y"]),
+            radius=clip_radius,
+            feather_px=INNER_FEATHER_PX,
         )
+        if strict_window_mask is not None:
+            clip_mask = _combine_masks(clip_mask, strict_window_mask)
+        art_layer.putalpha(clip_mask)
+        composited = Image.alpha_composite(canvas, art_layer)
 
-    full_overlay.putalpha(mask)
+        ring_layer = _draw_gold_ring_pil(
+            size=(cover_w, cover_h),
+            center_x=int(geometry["center_x"]),
+            center_y=int(geometry["center_y"]),
+            radius=clip_radius,
+            ring_width=RING_WIDTH_PX,
+        )
+        composited = Image.alpha_composite(composited, ring_layer)
 
-    composited_rgba = Image.alpha_composite(cover.convert("RGBA"), full_overlay)
-    composited_rgb = composited_rgba.convert("RGB")
+        overlay = _build_cover_overlay_with_punch(
+            cover=cover,
+            center_x=int(geometry["center_x"]),
+            center_y=int(geometry["center_y"]),
+            punch_radius=opening_radius,
+        )
+        composited_rgb = Image.alpha_composite(composited, overlay).convert("RGB")
+        validation_region = Region(
+            center_x=int(geometry["center_x"]),
+            center_y=int(geometry["center_y"]),
+            radius=opening_radius,
+            frame_bbox=region_obj.frame_bbox,
+            region_type="circle",
+        )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     composited_rgb.save(output_path, format="JPEG", quality=100, subsampling=0, dpi=(300, 300))
     validation = validate_composite_output(
         cover=cover,
         composited=composited_rgb,
-        region=region_obj,
+        region=validation_region,
         output_path=output_path,
     )
     safe_json.atomic_write_json(
@@ -425,7 +908,9 @@ def _region_from_dict(region: dict[str, Any]) -> Region:
 
 def _strip_border(image: Image.Image, border_percent: float = 0.05) -> Image.Image:
     """Crop a symmetric outer strip to remove AI-added frame/border artifacts."""
-    percent = max(0.0, min(0.20, float(border_percent or 0.0)))
+    base_percent = max(0.0, min(0.20, float(border_percent or 0.0)))
+    adaptive_extra = _adaptive_border_strip_percent(image)
+    percent = max(0.0, min(0.24, base_percent + adaptive_extra))
     if percent <= 0:
         return image
     width, height = image.size
@@ -441,6 +926,57 @@ def _strip_border(image: Image.Image, border_percent: float = 0.05) -> Image.Ima
         return image
     cropped = image.crop((left, top, right, bottom))
     return cropped
+
+
+def _adaptive_border_strip_percent(image: Image.Image) -> float:
+    rgb = np.array(image.convert("RGB"), dtype=np.float32)
+    if rgb.size == 0:
+        return 0.0
+    gray = rgb.mean(axis=2)
+    h, w = gray.shape[:2]
+    if h < 24 or w < 24:
+        return 0.0
+
+    dx = np.abs(np.diff(gray, axis=1))
+    dy = np.abs(np.diff(gray, axis=0))
+    edge_map = np.pad(dx, ((0, 0), (0, 1)), mode="constant") + np.pad(dy, ((0, 1), (0, 0)), mode="constant")
+    if float(edge_map.max()) < 2.0:
+        return 0.0
+
+    margin = max(6, int(min(h, w) * 0.14))
+    yy, xx = np.ogrid[:h, :w]
+    outer_mask = (xx < margin) | (xx >= w - margin) | (yy < margin) | (yy >= h - margin)
+    center_mask = (xx >= int(w * 0.30)) & (xx <= int(w * 0.70)) & (yy >= int(h * 0.30)) & (yy <= int(h * 0.70))
+
+    outer_vals = edge_map[outer_mask]
+    center_vals = edge_map[center_mask]
+    if outer_vals.size == 0 or center_vals.size == 0:
+        return 0.0
+
+    outer_strength = float(np.percentile(outer_vals, 90))
+    center_strength = float(np.percentile(center_vals, 90))
+    strength_ratio = outer_strength / max(1e-6, center_strength)
+
+    threshold = float(np.percentile(edge_map, 97))
+    strong = edge_map >= threshold
+    outer_density = float(strong[outer_mask].mean())
+    center_density = float(strong[center_mask].mean())
+    density_ratio = outer_density / max(1e-6, center_density + 1e-6)
+
+    row_fill = strong.mean(axis=1)
+    col_fill = strong.mean(axis=0)
+    top_peak = float(row_fill[: max(2, int(h * 0.20))].max(initial=0.0))
+    bottom_peak = float(row_fill[min(h - 1, int(h * 0.80)) :].max(initial=0.0))
+    left_peak = float(col_fill[: max(2, int(w * 0.20))].max(initial=0.0))
+    right_peak = float(col_fill[min(w - 1, int(w * 0.80)) :].max(initial=0.0))
+    boundary_peak = (top_peak + bottom_peak + left_peak + right_peak) / 4.0
+
+    artifact_score = (
+        0.55 * _clip((strength_ratio - 1.25) / 1.55)
+        + 0.25 * _clip((density_ratio - 1.45) / 2.30)
+        + 0.20 * _clip((boundary_peak - 0.17) / 0.32)
+    )
+    return 0.10 * _clip(artifact_score)
 
 
 def _paste_centered(*, canvas: Image.Image, overlay: Image.Image, center_x: int, center_y: int) -> None:
@@ -510,6 +1046,34 @@ def _load_custom_mask(mask_path: str, size: tuple[int, int]) -> Image.Image:
     if mask.size != size:
         mask = mask.resize(size, Image.LANCZOS)
     return mask
+
+
+def _load_global_compositing_mask(size: tuple[int, int]) -> Image.Image | None:
+    if tuple(size) != (3784, 2777):
+        return None
+    candidate = config.CONFIG_DIR / "compositing_mask.png"
+    if not candidate.exists():
+        return None
+    try:
+        mask_rgba = Image.open(candidate).convert("RGBA")
+    except Exception:
+        logger.warning("Failed to read compositing mask at %s", candidate)
+        return None
+    if mask_rgba.size != size:
+        mask_rgba = mask_rgba.resize(size, Image.LANCZOS)
+    alpha = mask_rgba.split()[-1]
+    # Ignore malformed masks that are fully opaque or fully transparent.
+    arr = np.array(alpha, dtype=np.uint8)
+    if int(arr.max()) <= 1 or int(arr.min()) >= 254:
+        return None
+    return alpha
+
+
+def _combine_masks(primary: Image.Image, secondary: Image.Image) -> Image.Image:
+    first = np.array(primary.convert("L"), dtype=np.uint8)
+    second = np.array(secondary.convert("L"), dtype=np.uint8)
+    combined = np.minimum(first, second)
+    return Image.fromarray(combined, mode="L")
 
 
 def _validation_path(output_path: Path) -> Path:

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import importlib
+import os
 from pathlib import Path
 
 import pytest
@@ -229,3 +231,51 @@ def test_config_runtime_methods_and_get_config_fallback(monkeypatch: pytest.Monk
     assert isinstance(cfg, config.Config)
     assert "dirs" in calls
     assert "warn" in calls
+
+
+def test_get_config_always_includes_all_gemini_models():
+    cfg = config.get_config("classics")
+    required = {
+        "openrouter/google/gemini-3-pro-image-preview",
+        "openrouter/google/gemini-3.1-flash-image-preview",
+        "openrouter/google/gemini-2.5-flash-image",
+        "google/gemini-3-pro-image-preview",
+        "google/gemini-3.1-flash-image-preview",
+        "google/gemini-2.5-flash-image",
+    }
+    assert required.issubset(set(cfg.all_models))
+
+
+def test_drive_and_budget_alias_env_vars_are_honored(monkeypatch: pytest.MonkeyPatch):
+    old_source = os.environ.get("DRIVE_SOURCE_FOLDER_ID")
+    old_output = os.environ.get("DRIVE_OUTPUT_FOLDER_ID")
+    old_budget = os.environ.get("BUDGET_LIMIT_USD")
+    old_max_cost = os.environ.get("MAX_COST_USD")
+    monkeypatch.setenv("DRIVE_SOURCE_FOLDER_ID", "source-alias-folder")
+    monkeypatch.setenv("DRIVE_OUTPUT_FOLDER_ID", "output-alias-folder")
+    monkeypatch.setenv("BUDGET_LIMIT_USD", "321.5")
+    monkeypatch.setenv("MAX_COST_USD", "1.0")
+    reloaded = importlib.reload(config)
+    try:
+        cfg = reloaded.get_config("classics")
+        assert cfg.gdrive_source_folder_id == "source-alias-folder"
+        assert cfg.gdrive_output_folder_id == "output-alias-folder"
+        assert cfg.max_cost_usd == pytest.approx(321.5)
+    finally:
+        if old_source is None:
+            os.environ.pop("DRIVE_SOURCE_FOLDER_ID", None)
+        else:
+            os.environ["DRIVE_SOURCE_FOLDER_ID"] = old_source
+        if old_output is None:
+            os.environ.pop("DRIVE_OUTPUT_FOLDER_ID", None)
+        else:
+            os.environ["DRIVE_OUTPUT_FOLDER_ID"] = old_output
+        if old_budget is None:
+            os.environ.pop("BUDGET_LIMIT_USD", None)
+        else:
+            os.environ["BUDGET_LIMIT_USD"] = old_budget
+        if old_max_cost is None:
+            os.environ.pop("MAX_COST_USD", None)
+        else:
+            os.environ["MAX_COST_USD"] = old_max_cost
+        importlib.reload(reloaded)

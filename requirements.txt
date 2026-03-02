@@ -4,6 +4,7 @@
 Pillow>=10.0
 opencv-python-headless>=4.8
 numpy>=1.24
+scipy>=1.11
 
 # AI image generation
 replicate>=0.25

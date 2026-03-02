@@ -64,6 +64,7 @@ try:
     from src import image_generator
     from src import intelligent_prompter
     from src import genre_intelligence
+    from src import prompt_generator
     from src import job_store
     from src import mockup_generator
     from src import print_validator
@@ -101,6 +102,7 @@ except ModuleNotFoundError:  # pragma: no cover
     import image_generator  # type: ignore
     import intelligent_prompter  # type: ignore
     import genre_intelligence  # type: ignore
+    import prompt_generator  # type: ignore
     import job_store  # type: ignore
     import mockup_generator  # type: ignore
     import print_validator  # type: ignore
@@ -140,6 +142,9 @@ EXPORTS_ROOT = PROJECT_ROOT / "exports"
 DELIVERY_CONFIG_PATH = config.delivery_config_path()
 DELIVERY_TRACKING_PATH = config.delivery_tracking_path()
 DRIVE_SYNC_LOG_PATH = PROJECT_ROOT / "data" / "drive_sync_log.json"
+SETTINGS_STORE_PATH = PROJECT_ROOT / "settings_store.json"
+CGI_CATALOG_CACHE_PATH = PROJECT_ROOT / "catalog_cache.json"
+CGI_CATALOG_MAX_AGE_SECONDS = 3600
 APP_STARTED_AT = time.time()
 ACTIVE_WORKER_MODE = "inline"
 STARTUP_HEALTH: dict[str, Any] = {
@@ -1775,6 +1780,58 @@ def _hydrate_serialized_result_paths(*, runtime: config.Config, rows: list[dict[
     return hydrated
 
 
+def _current_run_generated_paths(*, runtime: config.Config, rows: list[dict[str, Any]]) -> set[Path]:
+    keep: set[Path] = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        token = str(row.get("image_path", "") or "").strip()
+        if not token:
+            continue
+        candidate = _project_path_if_exists(token)
+        if candidate is not None and candidate.exists():
+            keep.add(candidate.resolve())
+    return keep
+
+
+def _prune_stale_generated_variants_for_book(*, runtime: config.Config, book_number: int, keep_paths: set[Path]) -> None:
+    root = runtime.tmp_dir / "generated" / str(book_number)
+    if not root.exists() or not root.is_dir():
+        return
+    image_suffixes = {".png", ".jpg", ".jpeg", ".webp"}
+    keep = {path.resolve() for path in keep_paths}
+    removed = 0
+    for file_path in root.rglob("*"):
+        if not file_path.is_file():
+            continue
+        if file_path.suffix.lower() not in image_suffixes:
+            continue
+        try:
+            resolved = file_path.resolve()
+        except Exception:
+            resolved = file_path
+        if resolved in keep:
+            continue
+        try:
+            file_path.unlink()
+            removed += 1
+        except Exception:
+            continue
+    if removed > 0:
+        for directory in sorted([path for path in root.rglob("*") if path.is_dir()], key=lambda p: len(p.parts), reverse=True):
+            try:
+                next(directory.iterdir())
+            except StopIteration:
+                try:
+                    directory.rmdir()
+                except Exception:
+                    continue
+        logger.info(
+            "Pruned stale generated variants before compositing",
+            extra={"book_number": int(book_number), "removed_files": int(removed)},
+        )
+
+
 class JobStageError(RuntimeError):
     """Stage-scoped execution error for retry-aware async jobs."""
 
@@ -1986,7 +2043,14 @@ def _execute_generation_payload(
             composed_prompt_payload = _compose_prompt_for_book(
                 runtime=runtime,
                 book=book_row,
-                base_prompt=str(prompt or default_prompt or f"Classical medallion illustration for {book_row.get('title', f'Book {book}')}"),
+                base_prompt=str(
+                    prompt
+                    or default_prompt
+                    or (
+                        f"Cinematic full-bleed narrative scene for {book_row.get('title', f'Book {book}')}, "
+                        "single dominant focal subject, vivid painterly color, no text, no logos, no borders or frames"
+                    )
+                ),
                 template_id=template_id,
             )
             if prompt_source == "template" or not str(prompt).strip():
@@ -2091,6 +2155,8 @@ def _execute_generation_payload(
     if not dry_run and not (checkpoint and _checkpoint_stage_completed(checkpoint, "composite")):
         regions = _load_json(config.cover_regions_path(catalog_id=runtime.catalog_id, config_dir=runtime.config_dir), {})
         try:
+            keep_paths = _current_run_generated_paths(runtime=runtime, rows=serialized)
+            _prune_stale_generated_variants_for_book(runtime=runtime, book_number=book, keep_paths=keep_paths)
             if cover_source == "drive":
                 _emit_stage("download", "Downloading cover from Google Drive...", 0.03)
                 effective_drive_folder_id = (
@@ -2324,6 +2390,27 @@ def _assert_composite_validation_within_limits(*, runtime: config.Config, book_n
         return
     max_invalid = max(0, _safe_int(getattr(runtime, "composite_max_invalid_variants", 0), 0))
     if invalid > max_invalid:
+        items = report.get("items", [])
+        blocking_invalid = 0
+        evaluated_invalid_rows = 0
+        if isinstance(items, list):
+            for row in items:
+                if not isinstance(row, dict):
+                    continue
+                if bool(row.get("valid", False)):
+                    continue
+                evaluated_invalid_rows += 1
+                issues = [str(issue).strip() for issue in row.get("issues", []) if str(issue).strip()]
+                non_soft = [issue for issue in issues if issue != "edge_artifact_risk"]
+                if non_soft:
+                    blocking_invalid += 1
+        if evaluated_invalid_rows > 0 and blocking_invalid <= max_invalid:
+            logger.warning(
+                "Composite validation soft-failed for book %s; allowing run to continue",
+                book_number,
+                extra={"invalid": int(invalid), "blocking_invalid": int(blocking_invalid), "total": int(total)},
+            )
+            return
         raise ValueError(
             f"Composite validation failed for book {book_number}: "
             f"invalid variants {invalid}/{total} exceeds allowed {max_invalid}"
@@ -2992,6 +3079,20 @@ def _batch_publish_progress_for_job(job: job_store.JobRecord) -> None:
 
 
 def _create_snapshot_before_operation(runtime: config.Config, *, operation: str) -> dict[str, Any]:
+    mode = str(os.getenv("DISASTER_SNAPSHOT_MODE", "async")).strip().lower()
+    if mode not in {"sync", "blocking"}:
+        def _background_snapshot() -> None:
+            try:
+                disaster_recovery.create_snapshot(runtime=runtime)
+            except Exception as exc:
+                logger.warning(
+                    "Background snapshot failed",
+                    extra={"operation": operation, "catalog": runtime.catalog_id, "error": str(exc)},
+                )
+
+        thread = threading.Thread(target=_background_snapshot, name=f"snapshot-{operation}", daemon=True)
+        thread.start()
+        return {"ok": True, "operation": operation, "scheduled": True, "mode": "async"}
     try:
         snapshot = disaster_recovery.create_snapshot(runtime=runtime)
         return {"ok": True, "operation": operation, **snapshot.to_dict()}
@@ -3346,7 +3447,13 @@ def write_iterate_data(*, runtime: config.Config | None = None, prompts_path: Pa
                 "genre": book.get("genre", ""),
                 "enrichment": enriched_by_book.get(number, {}),
             },
-            base_prompt=str(default_prompt or f"Classical medallion illustration for {book.get('title', '')}"),
+            base_prompt=str(
+                default_prompt
+                or (
+                    f'Cinematic full-bleed narrative scene for "{book.get("title", "")}" by {book.get("author", "")}, '
+                    "single dominant focal subject, scene artwork only, no text, no logos, no borders or frames."
+                )
+            ),
             template_id=default_template_id,
         )
         books.append(
@@ -3393,6 +3500,7 @@ def write_iterate_data(*, runtime: config.Config | None = None, prompts_path: Pa
         "style_anchors": [asdict(anchor) for anchor in library.get_style_anchors()],
         "prompt_library": [asdict(item) for item in library.get_prompts()],
         "model_costs": {model: runtime.get_model_cost(model) for model in runtime.all_models},
+        "model_modalities": {model: runtime.get_model_modality(model) for model in runtime.all_models},
         "gdrive_output_folder_id": str(runtime.gdrive_output_folder_id or ""),
         "default_cover_source": _default_cover_source_for_runtime(runtime),
         "local_input_covers_available": _has_local_input_covers(runtime=runtime),
@@ -3496,14 +3604,19 @@ def _compose_prompt_for_book(
 
     positive, negative = genre_intelligence.genre_modifiers_for(inferred_genre, prompts=prompts)
     keywords = genre_intelligence.extract_title_keywords(title=str(book.get("title", "")), limit=6)
+    constrained_base = prompt_generator.enforce_prompt_constraints(str(base_prompt or "").strip())
     composed = genre_intelligence.compose_prompt(
-        base_style_prompt=str(base_prompt or "").strip(),
+        base_style_prompt=constrained_base,
         template_modifier=str((selected_template or {}).get("prompt_modifier", "")).strip(),
         genre_modifier=positive,
         title_keywords=keywords,
-        negative_prompt="text, letters, words, watermark, signature",
+        negative_prompt=(
+            "text, letters, words, typography, logos, labels, watermark, signature, "
+            "frame, border, decorative edge, ornamental border, ribbon banner, plaque"
+        ),
         genre_negative_modifier=negative,
     )
+    composed["prompt"] = prompt_generator.enforce_prompt_constraints(str(composed.get("prompt", "")).strip())
     composed["genre_modifier"] = composed.get("genre", "")
     composed["genre"] = inferred_genre
     composed["genre_source"] = str(inferred.get("source", "default"))
@@ -3548,6 +3661,7 @@ def _api_models_payload(*, runtime: config.Config) -> dict[str, Any]:
                 "provider": provider,
                 "status": "active" if model in runtime.all_models else "disabled",
                 "avg_cost_usd": round(_safe_float(stats.get("avg_cost_per_variant"), runtime.get_model_cost(model)), 6),
+                "modality": runtime.get_model_modality(model),
                 "avg_generation_time_s": round(_safe_float(stats.get("avg_generation_time_seconds"), 0.0), 4),
                 "success_rate": round(success_rate, 6),
                 "total_generations": int(count),
@@ -3916,6 +4030,206 @@ def _import_prompt_payload(*, runtime: config.Config, body: dict[str, Any]) -> d
         library.save_prompt(prompt)
         imported += 1
     return {"ok": True, "imported": imported}
+
+
+def _builtin_prompt_seed_rows() -> list[dict[str, str]]:
+    def _normalize_constraint_artifacts(text: str) -> str:
+        out = str(text or "")
+        out = re.sub(r"\bno\s*,\s*no\b", "no", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bno,\s*(?=no\b)", "", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bno,\s*(?=[\.,;:!?]|$)", "", out, flags=re.IGNORECASE)
+        out = re.sub(r",\s*no\s*,", ", ", out, flags=re.IGNORECASE)
+        out = re.sub(r",\s*,+", ", ", out)
+        out = re.sub(r"\s+,", ",", out)
+        out = re.sub(r"\s+", " ", out)
+        return out.strip(" ,")
+
+    rows: list[dict[str, str]] = []
+    for item in prompt_generator.PROMPT_LIBRARY_BUILTINS:
+        if not isinstance(item, dict):
+            continue
+        label = str(item.get("label", "")).strip()
+        modifier = str(item.get("modifier", "")).strip()
+        style_id = str(item.get("id", "")).strip()
+        if not label or not modifier:
+            continue
+        template = (
+            'Create a vivid, highly detailed illustration for the classic book "{title}" by {author}. '
+            "Identify the story's most iconic scene, central character, or symbolic turning point, then depict that moment as a cinematic narrative scene. "
+            f"Style direction: {label}. {modifier} "
+            "Keep one dominant focal subject, dynamic depth, and strong emotional storytelling. "
+            "Output rules: scene artwork only, no text, no letters, no words, no typography, no logos, no labels, "
+            "no watermark, no ribbon, no plaque, no decorative border, no frame, no medallion ring."
+        )
+        constrained_template = prompt_generator.enforce_prompt_constraints(
+            template.replace("{title}", "BOOKTITLETOKEN").replace("{author}", "BOOKAUTHORTOKEN")
+        )
+        constrained_template = constrained_template.replace("BOOKTITLETOKEN", "{title}").replace("BOOKAUTHORTOKEN", "{author}")
+        constrained_template = _normalize_constraint_artifacts(constrained_template)
+        lowered = constrained_template.lower()
+        if f"style direction: {label.lower()}" not in lowered:
+            constrained_template = f"Style direction: {label}. {modifier} {constrained_template}".strip()
+            constrained_template = _normalize_constraint_artifacts(constrained_template)
+            lowered = constrained_template.lower()
+        if "no text" not in lowered:
+            constrained_template = f"{constrained_template}, no text, no letters, no words, no typography".strip(" ,")
+            lowered = constrained_template.lower()
+        if "no border" not in lowered and "no frame" not in lowered:
+            constrained_template = f"{constrained_template}, no border, no frame".strip(" ,")
+            constrained_template = _normalize_constraint_artifacts(constrained_template)
+        rows.append(
+            {
+                "style_id": style_id or _safe_file_stem(label).replace("_", "-"),
+                "name": label,
+                "prompt_template": constrained_template,
+                "negative_prompt": (
+                    "text, letters, words, typography, logos, labels, watermark, signature, "
+                    "ribbon banner, plaque, medallion ring, border, frame, decorative edge, ornamental border"
+                ),
+            }
+        )
+    return rows
+
+
+def _seed_builtin_prompts(*, runtime: config.Config, actor: str = "tim", overwrite: bool = False) -> dict[str, Any]:
+    def _has_malformed_constraints(text: str) -> bool:
+        token = str(text or "").strip().lower()
+        if not token:
+            return True
+        malformed_patterns = (
+            r"\bno\s*,\s*no\b",
+            r"\bno\s+no\b",
+            r",\s*,",
+            r"\bavoid:\s*no\b",
+        )
+        return any(re.search(pattern, token, flags=re.IGNORECASE) for pattern in malformed_patterns)
+
+    def _builtin_prompt_needs_repair(existing_prompt: LibraryPrompt) -> bool:
+        template = str(existing_prompt.prompt_template or "")
+        negative = str(existing_prompt.negative_prompt or "")
+        if "{title}" not in template:
+            return True
+        if _has_malformed_constraints(template) or _has_malformed_constraints(negative):
+            return True
+        joined = f"{template} {negative}".lower()
+        if "no text" not in joined:
+            return True
+        if "no border" not in joined and "no frame" not in joined:
+            return True
+        return False
+
+    library = PromptLibrary(runtime.prompt_library_path)
+    existing = library.get_prompts()
+    by_name = {str(row.name).strip().lower(): row for row in existing}
+    by_style_tag: dict[str, LibraryPrompt] = {}
+    for row in existing:
+        tags = [str(tag).strip().lower() for tag in row.tags if str(tag).strip()]
+        for tag in tags:
+            if tag.startswith("builtin_v2:"):
+                by_style_tag[tag.split("builtin_v2:", 1)[1]] = row
+
+    created = 0
+    updated = 0
+    skipped = 0
+    repaired = 0
+    now = datetime.now(timezone.utc).isoformat()
+    rows = _builtin_prompt_seed_rows()
+
+    for item in rows:
+        style_id = str(item.get("style_id", "")).strip().lower()
+        name = str(item.get("name", "")).strip()
+        if not name or "{title}" not in str(item.get("prompt_template", "")):
+            skipped += 1
+            continue
+
+        existing_prompt = by_style_tag.get(style_id) or by_name.get(name.lower())
+        needs_repair = existing_prompt is not None and _builtin_prompt_needs_repair(existing_prompt)
+        if existing_prompt and not overwrite and not needs_repair:
+            skipped += 1
+            continue
+        if existing_prompt is not None and needs_repair and not overwrite:
+            repaired += 1
+
+        payload = {
+            "name": name,
+            "prompt_template": str(item.get("prompt_template", "")),
+            "style_anchors": [style_id] if style_id else [],
+            "negative_prompt": str(item.get("negative_prompt", "")),
+            "notes": "Seeded from Alexandria models/prompt report (v2).",
+            "tags": ["builtin", "builtin_v2", f"builtin_v2:{style_id}"] if style_id else ["builtin", "builtin_v2"],
+            "category": "builtin",
+            "quality_score": 0.82,
+            "source_model": "openrouter/google/gemini-3-pro-image-preview",
+        }
+
+        if existing_prompt is None:
+            prompt = LibraryPrompt(
+                id=str(uuid.uuid4()),
+                name=payload["name"],
+                prompt_template=payload["prompt_template"],
+                style_anchors=payload["style_anchors"],
+                negative_prompt=payload["negative_prompt"],
+                source_book="builtin",
+                source_model=payload["source_model"],
+                quality_score=float(payload["quality_score"]),
+                saved_by=str(actor or "tim"),
+                created_at=now,
+                notes=payload["notes"],
+                tags=payload["tags"],
+                category=payload["category"],
+            )
+            library.save_prompt(prompt)
+            created += 1
+            if style_id:
+                by_style_tag[style_id] = prompt
+            by_name[name.lower()] = prompt
+            continue
+
+        library.update_prompt(
+            existing_prompt.id,
+            name=payload["name"],
+            prompt_template=payload["prompt_template"],
+            style_anchors=payload["style_anchors"],
+            negative_prompt=payload["negative_prompt"],
+            notes=payload["notes"],
+            tags=payload["tags"],
+            category=payload["category"],
+            quality_score=float(payload["quality_score"]),
+            source_model=payload["source_model"],
+            saved_by=str(actor or "tim"),
+        )
+        updated += 1
+
+    return {
+        "ok": True,
+        "catalog": runtime.catalog_id,
+        "total_builtins": len(rows),
+        "created": int(created),
+        "updated": int(updated),
+        "skipped": int(skipped),
+        "repaired": int(repaired),
+        "overwrite": bool(overwrite),
+    }
+
+
+def _ensure_builtin_prompts_seeded(*, runtime: config.Config, actor: str = "system") -> None:
+    """Ensure v2 built-ins are available without requiring a manual seed click."""
+    try:
+        payload = _seed_builtin_prompts(runtime=runtime, actor=actor, overwrite=False)
+        created = int(payload.get("created", 0) or 0)
+        updated = int(payload.get("updated", 0) or 0)
+        total = int(payload.get("total_builtins", 0) or 0)
+        logger.info(
+            "Builtin prompt seed ensured",
+            extra={
+                "catalog": runtime.catalog_id,
+                "seed_created": created,
+                "seed_updated": updated,
+                "total_builtins": total,
+            },
+        )
+    except Exception as exc:  # pragma: no cover - startup best-effort
+        logger.warning("Failed to auto-seed built-in prompts: %s", exc)
 
 
 def _model_recommendation_payload(*, runtime: config.Config, book_number: int | None = None) -> dict[str, Any]:
@@ -4303,7 +4617,7 @@ def _health_payload(*, runtime: config.Config | None = None) -> dict[str, Any]:
     return {
         "status": "ok" if overall_healthy else "degraded",
         "healthy": overall_healthy,
-        "version": "2.0.0",
+        "version": "2.1.1",
         "uptime_seconds": int(max(0.0, time.time() - APP_STARTED_AT)),
         "database": "connected" if str(database_check.get("status", "")).strip().lower() == "ok" else "disconnected",
         "drive": {
@@ -4577,6 +4891,7 @@ def serve_review_webapp(
     _bootstrap_state_store_for_runtime(default_runtime)
     global STARTUP_HEALTH
     STARTUP_HEALTH = _run_startup_checks(default_runtime)
+    _ensure_builtin_prompts_seeded(runtime=default_runtime, actor="startup")
     write_review_data(output_dir, runtime=default_runtime)
     write_iterate_data(runtime=default_runtime)
     generate_review_gallery(output_dir)
@@ -4673,7 +4988,13 @@ def serve_review_webapp(
             self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
             self.send_header(
                 "Content-Security-Policy",
-                "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'",
+                (
+                    "default-src 'self'; "
+                    "img-src 'self' data: blob:; "
+                    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+                    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
+                    "font-src 'self' data: https://fonts.gstatic.com"
+                ),
             )
             super().end_headers()
 
@@ -4800,6 +5121,15 @@ def serve_review_webapp(
             cache_key = _cache_key(path, query, runtime_req.catalog_id)
             should_cache = path in cacheable_paths or path.startswith("/api/analytics/reports")
 
+            def _static_cache_control_for(request_path: str) -> str:
+                lower = str(request_path or "").lower()
+                if lower.endswith((".css", ".js", ".html")):
+                    # Always fetch latest UI assets so deploys never render stale layouts.
+                    return "no-store"
+                if lower.endswith((".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".ico", ".avif")):
+                    return "public, max-age=3600"
+                return "public, max-age=900"
+
             def _cache_and_send(payload: dict[str, Any]):
                 if should_cache:
                     data_cache.set(cache_key, payload)
@@ -4811,90 +5141,92 @@ def serve_review_webapp(
                     return self._send_json(cached, headers={"X-Cache": "HIT"})
 
             if path in {"", "/"}:
-                path = "/review"
-            if path == "/review":
-                mode = str(query.get("mode", [""])[0]).strip().lower()
-                page = "/src/static/review_speed.html" if mode == "speed" else "/src/static/review.html"
+                path = "/iterate"
+
+            def _build_cgi_catalog_payload() -> dict[str, Any]:
+                write_iterate_data(runtime=runtime_req)
+                iterate_payload = _load_json(_iterate_data_path_for_runtime(runtime_req), {"books": []})
+                rows = iterate_payload.get("books", []) if isinstance(iterate_payload, dict) else []
+                books: list[dict[str, Any]] = []
+                for row in rows:
+                    if not isinstance(row, dict):
+                        continue
+                    number = _safe_int(row.get("number"), 0)
+                    if number <= 0:
+                        continue
+                    books.append(
+                        {
+                            "id": number,
+                            "number": number,
+                            "title": str(row.get("title", "")),
+                            "author": str(row.get("author", "")),
+                            "folder_name": str(row.get("folder", row.get("folder_name", ""))),
+                            "cover_jpg_id": str(row.get("cover_jpg_id", "")),
+                            "cover_name": str(row.get("cover_name", "")),
+                            "synced_at": datetime.now(timezone.utc).isoformat(),
+                        }
+                    )
+                books.sort(key=lambda item: _safe_int(item.get("number"), 0))
+                payload = {
+                    "books": books,
+                    "synced_at": datetime.now(timezone.utc).isoformat(),
+                    "count": len(books),
+                }
+                try:
+                    CGI_CATALOG_CACHE_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+                except Exception:
+                    pass
+                return payload
+
+            if path == "/cgi-bin/settings.py":
+                payload = _load_json(SETTINGS_STORE_PATH, {})
+                if not isinstance(payload, dict):
+                    payload = {}
+                return self._send_json(payload)
+            if path == "/cgi-bin/catalog.py/status":
+                if CGI_CATALOG_CACHE_PATH.exists():
+                    age = max(0.0, time.time() - CGI_CATALOG_CACHE_PATH.stat().st_mtime)
+                    cache_payload = _load_json(CGI_CATALOG_CACHE_PATH, {})
+                    books = cache_payload.get("books", []) if isinstance(cache_payload, dict) else []
+                    return self._send_json(
+                        {
+                            "cached": True,
+                            "age_seconds": age,
+                            "count": len(books) if isinstance(books, list) else 0,
+                            "synced_at": cache_payload.get("synced_at") if isinstance(cache_payload, dict) else None,
+                            "stale": age > CGI_CATALOG_MAX_AGE_SECONDS,
+                        }
+                    )
+                return self._send_json({"cached": False, "age_seconds": 0.0, "count": 0, "synced_at": None, "stale": False})
+            if path == "/cgi-bin/catalog.py":
+                if CGI_CATALOG_CACHE_PATH.exists():
+                    payload = _load_json(CGI_CATALOG_CACHE_PATH, {})
+                    if isinstance(payload, dict) and isinstance(payload.get("books"), list):
+                        return self._send_json(payload)
+                return self._send_json(_build_cgi_catalog_payload())
+
+            spa_routes = {
+                "/iterate",
+                "/batch",
+                "/jobs",
+                "/review",
+                "/compare",
+                "/similarity",
+                "/mockups",
+                "/dashboard",
+                "/history",
+                "/analytics",
+                "/analytics/models",
+                "/catalogs",
+                "/prompts",
+                "/settings",
+                "/catalog/settings",
+                "/admin/performance",
+                "/api-docs",
+            }
+            if path in spa_routes:
                 return self._serve_project_relative(
-                    page,
-                    allowed_roots=[PROJECT_ROOT / "src" / "static"],
-                    cache_control="no-store",
-                )
-            if path == "/iterate":
-                return self._serve_project_relative(
-                    "/src/static/iterate.html",
-                    allowed_roots=[PROJECT_ROOT / "src" / "static"],
-                    cache_control="no-store",
-                )
-            if path == "/history":
-                return self._serve_project_relative(
-                    "/src/static/history.html",
-                    allowed_roots=[PROJECT_ROOT / "src" / "static"],
-                    cache_control="no-store",
-                )
-            if path == "/dashboard":
-                return self._serve_project_relative(
-                    "/src/static/dashboard.html",
-                    allowed_roots=[PROJECT_ROOT / "src" / "static"],
-                    cache_control="no-store",
-                )
-            if path == "/similarity":
-                return self._serve_project_relative(
-                    "/src/static/similarity.html",
-                    allowed_roots=[PROJECT_ROOT / "src" / "static"],
-                    cache_control="no-store",
-                )
-            if path == "/mockups":
-                return self._serve_project_relative(
-                    "/src/static/mockups.html",
-                    allowed_roots=[PROJECT_ROOT / "src" / "static"],
-                    cache_control="no-store",
-                )
-            if path == "/compare":
-                return self._serve_project_relative(
-                    "/src/static/compare.html",
-                    allowed_roots=[PROJECT_ROOT / "src" / "static"],
-                    cache_control="no-store",
-                )
-            if path == "/analytics/models":
-                return self._serve_project_relative(
-                    "/src/static/model_analytics.html",
-                    allowed_roots=[PROJECT_ROOT / "src" / "static"],
-                    cache_control="no-store",
-                )
-            if path == "/prompts":
-                return self._serve_project_relative(
-                    "/src/static/prompts.html",
-                    allowed_roots=[PROJECT_ROOT / "src" / "static"],
-                    cache_control="no-store",
-                )
-            if path == "/catalog/settings":
-                return self._serve_project_relative(
-                    "/src/static/catalog_settings.html",
-                    allowed_roots=[PROJECT_ROOT / "src" / "static"],
-                    cache_control="no-store",
-                )
-            if path == "/admin/performance":
-                return self._serve_project_relative(
-                    "/src/static/performance.html",
-                    allowed_roots=[PROJECT_ROOT / "src" / "static"],
-                    cache_control="no-store",
-                )
-            if path == "/jobs":
-                return self._serve_project_relative(
-                    "/src/static/jobs.html",
-                    allowed_roots=[PROJECT_ROOT / "src" / "static"],
-                    cache_control="no-store",
-                )
-            if path == "/batch":
-                return self._serve_project_relative(
-                    "/src/static/batch.html",
-                    allowed_roots=[PROJECT_ROOT / "src" / "static"],
-                    cache_control="no-store",
-                )
-            if path == "/catalogs":
-                return self._serve_project_relative(
-                    "/src/static/catalogs.html",
+                    "/src/static/index.html",
                     allowed_roots=[PROJECT_ROOT / "src" / "static"],
                     cache_control="no-store",
                 )
@@ -4904,18 +5236,24 @@ def serve_review_webapp(
                     allowed_roots=[PROJECT_ROOT],
                     cache_control="public, max-age=86400",
                 )
+            if path.startswith("/css/") or path.startswith("/js/") or path.startswith("/img/"):
+                return self._serve_project_relative(
+                    f"/src/static{path}",
+                    allowed_roots=[PROJECT_ROOT / "src" / "static"],
+                    cache_control=_static_cache_control_for(path),
+                )
             if path.startswith("/src/static/"):
                 return self._serve_project_relative(
                     path,
                     allowed_roots=[PROJECT_ROOT / "src" / "static"],
-                    cache_control="public, max-age=86400",
+                    cache_control=_static_cache_control_for(path),
                 )
             if path.startswith("/static/"):
                 static_rel = path.split("/static/", 1)[1]
                 return self._serve_project_relative(
                     f"/src/static/{static_rel}",
                     allowed_roots=[PROJECT_ROOT / "src" / "static"],
-                    cache_control="public, max-age=86400",
+                    cache_control=_static_cache_control_for(path),
                 )
             if path.startswith("/Output Covers/") or path.startswith("/tmp/"):
                 return self._serve_project_relative(
@@ -4933,7 +5271,7 @@ def serve_review_webapp(
                 self.wfile.write(data)
                 return
             if path == "/api/version":
-                return self._send_json({"ok": True, "version": "2.0.0"})
+                return self._send_json({"ok": True, "version": "2.1.1"})
             if path == "/api/models":
                 return _cache_and_send({"ok": True, **_api_models_payload(runtime=runtime_req)})
             if path == "/api/providers":
@@ -6399,6 +6737,14 @@ def serve_review_webapp(
                 endpoint=path,
             )
 
+        def do_OPTIONS(self):
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type, X-API-Token, X-Request-Id")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
         def do_POST(self):
             self._request_started_at = time.perf_counter()
             self._request_method = "POST"
@@ -6443,6 +6789,51 @@ def serve_review_webapp(
             runtime_req = config.get_config(requested_catalog or default_runtime.catalog_id)
             self._set_active_runtime(runtime_req)
             client_ip = str(self.client_address[0] if self.client_address else "unknown")
+
+            if path == "/cgi-bin/settings.py":
+                current = _load_json(SETTINGS_STORE_PATH, {})
+                if not isinstance(current, dict):
+                    current = {}
+                current.update(body)
+                SETTINGS_STORE_PATH.write_text(json.dumps(current, indent=2), encoding="utf-8")
+                return self._send_json(current)
+
+            if path == "/cgi-bin/settings.py/reset":
+                if SETTINGS_STORE_PATH.exists():
+                    SETTINGS_STORE_PATH.unlink()
+                return self._send_json({"status": "reset"})
+
+            if path == "/cgi-bin/catalog.py/refresh":
+                write_iterate_data(runtime=runtime_req)
+                iterate_payload = _load_json(_iterate_data_path_for_runtime(runtime_req), {"books": []})
+                rows = iterate_payload.get("books", []) if isinstance(iterate_payload, dict) else []
+                books: list[dict[str, Any]] = []
+                for row in rows:
+                    if not isinstance(row, dict):
+                        continue
+                    number = _safe_int(row.get("number"), 0)
+                    if number <= 0:
+                        continue
+                    books.append(
+                        {
+                            "id": number,
+                            "number": number,
+                            "title": str(row.get("title", "")),
+                            "author": str(row.get("author", "")),
+                            "folder_name": str(row.get("folder", row.get("folder_name", ""))),
+                            "cover_jpg_id": str(row.get("cover_jpg_id", "")),
+                            "cover_name": str(row.get("cover_name", "")),
+                            "synced_at": datetime.now(timezone.utc).isoformat(),
+                        }
+                    )
+                books.sort(key=lambda item: _safe_int(item.get("number"), 0))
+                payload = {
+                    "books": books,
+                    "synced_at": datetime.now(timezone.utc).isoformat(),
+                    "count": len(books),
+                }
+                CGI_CATALOG_CACHE_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+                return self._send_json(payload)
 
             if MUTATION_API_TOKEN:
                 supplied = str(self.headers.get("X-API-Token", "")).strip()
@@ -6925,7 +7316,14 @@ def serve_review_webapp(
                         composed_prompt_payload = _compose_prompt_for_book(
                             runtime=runtime_req,
                             book=book_row,
-                            base_prompt=str(prompt or default_prompt or f"Classical medallion illustration for {book_row.get('title', f'Book {book}')}"),
+                            base_prompt=str(
+                                prompt
+                                or default_prompt
+                                or (
+                                    f"Cinematic full-bleed narrative scene for {book_row.get('title', f'Book {book}')}, "
+                                    "single dominant focal subject, vivid painterly color, no text, no logos, no borders or frames"
+                                )
+                            ),
                             template_id=template_id,
                         )
                         if prompt_source == "template" or not str(prompt).strip():
@@ -8314,6 +8712,16 @@ def serve_review_webapp(
                 _invalidate_cache("/api/prompts", "/api/iterate-data")
                 return self._send_json(payload)
 
+            if path == "/api/prompts/seed-builtins":
+                payload = _seed_builtin_prompts(
+                    runtime=runtime_req,
+                    actor=str(body.get("actor") or body.get("reviewer") or configured_reviewer),
+                    overwrite=bool(body.get("overwrite", False)),
+                )
+                write_iterate_data(runtime=runtime_req)
+                _invalidate_cache("/api/prompts", "/api/iterate-data", "/api/prompt-performance")
+                return self._send_json(payload)
+
             if path == "/api/prompts/import":
                 imported = _import_prompt_payload(runtime=runtime_req, body=body)
                 write_iterate_data(runtime=runtime_req)
@@ -8546,7 +8954,14 @@ def serve_review_webapp(
                         composed_prompt_payload = _compose_prompt_for_book(
                             runtime=runtime_req,
                             book=book_row,
-                            base_prompt=str(prompt or default_prompt or f"Classical medallion illustration for {book_row.get('title', f'Book {book}')}")
+                            base_prompt=str(
+                                prompt
+                                or default_prompt
+                                or (
+                                    f"Cinematic full-bleed narrative scene for {book_row.get('title', f'Book {book}')}, "
+                                    "single dominant focal subject, vivid painterly color, no text, no logos, no borders or frames"
+                                )
+                            )
                             .strip(),
                             template_id=template_id,
                         )
@@ -10937,9 +11352,18 @@ def _project_path_if_exists(path_token: str | Path | None) -> Path | None:
     if not token:
         return None
     path = Path(token)
-    if not path.is_absolute():
-        path = PROJECT_ROOT / path
-    return path if path.exists() else None
+    candidates: list[Path] = []
+    if path.is_absolute():
+        candidates.append(path)
+        token_lstrip = token.lstrip("/")
+        if token_lstrip:
+            candidates.append(PROJECT_ROOT / token_lstrip)
+    else:
+        candidates.append(PROJECT_ROOT / path)
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
 
 
 def _latest_variant_record(
@@ -12072,6 +12496,198 @@ def _load_quality_trend_series(*, runtime: config.Config) -> list[dict[str, Any]
     return series
 
 
+def _style_tags_from_prompt(prompt: str) -> list[str]:
+    text = str(prompt or "").strip().lower()
+    if not text:
+        return []
+    mapping: list[tuple[str, str]] = [
+        ("sevastopol", "Sevastopol"),
+        ("cossack", "Cossack"),
+        ("art nouveau", "Art Nouveau"),
+        ("ukiyo", "Ukiyo-e"),
+        ("woodblock", "Ukiyo-e"),
+        ("noir", "Noir"),
+        ("botanical", "Botanical"),
+        ("gothic", "Gothic"),
+        ("stained glass", "Stained Glass"),
+        ("impression", "Impressionist"),
+        ("expression", "Expressionist"),
+        ("baroque", "Baroque"),
+        ("watercolour", "Watercolour"),
+        ("watercolor", "Watercolour"),
+        ("symbolist", "Symbolist"),
+        ("renaissance", "Renaissance"),
+        ("realist", "Realist"),
+        ("oil painting", "Classical Oil"),
+        ("romantic", "Romantic"),
+    ]
+    out: list[str] = []
+    for needle, label in mapping:
+        if needle in text and label not in out:
+            out.append(label)
+    return out[:3]
+
+
+def _discover_recent_cover_files(*, runtime: config.Config, title_by_book: dict[int, str], limit: int) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+
+    def _append_row(*, path: Path, book: int, variant: int, model: str) -> None:
+        if book <= 0 or variant <= 0:
+            return
+        rows.append(
+            {
+                "timestamp": datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc).isoformat(),
+                "book_number": int(book),
+                "book_title": title_by_book.get(int(book), f"Book {int(book)}"),
+                "model": str(model or "composited"),
+                "provider": runtime.resolve_model_provider(str(model or "composited")),
+                "variant": int(variant),
+                "quality_score": 0.0,
+                "cost": round(runtime.get_model_cost(str(model or "")), 4),
+                "status": "success",
+                "duration": 0.0,
+                "prompt": "",
+                "image_path": None,
+                "composited_path": str(path),
+                "distinctiveness_score": 0.0,
+                "similar_to_book": 0,
+                "similarity_warning": "",
+                "error": None,
+                "print_validation": {},
+            }
+        )
+
+    composited_root = runtime.tmp_dir / "composited"
+    if composited_root.exists():
+        for path in composited_root.rglob("variant_*.jpg"):
+            rel = path.relative_to(composited_root)
+            parts = list(rel.parts)
+            if not parts:
+                continue
+            book = _safe_int(parts[0], 0)
+            variant = _parse_variant(path.stem)
+            model = parts[1] if len(parts) >= 3 else "composited"
+            _append_row(path=path, book=book, variant=variant, model=model)
+
+    if rows:
+        rows.sort(key=lambda row: str(row.get("timestamp", "")), reverse=True)
+        return rows[: max(1, int(limit))]
+
+    output_root = runtime.output_dir
+    if output_root.exists():
+        for path in output_root.rglob("Variant-*/*.jpg"):
+            if len(path.parts) < 3:
+                continue
+            variant_folder = path.parent.name
+            variant = _safe_int(variant_folder.split("-", 1)[1] if "-" in variant_folder else "", 0)
+            book_folder = path.parent.parent.name
+            book = _safe_int(book_folder.split(".", 1)[0], 0)
+            _append_row(path=path, book=book, variant=variant, model="composited")
+
+    rows.sort(key=lambda row: str(row.get("timestamp", "")), reverse=True)
+    return rows[: max(1, int(limit))]
+
+
+def _dashboard_recent_results(*, items: list[dict[str, Any]], runtime: config.Config, limit: int = 24) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    seen: set[tuple[int, int, str]] = set()
+    title_by_book, _folder_map = _catalog_maps(catalog_path=runtime.book_catalog_path)
+    max_rows = max(1, int(limit))
+
+    def _timestamp_sort_value(payload: dict[str, Any]) -> float:
+        token = str(payload.get("timestamp", "")).strip()
+        if not token:
+            return float("-inf")
+        parsed = _safe_iso_datetime(token)
+        if parsed is None:
+            return float("-inf")
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return float(parsed.timestamp())
+
+    def _append_rows_from_candidates(source_rows: list[dict[str, Any]]) -> None:
+        for row in sorted(source_rows, key=_timestamp_sort_value, reverse=True):
+            if not isinstance(row, dict):
+                continue
+            book = _safe_int(row.get("book_number"), 0)
+            variant = _safe_int(row.get("variant"), 0)
+            model = str(row.get("model", "")).strip()
+            if book <= 0 or variant <= 0 or not model:
+                continue
+            key = (book, variant, model)
+            if key in seen:
+                continue
+
+            composed_token = str(row.get("composited_path", "") or "").strip()
+            image_token = str(row.get("image_path", "") or "").strip()
+            candidate = _project_path_if_exists(composed_token)
+            if candidate is None and image_token:
+                source_path = _project_path_if_exists(image_token)
+                if source_path is not None:
+                    derived = _resolve_composited_candidate(source_path, runtime=runtime)
+                    if derived is not None and derived.exists():
+                        candidate = derived
+                    elif "/generated/" not in image_token.replace("\\", "/"):
+                        # Non-generated artifacts (for example legacy merged assets) may be directly displayable.
+                        candidate = source_path
+            if candidate is None:
+                continue
+
+            seen.add(key)
+            rel = _to_project_relative(candidate)
+            quality = _safe_float(row.get("quality_score"), 0.0)
+            cost = _safe_float(row.get("cost"), runtime.get_model_cost(model))
+            prompt = str(row.get("prompt", "")).strip()
+            rows.append(
+                {
+                    "timestamp": str(row.get("timestamp", "")),
+                    "book_number": int(book),
+                    "book_title": str(row.get("book_title", f"Book {book}")),
+                    "variant": int(variant),
+                    "model": model,
+                    "provider": str(row.get("provider", runtime.resolve_model_provider(model))),
+                    "quality_score": round(quality, 4),
+                    "cost": round(cost, 6),
+                    "prompt": prompt,
+                    "style_tags": (
+                        [str(tag).strip() for tag in row.get("style_tags", []) if str(tag).strip()]
+                        if isinstance(row.get("style_tags"), list)
+                        else _style_tags_from_prompt(prompt)
+                    ),
+                    "image_path": rel,
+                    "image_url": f"/{rel}",
+                    "thumbnail_url": f"/api/thumbnail?path={quote(rel, safe='')}&size=small",
+                }
+            )
+            if len(rows) >= max_rows:
+                return
+
+    candidate_items: list[dict[str, Any]] = [row for row in items if isinstance(row, dict)]
+    if not candidate_items:
+        try:
+            jobs = job_db_store.list_jobs(
+                limit=max(50, int(limit) * 8),
+                statuses=["completed"],
+                catalog_id=runtime.catalog_id,
+            )
+        except Exception:
+            jobs = []
+        for job in jobs:
+            for job_row in _job_result_rows(job):
+                enriched = dict(job_row)
+                if not str(enriched.get("timestamp", "")).strip():
+                    enriched["timestamp"] = str(job.finished_at or job.updated_at or job.created_at or "")
+                book_number = _safe_int(enriched.get("book_number"), 0)
+                if book_number > 0 and not str(enriched.get("book_title", "")).strip():
+                    enriched["book_title"] = title_by_book.get(book_number, f"Book {book_number}")
+                candidate_items.append(enriched)
+    _append_rows_from_candidates(candidate_items)
+    if not rows:
+        discovered = _discover_recent_cover_files(runtime=runtime, title_by_book=title_by_book, limit=max(24, int(limit) * 4))
+        _append_rows_from_candidates(discovered)
+    return rows[:max_rows]
+
+
 def _build_dashboard_payload(items: list[dict[str, Any]], *, runtime: config.Config | None = None) -> dict[str, Any]:
     runtime = runtime or config.get_config()
     title_by_book, _ = _catalog_maps(catalog_path=runtime.book_catalog_path)
@@ -12156,6 +12772,7 @@ def _build_dashboard_payload(items: list[dict[str, Any]], *, runtime: config.Con
         "cumulative_cost": cumulative,
         "scatter_cost_vs_quality": scatter[-2000:],
         "quality_trend": _load_quality_trend_series(runtime=runtime),
+        "recent_results": _dashboard_recent_results(items=items, runtime=runtime, limit=24),
     }
 
 
@@ -12498,7 +13115,7 @@ def _build_api_docs_html() -> str:
         ("GET", "/batch", "Batch UI", "-", "-", "Batch generation planning and live progress page."),
         ("GET", "/similarity", "Similarity UI", "-", "-", "Cross-book similarity heatmap, alerts, and clusters."),
         ("GET", "/mockups", "Mockup UI", "-", "-", "Mockup gallery and generation controls."),
-        ("GET", "/api/version", "API version", "-", "{\"version\":\"2.0.0\"}", "Current application version."),
+        ("GET", "/api/version", "API version", "-", "{\"version\":\"2.1.1\"}", "Current application version."),
         ("GET", "/api/models", "Model registry", "-", "{\"models\":[...],\"total\":13}", "List all known models with provider, cost, speed, and success stats."),
         ("GET", "/api/providers", "Provider health", "-", "{\"providers\":[...]}", "Provider-level health, circuit state, and 24h request/error counters."),
         ("GET", "/api/catalog", "Catalog overview", "-", "{\"catalogs\":[...],\"total_books\":99}", "Catalog list with generated/winner counts."),

@@ -9,6 +9,7 @@ import io
 import json
 import logging
 import random
+import re
 import threading
 import time
 from collections import defaultdict, deque
@@ -22,6 +23,11 @@ from urllib.parse import urlparse
 import numpy as np
 import requests
 from PIL import Image, ImageDraw
+
+try:  # pragma: no cover - optional dependency path
+    from scipy import ndimage as _ndi
+except Exception:  # pragma: no cover
+    _ndi = None
 
 try:
     from src import config
@@ -45,51 +51,51 @@ RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 MODEL_STYLE_PROFILES: list[dict[str, str]] = [
     {
         "style": "dramatic cinematic classic",
-        "detail": "deep chiaroscuro, controlled golden highlights, tactile brush texture",
-        "palette": "deep navy, gold, and warm amber contrast",
-        "composition": "full-bleed scene with title-safe center focus",
+        "detail": "deep chiaroscuro, tactile brush texture, clean scene geometry",
+        "palette": "deep navy, gold, warm amber, vivid cobalt contrast",
+        "composition": "full-bleed narrative scene with centered focal subject",
     },
     {
-        "style": "minimal modern literary",
-        "detail": "restrained geometry, clean negative space, strong silhouette hierarchy",
-        "palette": "off-white base with one bold accent hue",
-        "composition": "split layout with asymmetric visual weight",
+        "style": "heroic painterly realism",
+        "detail": "confident brushwork, atmospheric depth, strong silhouette hierarchy",
+        "palette": "ultramarine, vermilion, antique gold, luminous highlights",
+        "composition": "single dominant subject with layered depth and crop-safe margins",
     },
     {
-        "style": "vintage engraved classic",
-        "detail": "fine line etching texture, aged paper grain, ornate vignette rhythm",
-        "palette": "sepia, umber, and antique brass",
-        "composition": "central medallion motif with breathing room around edges",
+        "style": "neo-engraved chromatic classic",
+        "detail": "fine line etching texture with high-chroma painterly accents and scene-first storytelling",
+        "palette": "vibrant sapphire, teal, amber, and luminous brass highlights",
+        "composition": "edge-to-edge story tableau with central visual tension",
     },
     {
         "style": "bold graphic poster",
-        "detail": "high-contrast blocks, simplified shapes, strong focal tension",
-        "palette": "vibrant jewel tones with one dark anchor color",
-        "composition": "dominant foreground subject and simplified layered background",
+        "detail": "high-contrast value grouping, expressive shape rhythm, clear focal tension",
+        "palette": "vibrant jewel tones with a dark anchor and bright highlights",
+        "composition": "dominant foreground subject with dynamic layered background",
     },
     {
         "style": "ethereal painterly",
-        "detail": "soft atmospheric diffusion, subtle edge blending, dreamlike depth",
-        "palette": "pastel gradients with desaturated supporting tones",
-        "composition": "floating central subject with directional light drift",
+        "detail": "soft atmospheric diffusion, expressive edges, dreamlike depth",
+        "palette": "luminous teal, peach, and gold with saturated accents",
+        "composition": "centered narrative moment with flowing directional light",
     },
     {
         "style": "dark moody gothic",
-        "detail": "inky shadows, selective highlights, dramatic depth cues",
-        "palette": "deep charcoal with selective neon or gold accents",
-        "composition": "close-up focal subject with layered foreground framing",
+        "detail": "inky shadows, selective highlights, dramatic depth cues, no decorative overlays",
+        "palette": "deep charcoal with electric blue and gold accents",
+        "composition": "close-up focal subject with clean edge-to-edge scene composition",
     },
     {
         "style": "illustrated hand-crafted",
-        "detail": "ink-and-wash feel, visible hand-drawn imperfections, textured brush marks",
-        "palette": "earth pigments with muted cool balancing tones",
+        "detail": "ink-and-wash feel, visible hand-crafted marks, energetic brush texture",
+        "palette": "earth pigments with vivid turquoise and crimson accents",
         "composition": "scene-led narrative tableau with diagonal motion",
     },
     {
-        "style": "typography-led conceptual cover",
-        "detail": "image mass arranged to support bold title area and clear hierarchy",
-        "palette": "monochrome base plus one accent color family",
-        "composition": "structured geometry with deliberate text-safe negative space",
+        "style": "baroque adventure painting",
+        "detail": "ornate light choreography, layered atmospheric perspective, dramatic motion",
+        "palette": "rich emerald, crimson, ultramarine, and luminous gold",
+        "composition": "high-energy centered action with crop-safe margins",
     },
 ]
 
@@ -104,6 +110,42 @@ MODEL_PROVIDER_HINTS: tuple[tuple[str, str], ...] = (
     ("sdxl", "Include technical style keywords and painterly medium guidance."),
 )
 
+STRICT_SCENE_GUARDRAIL = (
+    "Mandatory output rules: produce only the scene artwork. "
+    "No text, no letters, no numbers, no words, no logos, no title design, no labels, "
+    "no ribbons, no banners, no plaques, no inscriptions, no calligraphy, no medallion ring, "
+    "no frame, no border, no decorative edge, no seal, no coin, no emblem."
+)
+VIVID_COLOR_GUARDRAIL = (
+    "Color direction: vivid, high-saturation painterly palette with rich contrast and luminous highlights."
+)
+GENERATION_GUARDRAIL = f"{STRICT_SCENE_GUARDRAIL} {VIVID_COLOR_GUARDRAIL}"
+MAX_CONTENT_VIOLATION_SCORE = 0.24
+ARTIFACT_RETRY_LIMIT = 2
+ARTIFACT_RETRY_APPEND = (
+    "Retry instruction: scene artwork only. Absolutely no words, letters, numbers, logos, labels, ribbons, "
+    "banners, plaques, medallion rings, circular frames, ornamental borders, or decorative edges."
+)
+_PROMPT_REMOVAL_PATTERNS: tuple[str, ...] = (
+    r"\bcircular vignette composition\b",
+    r"\bcircular(?:\s+medallion)?(?:\s+frame)?\b",
+    r"\btypography(?:[- ]led)?\b",
+    r"\btext[- ]safe\b",
+    r"\btitle[- ]safe\b",
+    r"\bnameplate\b",
+    r"\blogo(?:s)?\b",
+    r"\bwatermark(?:s)?\b",
+    r"\bribbon(?:\s+banner)?\b",
+    r"\bplaque\b",
+    r"\bseal\b",
+    r"\binner(?:\s+frame|\s+ring|\s+border)?\b",
+    r"\bdecorative(?:\s+edge|\s+frame|\s+border)?\b",
+    r"\bornamental(?:\s+border|\s+frame|\s+edge)?\b",
+    r"\bframing\b",
+    r"\bmedallion(?:\s+zone|\s+opening|\s+window)?\b",
+    r"\bgilt ornament language\b",
+)
+
 
 def _host_matches_allowlist(host: str, pattern: str) -> bool:
     host_token = str(host or "").strip().lower()
@@ -116,6 +158,54 @@ def _host_matches_allowlist(host: str, pattern: str) -> bool:
         root = allow[2:]
         return host_token == root or host_token.endswith(f".{root}")
     return host_token == allow or host_token.endswith(f".{allow}")
+
+
+def _sanitize_prompt_text(prompt: str) -> str:
+    text = " ".join(str(prompt or "").split())
+    if not text:
+        return text
+    for pattern in _PROMPT_REMOVAL_PATTERNS:
+        text = re.sub(pattern, " ", text, flags=re.IGNORECASE)
+    # Cleanup artifacts created by removing forbidden tokens from "no ..." clauses.
+    text = re.sub(r"\bno\s*,\s*no\b", "no", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bno,\s*(?=no\b)", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bno,\s*(?=[\.,;:!?]|$)", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s+", " ", text)
+    text = re.sub(r"\s+,", ",", text)
+    text = re.sub(r",\s*no\s*,", ", ", text, flags=re.IGNORECASE)
+    text = re.sub(r",\s*,+", ", ", text)
+    return text.strip(" ,")
+
+
+def _guardrailed_prompt(prompt: str) -> str:
+    base = _sanitize_prompt_text(prompt)
+    if not base:
+        return GENERATION_GUARDRAIL
+    text = f"{GENERATION_GUARDRAIL} {base}".strip()
+    return " ".join(text.split())
+
+
+def _is_artifact_generation_error(message: str) -> bool:
+    token = str(message or "").strip().lower()
+    if not token:
+        return False
+    return any(
+        marker in token
+        for marker in (
+            "text_or_banner_artifact",
+            "inner_frame_or_ring_artifact",
+            "rectangular_frame_artifact",
+            "content guardrail",
+        )
+    )
+
+
+def _artifact_retry_prompt(*, prompt: str, retry_index: int) -> str:
+    hardened = (
+        f"{prompt} {ARTIFACT_RETRY_APPEND} "
+        f"Retry #{int(retry_index)}: increase color contrast and keep only one clear focal subject."
+    ).strip()
+    return _guardrailed_prompt(hardened)
 
 
 @dataclass(slots=True)
@@ -389,9 +479,19 @@ class OpenRouterProvider(BaseProvider):
         endpoint = "https://openrouter.ai/api/v1/chat/completions"
         self._assert_outbound_url(endpoint)
         seeded_prompt = f"{prompt}\nVariation seed: {seed}" if seed is not None else prompt
+        runtime = self.runtime or config.get_config()
+        modality = runtime.get_model_modality(f"openrouter/{self.model}")
+        modalities = ["image", "text"] if modality == "both" else ["image"]
         payload = {
             "model": self.model,
             "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "Return only scene artwork. Strictly avoid text, letters, logos, labels, plaques, "
+                        "ribbons, medallion rings, frames, or decorative borders."
+                    ),
+                },
                 {
                     "role": "user",
                     "content": (
@@ -400,20 +500,41 @@ class OpenRouterProvider(BaseProvider):
                     ),
                 }
             ],
-            "modalities": ["image"],
+            "modalities": modalities,
             "stream": False,
         }
-        response = requests.post(
-            endpoint,
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://alexandria-cover-designer.local",
-                "X-Title": "Alexandria Cover Designer",
-            },
-            json=payload,
-            timeout=self.timeout,
-        )
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://alexandria-cover-designer.local",
+            "X-Title": "Alexandria Cover Designer",
+        }
+
+        response = None
+        for attempt in range(1, 4):
+            response = requests.post(
+                endpoint,
+                headers=headers,
+                json=payload,
+                timeout=self.timeout,
+            )
+            if response.status_code == 429:
+                retry_after_raw = str(response.headers.get("Retry-After", "")).strip()
+                try:
+                    retry_after = max(1.0, float(retry_after_raw))
+                except ValueError:
+                    retry_after = float(10 * attempt)
+                if attempt >= 3:
+                    raise RetryableGenerationError(
+                        f"OpenRouter rate-limited after retries (429): {response.text[:240]}",
+                        status_code=429,
+                    )
+                logger.warning("OpenRouter 429; retrying in %.1fs (attempt %d/3)", retry_after, attempt)
+                time.sleep(retry_after)
+                continue
+            break
+
+        assert response is not None
         if response.status_code in RETRYABLE_STATUS_CODES:
             raise RetryableGenerationError(
                 f"OpenRouter temporary error {response.status_code}: {response.text[:240]}",
@@ -423,35 +544,76 @@ class OpenRouterProvider(BaseProvider):
             raise GenerationError(f"OpenRouter error {response.status_code}: {response.text[:300]}")
 
         body = response.json()
-        choices = body.get("choices") or []
-        if choices:
-            message = choices[0].get("message", {})
+
+        def _decode_candidate_url(image_url: str) -> Image.Image | None:
+            token = str(image_url or "").strip()
+            if not token:
+                return None
+            if token.startswith("data:image") and "," in token:
+                encoded = token.split(",", 1)[1]
+                image_bytes = base64.b64decode(encoded)
+                return Image.open(io.BytesIO(image_bytes)).convert("RGB")
+            if token.startswith("http"):
+                return _download_image(token, timeout=self.timeout)
+            return None
+
+        # Format 1: choices[].message.images[].image_url/url
+        for choice in body.get("choices") or []:
+            if not isinstance(choice, dict):
+                continue
+            message = choice.get("message", {})
+            if not isinstance(message, dict):
+                continue
             images = message.get("images") or []
-            for image_row in images:
-                image_url = ""
-                if isinstance(image_row, dict):
-                    image_ref = image_row.get("image_url")
+            if isinstance(images, list):
+                for image_row in images:
+                    if not isinstance(image_row, dict):
+                        continue
+                    image_ref = image_row.get("image_url", image_row.get("url", ""))
                     if isinstance(image_ref, dict):
-                        image_url = str(image_ref.get("url", ""))
-                    elif isinstance(image_ref, str):
-                        image_url = image_ref
-                if not image_url:
-                    continue
-                if image_url.startswith("data:image") and "," in image_url:
-                    encoded = image_url.split(",", 1)[1]
+                        image_ref = image_ref.get("url", "")
+                    parsed = _decode_candidate_url(str(image_ref or ""))
+                    if parsed is not None:
+                        return parsed
+
+            # Format 2: OpenAI-style message content blocks.
+            content = message.get("content")
+            if isinstance(content, list):
+                for part in content:
+                    if not isinstance(part, dict):
+                        continue
+                    image_ref = part.get("image_url", "")
+                    if isinstance(image_ref, dict):
+                        image_ref = image_ref.get("url", "")
+                    parsed = _decode_candidate_url(str(image_ref or ""))
+                    if parsed is not None:
+                        return parsed
+
+        # Format 3: OpenAI-compatible data[] envelope.
+        for candidate in body.get("data") or []:
+            if not isinstance(candidate, dict):
+                continue
+            encoded = str(candidate.get("b64_json", "") or "").strip()
+            if encoded:
+                image_bytes = base64.b64decode(encoded)
+                return Image.open(io.BytesIO(image_bytes)).convert("RGB")
+            parsed = _decode_candidate_url(str(candidate.get("url", "") or ""))
+            if parsed is not None:
+                return parsed
+
+        # Format 4: generated_images[] envelopes.
+        for candidate in body.get("generated_images") or body.get("generatedImages") or []:
+            if not isinstance(candidate, dict):
+                continue
+            nested = candidate.get("image", {})
+            if isinstance(nested, dict):
+                encoded = str(nested.get("imageBytes", "") or "").strip()
+                if encoded:
                     image_bytes = base64.b64decode(encoded)
                     return Image.open(io.BytesIO(image_bytes)).convert("RGB")
-                if image_url.startswith("http"):
-                    return _download_image(image_url, timeout=self.timeout)
-
-        # Backward-compatible fallback (older OpenAI-compatible image schema).
-        candidate = (body.get("data") or [{}])[0]
-        if isinstance(candidate, dict):
-            if candidate.get("b64_json"):
-                image_bytes = base64.b64decode(candidate["b64_json"])
-                return Image.open(io.BytesIO(image_bytes)).convert("RGB")
-            if candidate.get("url"):
-                return _download_image(candidate["url"], timeout=self.timeout)
+            parsed = _decode_candidate_url(str(candidate.get("url", "") or ""))
+            if parsed is not None:
+                return parsed
 
         raise GenerationError("OpenRouter response missing image payload")
 
@@ -1005,6 +1167,20 @@ def generate_image(
     processed = _post_process_image(image, width=width, height=height)
     if _is_blank_or_solid(processed):
         raise GenerationError("Generated image rejected by blank/solid-color quality check")
+    # Synthetic fallback exists for key-less demo/testing environments; keep guardrails strict for real providers.
+    provider_name = str(getattr(provider_instance, "name", "")).strip().lower()
+    if provider_name != "synthetic":
+        content_score, content_issues, _metrics = _content_guardrail_score(processed)
+        hard_text_artifact = "text_or_banner_artifact" in content_issues
+        hard_frame_artifact = (
+            ("inner_frame_or_ring_artifact" in content_issues or "rectangular_frame_artifact" in content_issues)
+            and content_score >= 0.22
+        )
+        if content_score > MAX_CONTENT_VIOLATION_SCORE or hard_text_artifact or hard_frame_artifact:
+            issue_blob = ", ".join(content_issues[:3]) if content_issues else "content_artifacts"
+            raise GenerationError(
+                f"Generated image rejected by content guardrail ({content_score:.3f}): {issue_blob}"
+            )
 
     buffer = io.BytesIO()
     processed.save(buffer, format="PNG")
@@ -1191,13 +1367,16 @@ def generate_all_models(
 
 
 def _diversify_prompt_for_variant(*, prompt: str, variant: int) -> str:
-    base = prompt_generator.enforce_prompt_constraints(str(prompt or "").strip())
+    base_text = _sanitize_prompt_text(str(prompt or "").strip())
+    if not base_text:
+        base_text = "Cinematic full-bleed narrative scene with one dominant focal subject and vivid color"
+    base = _guardrailed_prompt(base_text)
     diversified = prompt_generator.diversify_prompt(base, int(variant))
     if int(variant) > 1:
         diversified = (
             f"{diversified} Create a visibly distinct composition from prior variants for this title."
         ).strip()
-    return prompt_generator.enforce_prompt_constraints(diversified)
+    return " ".join(diversified.split())
 
 
 def _stable_model_seed(*, model: str, provider: str) -> int:
@@ -1229,18 +1408,27 @@ def _diversify_prompt_for_model_variant(
     stable_seed = _stable_model_seed(model=model, provider=provider)
     profile = MODEL_STYLE_PROFILES[(stable_seed + int(model_index) + int(variant)) % len(MODEL_STYLE_PROFILES)]
     provider_hint = _provider_model_hint(model=model, provider=provider)
+    provider_token = provider.strip().lower()
+    model_token = model.strip().lower()
+    signature_token = model_token if model_token.startswith(f"{provider_token}/") else f"{provider_token}/{model_token}"
     directive_parts = [
-        f"Model signature: {provider.strip().lower()}/{model.strip().lower()}.",
+        f"Model signature: {signature_token}.",
         f"Style direction: {profile['style']}.",
         f"Color direction: {profile['palette']}.",
         f"Composition direction: {profile['composition']}.",
         f"Visual treatment: {profile['detail']}.",
         "Ensure this result is intentionally different from other models in the same run.",
     ]
+    if STRICT_SCENE_GUARDRAIL not in diversified:
+        directive_parts.append(STRICT_SCENE_GUARDRAIL)
+    if VIVID_COLOR_GUARDRAIL not in diversified:
+        directive_parts.append(VIVID_COLOR_GUARDRAIL)
     if provider_hint:
         directive_parts.append(provider_hint)
     merged = f"{' '.join(directive_parts)} {diversified}".strip()
-    return prompt_generator.enforce_prompt_constraints(merged)
+    # Keep explicit anti-text / anti-frame directives verbatim for provider calls.
+    # Re-running constraint sanitization here can strip key "no ..." terms and create malformed lists.
+    return " ".join(merged.split())
 
 
 def _variant_seed(*, rng: random.Random | random.SystemRandom, book_number: int, model: str, variant: int) -> int:
@@ -1408,6 +1596,7 @@ def generate_single_book(
 
     if not selected_prompt:
         selected_prompt = str(base_variant.get("prompt", "")).strip()
+    selected_prompt = _sanitize_prompt_text(str(selected_prompt or ""))
 
     active_models = models[:] if models else runtime.all_models[:]
     if not active_models:
@@ -1477,7 +1666,7 @@ def generate_batch(
         for variant_entry in variants:
             completed += 1
             variant_id = int(variant_entry.get("variant_id", completed))
-            prompt = str(variant_entry.get("prompt", ""))
+            prompt = _sanitize_prompt_text(str(variant_entry.get("prompt", "")))
             negative_prompt = str(variant_entry.get("negative_prompt", ""))
             image_path = output_dir / str(book_number) / f"variant_{variant_id}.png"
 
@@ -1632,6 +1821,8 @@ def _generate_one(
 
     attempt = 0
     max_attempts = max(1, runtime.max_retries) * max(1, len(provider_chain))
+    artifact_retry_count = 0
+    working_prompt = str(prompt)
     while attempt < max_attempts:
         # Skip providers that are currently in cooldown.
         provider_advanced = False
@@ -1660,7 +1851,7 @@ def _generate_one(
         attempt += 1
         try:
             image_bytes = generate_image(
-                prompt=prompt,
+                prompt=working_prompt,
                 negative_prompt=negative_prompt,
                 model=model,
                 params={
@@ -1708,7 +1899,7 @@ def _generate_one(
             return GenerationResult(
                 book_number=book_number,
                 variant=variant,
-                prompt=prompt,
+                prompt=working_prompt,
                 model=model,
                 image_path=output_path,
                 success=True,
@@ -1767,6 +1958,19 @@ def _generate_one(
             time.sleep(backoff)
         except GenerationError as exc:
             last_error = str(exc)
+            if _is_artifact_generation_error(last_error) and artifact_retry_count < ARTIFACT_RETRY_LIMIT:
+                artifact_retry_count += 1
+                working_prompt = _artifact_retry_prompt(prompt=working_prompt, retry_index=artifact_retry_count)
+                logger.warning(
+                    "Artifact guardrail retry for book %s model %s variant %s (%d/%d): %s",
+                    book_number,
+                    model,
+                    variant,
+                    artifact_retry_count,
+                    ARTIFACT_RETRY_LIMIT,
+                    exc,
+                )
+                continue
             consecutive_provider_failures += 1
             if consecutive_provider_failures >= 3 and provider_index < (len(provider_chain) - 1):
                 previous_provider = active_provider
@@ -1819,7 +2023,7 @@ def _generate_one(
     return GenerationResult(
         book_number=book_number,
         variant=variant,
-        prompt=prompt,
+        prompt=working_prompt,
         model=model,
         image_path=None,
         success=False,
@@ -1914,6 +2118,216 @@ def _post_process_image(image: Image.Image, width: int, height: int) -> Image.Im
     processed.putalpha(mask)
 
     return processed
+
+
+def _clip(value: float) -> float:
+    return max(0.0, min(1.0, float(value)))
+
+
+def _edge_energy_map(gray: np.ndarray) -> np.ndarray:
+    dx = np.abs(np.diff(gray, axis=1))
+    dy = np.abs(np.diff(gray, axis=0))
+    return np.pad(dx, ((0, 0), (0, 1)), mode="constant") + np.pad(dy, ((0, 1), (0, 0)), mode="constant")
+
+
+def _tiny_component_ratio(binary: np.ndarray, mask: np.ndarray) -> float:
+    active = (binary.astype(bool) & mask.astype(bool))
+    if not np.any(active):
+        return 0.0
+    total = max(1, int(mask.sum()))
+    if _ndi is not None:
+        labeled, count = _ndi.label(active.astype(np.uint8))
+        if int(count) <= 0:
+            return 0.0
+        sizes = np.bincount(labeled.ravel())
+        if sizes.shape[0] <= 1:
+            return 0.0
+        tiny_pixels = int(sizes[1:][(sizes[1:] >= 2) & (sizes[1:] <= 160)].sum())
+        return float(tiny_pixels) / float(total)
+    # Fallback path when scipy is unavailable: ensure arithmetic runs on integers, not bool.
+    padded = np.pad(active.astype(np.uint8), 1, mode="constant")
+    neighbors = (
+        padded[1:-1, :-2]
+        + padded[1:-1, 2:]
+        + padded[:-2, 1:-1]
+        + padded[2:, 1:-1]
+    )
+    tiny = active & (neighbors <= 2)
+    return float(tiny.mean())
+
+
+def _ring_artifact_penalty(edge_map: np.ndarray, mask: np.ndarray) -> tuple[float, dict[str, float]]:
+    h, w = edge_map.shape[:2]
+    if h <= 0 or w <= 0:
+        return 1.0, {"annulus_ratio": 0.0, "ring_peaks": 0.0}
+
+    center_x = (w - 1.0) / 2.0
+    center_y = (h - 1.0) / 2.0
+    radius = max(1.0, min(h, w) / 2.0)
+    yy, xx = np.ogrid[:h, :w]
+    dist = np.sqrt((xx - center_x) ** 2 + (yy - center_y) ** 2)
+
+    masked_edges = edge_map[mask]
+    mean_edge = float(masked_edges.mean()) if masked_edges.size else 0.0
+    annulus = mask & (dist >= radius * 0.68) & (dist <= radius * 0.97)
+    annulus_edges = edge_map[annulus]
+    annulus_mean = float(annulus_edges.mean()) if annulus_edges.size else 0.0
+    annulus_ratio = annulus_mean / max(1e-6, mean_edge)
+
+    bins = max(32, int(radius * 0.12))
+    radial = np.linspace(0.0, radius, bins + 1)
+    bin_idx = np.clip(np.digitize(dist.ravel(), radial) - 1, 0, bins - 1)
+    vals = edge_map.ravel()
+    mask_flat = mask.ravel()
+    profile = np.zeros(bins, dtype=np.float32)
+    counts = np.zeros(bins, dtype=np.float32)
+    np.add.at(profile, bin_idx[mask_flat], vals[mask_flat])
+    np.add.at(counts, bin_idx[mask_flat], 1.0)
+    profile = np.divide(profile, np.maximum(counts, 1.0))
+    smooth = np.convolve(profile, np.array([0.2, 0.6, 0.2], dtype=np.float32), mode="same")
+
+    tail_start = int(bins * 0.70)
+    tail = smooth[tail_start:] if tail_start < smooth.shape[0] else smooth
+    if tail.size <= 4:
+        ring_peaks = 0
+    else:
+        threshold = float(tail.mean() + (tail.std() * 1.15))
+        ring_peaks = 0
+        for idx in range(tail_start + 1, smooth.shape[0] - 1):
+            value = float(smooth[idx])
+            if value <= threshold:
+                continue
+            if value >= float(smooth[idx - 1]) and value >= float(smooth[idx + 1]):
+                ring_peaks += 1
+
+    penalty = (0.55 * _clip((annulus_ratio - 1.30) / 1.20)) + (0.45 * _clip((ring_peaks - 2.0) / 4.0))
+    return _clip(penalty), {"annulus_ratio": float(annulus_ratio), "ring_peaks": float(ring_peaks)}
+
+
+def _dull_palette_penalty(rgb: np.ndarray, mask: np.ndarray) -> tuple[float, dict[str, float]]:
+    if rgb.size == 0 or not np.any(mask):
+        return 1.0, {"mean_saturation": 0.0, "contrast": 0.0}
+    norm = rgb / 255.0
+    r = norm[..., 0]
+    g = norm[..., 1]
+    b = norm[..., 2]
+    maxc = np.maximum.reduce([r, g, b])
+    minc = np.minimum.reduce([r, g, b])
+    saturation = np.where(maxc > 1e-5, (maxc - minc) / np.maximum(maxc, 1e-5), 0.0)
+    sat_mean = float(saturation[mask].mean())
+
+    brightness = ((r + g + b) / 3.0)[mask]
+    if brightness.size:
+        contrast = float(np.percentile(brightness, 95) - np.percentile(brightness, 5))
+    else:
+        contrast = 0.0
+    penalty = (0.70 * _clip((0.18 - sat_mean) / 0.18)) + (0.30 * _clip((0.34 - contrast) / 0.34))
+    return _clip(penalty), {"mean_saturation": sat_mean, "contrast": contrast}
+
+
+def _rectangular_frame_penalty(edge_map: np.ndarray, mask: np.ndarray) -> tuple[float, dict[str, float]]:
+    h, w = edge_map.shape[:2]
+    if h <= 10 or w <= 10:
+        return 0.0, {"line_strength": 0.0, "frame_vs_center_ratio": 0.0}
+
+    valid = edge_map[mask]
+    if valid.size == 0:
+        return 0.0, {"line_strength": 0.0, "frame_vs_center_ratio": 0.0}
+    threshold = float(np.percentile(valid, 98.8))
+    strong = (edge_map >= threshold) & mask
+
+    row_fill = strong.mean(axis=1)
+    col_fill = strong.mean(axis=0)
+    top_peak = float(row_fill[: max(2, int(h * 0.22))].max(initial=0.0))
+    bottom_peak = float(row_fill[min(h - 1, int(h * 0.78)) :].max(initial=0.0))
+    left_peak = float(col_fill[: max(2, int(w * 0.22))].max(initial=0.0))
+    right_peak = float(col_fill[min(w - 1, int(w * 0.78)) :].max(initial=0.0))
+    line_strength = (top_peak + bottom_peak + left_peak + right_peak) / 4.0
+
+    yy, xx = np.ogrid[:h, :w]
+    frame_band = mask & ((xx < w * 0.18) | (xx > w * 0.82) | (yy < h * 0.18) | (yy > h * 0.82))
+    center_band = mask & (xx > w * 0.30) & (xx < w * 0.70) & (yy > h * 0.30) & (yy < h * 0.70)
+    frame_density = float(strong[frame_band].mean()) if np.any(frame_band) else 0.0
+    center_density = float(strong[center_band].mean()) if np.any(center_band) else 0.0
+    frame_vs_center_ratio = frame_density / max(1e-6, center_density + 1e-6)
+
+    penalty = (0.60 * _clip((line_strength - 0.22) / 0.38)) + (0.40 * _clip((frame_vs_center_ratio - 1.8) / 1.9))
+    return _clip(penalty), {
+        "line_strength": line_strength,
+        "frame_vs_center_ratio": frame_vs_center_ratio,
+    }
+
+
+def _content_guardrail_score(image: Image.Image) -> tuple[float, list[str], dict[str, float]]:
+    rgba = np.array(image.convert("RGBA"), dtype=np.uint8)
+    rgb = rgba[..., :3].astype(np.float32)
+    alpha = rgba[..., 3].astype(np.float32) / 255.0
+    mask = alpha > 0.04
+    if not np.any(mask):
+        mask = np.ones(alpha.shape, dtype=bool)
+
+    gray = rgb.mean(axis=2)
+    edge_map = _edge_energy_map(gray)
+    valid_edges = edge_map[mask]
+    if valid_edges.size:
+        edge_threshold = float(np.percentile(valid_edges, 98))
+    else:
+        edge_threshold = float(np.percentile(edge_map, 98))
+    binary = (edge_map >= edge_threshold) & mask
+    binary_ratio = float(binary.mean())
+
+    tiny_ratio = _tiny_component_ratio(binary, mask)
+    tiny_effective = float(tiny_ratio)
+    if binary_ratio > 0.15:
+        tiny_effective *= 0.25
+    elif binary_ratio > 0.10:
+        tiny_effective *= 0.45
+    h = binary.shape[0]
+    w = binary.shape[1]
+    row_window = binary[int(h * 0.50) : int(h * 0.96), int(w * 0.12) : int(w * 0.88)]
+    if row_window.size:
+        row_density = row_window.mean(axis=1)
+        peak_cutoff = float(row_density.mean() + (1.15 * row_density.std()) + 0.0015)
+        text_band_ratio = float((row_density > peak_cutoff).mean())
+    else:
+        text_band_ratio = 0.0
+    if min(h, w) < 128:
+        tiny_effective *= 0.15
+        text_band_ratio *= 0.35
+    text_penalty = (0.58 * _clip((tiny_effective - 0.004) / 0.030)) + (0.42 * _clip((text_band_ratio - 0.040) / 0.16))
+
+    ring_penalty, ring_metrics = _ring_artifact_penalty(edge_map=edge_map, mask=mask)
+    frame_penalty, frame_metrics = _rectangular_frame_penalty(edge_map=edge_map, mask=mask)
+    dull_penalty, color_metrics = _dull_palette_penalty(rgb=rgb, mask=mask)
+
+    score = (0.52 * text_penalty) + (0.30 * ring_penalty) + (0.28 * frame_penalty) + (0.18 * dull_penalty)
+    score = _clip(score)
+
+    issues: list[str] = []
+    if text_penalty > 0.26 and (text_band_ratio > 0.12 or tiny_effective > 0.018):
+        issues.append("text_or_banner_artifact")
+    if ring_penalty > 0.14:
+        issues.append("inner_frame_or_ring_artifact")
+    if frame_penalty > 0.14:
+        issues.append("rectangular_frame_artifact")
+    if dull_penalty > 0.12:
+        issues.append("low_vibrancy")
+    metrics = {
+        "text_penalty": float(text_penalty),
+        "ring_penalty": float(ring_penalty),
+        "frame_penalty": float(frame_penalty),
+        "dull_penalty": float(dull_penalty),
+        "tiny_component_ratio": float(tiny_ratio),
+        "tiny_effective": float(tiny_effective),
+        "text_band_ratio": float(text_band_ratio),
+        "binary_ratio": float(binary_ratio),
+        "annulus_ratio": float(ring_metrics.get("annulus_ratio", 0.0)),
+        "ring_peaks": float(ring_metrics.get("ring_peaks", 0.0)),
+        "frame_line_strength": float(frame_metrics.get("line_strength", 0.0)),
+        "frame_vs_center_ratio": float(frame_metrics.get("frame_vs_center_ratio", 0.0)),
+        "mean_saturation": float(color_metrics.get("mean_saturation", 0.0)),
+    }
+    return score, issues, metrics
 
 
 def _is_blank_or_solid(image: Image.Image) -> bool:

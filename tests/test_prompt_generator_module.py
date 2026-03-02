@@ -64,13 +64,14 @@ def test_text_helpers():
 def test_ensure_prompt_constraints_enforces_length_and_phrases():
     prompt = pg._ensure_prompt_constraints("short prompt")
     low = prompt.lower()
-    assert "circular vignette composition" in low
-    assert "no text, no letters, no words, no watermarks" in low
-    assert 40 <= len(prompt.split()) <= 80
+    assert "full-bleed narrative scene" in low
+    assert "no text, no letters, no words, no typography" in low
+    assert "vivid, high-saturation painterly color palette" in low
+    assert 44 <= len(prompt.split()) <= 92
 
     long_prompt = "word " * 120
     clipped = pg._ensure_prompt_constraints(long_prompt)
-    assert len(clipped.split()) <= 80
+    assert len(clipped.split()) <= 92
 
 
 def test_motif_for_known_and_fallback_books():
@@ -87,9 +88,18 @@ def test_generate_prompts_for_book_shape():
     as_dicts = [p.to_dict() for p in prompts]
     assert len({row["variant_id"] for row in as_dicts}) == 5
     for row in as_dicts:
-        assert 40 <= row["word_count"] <= 80
-        assert "circular vignette composition" in row["prompt"].lower()
-        assert "no text, no letters, no words, no watermarks" in row["prompt"].lower()
+        assert 44 <= row["word_count"] <= 92
+        assert "full-bleed narrative scene" in row["prompt"].lower()
+        assert "no text, no letters, no words, no typography" in row["prompt"].lower()
+
+
+def test_prompt_constraints_strip_typography_and_frame_directions():
+    raw = "Typography-led poster layout, circular vignette composition, gilt ornament language, text-safe spacing"
+    constrained = pg._ensure_prompt_constraints(raw).lower()
+    assert "typography-led" not in constrained
+    assert "gilt ornament language" not in constrained
+    assert "circular vignette composition" not in constrained
+    assert "full-bleed narrative scene" in constrained
 
 
 def test_generate_all_prompts_and_save(tmp_path: Path):
@@ -242,3 +252,35 @@ def test_module_main_entrypoint_runs(monkeypatch, tmp_path: Path):
         runpy.run_module("src.prompt_generator", run_name="__main__", alter_sys=True)
     assert exc.value.code == 0
     assert output_path.exists()
+
+
+def test_select_diverse_styles_prioritizes_sevastopol_cossack_and_cycles():
+    first_ten = pg.select_diverse_styles(10, seed_token="moby")
+    assert len(first_ten) == 10
+    ids = [row["id"] for row in first_ten]
+    assert ids[:2] == pg.FIXED_VARIANT_STYLE_IDS
+    assert len(set(ids[2:5])) == 3
+    assert all(style_id in set(pg.CURATED_VARIANT_STYLE_IDS) for style_id in ids[2:5])
+    reserved = set(pg.FIXED_VARIANT_STYLE_IDS) | set(pg.CURATED_VARIANT_STYLE_IDS)
+    assert len(set(ids[5:10])) == 5
+    assert all(style_id not in reserved for style_id in ids[5:10])
+    assert len(set(ids)) == 10
+
+    extended = pg.select_diverse_styles(20, seed_token="moby")
+    assert len(extended) == 20
+    assert [row["id"] for row in extended[:10]] == ids
+    assert all(isinstance(row.get("label"), str) and row.get("label") for row in extended)
+
+
+def test_build_diversified_prompt_applies_scene_only_constraints():
+    style = {
+        "id": "sevastopol-dramatic-conflict",
+        "label": "Sevastopol / Dramatic Conflict",
+        "modifier": "Use vivid conflict storytelling and saturated color contrast.",
+    }
+    prompt = pg.build_diversified_prompt("Moby Dick", "Herman Melville", style).lower()
+    assert "moby dick" in prompt
+    assert "herman melville" in prompt
+    assert "sevastopol / dramatic conflict" in prompt
+    assert "no text" in prompt
+    assert "no frame" in prompt

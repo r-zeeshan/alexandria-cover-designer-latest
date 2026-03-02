@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import logging
+import random
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,25 +24,310 @@ DEFAULT_CATALOG_PATH = Path("config/book_catalog.json")
 DEFAULT_TEMPLATES_PATH = Path("config/prompt_templates.json")
 DEFAULT_OUTPUT_PATH = Path("config/book_prompts.json")
 
-REQUIRED_PHRASE_COMPOSITION = "circular vignette composition"
-REQUIRED_PHRASE_TEXT = "no text, no letters, no words, no watermarks"
+REQUIRED_PHRASE_COMPOSITION = "full-bleed narrative scene, centered focal subject, crop-safe margins"
+REQUIRED_PHRASE_TEXT = (
+    "no text, no letters, no words, no typography, no logos, no labels, no title treatment, no watermark, no inscriptions, no calligraphy"
+)
 REQUIRED_PHRASE_NO_FRAME = (
-    "no border, no frame, no decorative edge, no ornamental border, interior scene only, edge to edge"
+    "no border, no frame, no decorative edge, no ornamental border, no ribbon banner, no plaque, no seal, no emblem, interior scene only, edge to edge"
+)
+REQUIRED_PHRASE_VIVID = "vivid, high-saturation painterly color palette with rich contrast"
+
+_PHRASE_REPLACEMENTS: tuple[tuple[str, str], ...] = (
+    (r"\bcircular vignette composition\b", "full-bleed narrative scene"),
+    (r"\bcentral medallion motif with breathing room around edges\b", "single focused narrative subject"),
+    (r"\bstructured geometry with deliberate text-safe negative space\b", "dynamic painterly composition"),
+    (r"\btypography[- ]led\b", "painterly"),
+    (r"\btext[- ]safe\b", "composition-safe"),
+    (r"\btitle[- ]safe\b", "composition-safe"),
 )
 
-VARIATION_DIRECTIVES = [
-    "",
-    "Use a warm palette with amber and antique gold tones.",
-    "Use a cool palette with deep blue and silver accents.",
-    "Emphasize dramatic chiaroscuro lighting and strong contrast.",
-    "Render with muted aged-canvas texture and restrained saturation.",
-    "Emphasize intricate fine detail and delicate linework.",
-    "Use rich jewel tones with emerald, ruby, and sapphire accents.",
-    "Render in a loose impressionistic brushwork style.",
-    "Use earthy sienna, umber, and ochre with naturalistic light.",
-    "Create a moody atmospheric composition with soft depth.",
-    "Use bold graphic silhouettes and high-contrast value shapes.",
+_REMOVAL_PATTERNS: tuple[str, ...] = (
+    r"\bgilt ornament language\b",
+    r"\bornamental(?:\s+border|\s+frame|\s+edge)?\b",
+    r"\bdecorative(?:\s+edge|\s+frame|\s+border)?\b",
+    r"\binner(?:\s+frame|\s+border|\s+ring)?\b",
+    r"\bcircular frame\b",
+    r"\bribbon(?:\s+banner)?\b",
+    r"\bscroll(?:work)?\b",
+    r"\bnameplate\b",
+    r"\bplaque\b",
+    r"\bseal\b",
+    r"\bframing\b",
+    r"\bmedallion(?:\s+ring|\s+frame|\s+window|\s+zone)?\b",
+    r"\bposter(?:\s+layout)?\b",
+    r"\btitle(?:\s+treatment|\s+text)?\b",
+    r"\btypography\b",
+    r"\blogo(?:s)?\b",
+    r"\bwatermark(?:s)?\b",
+)
+
+STYLE_POOL: list[dict[str, str]] = [
+    {
+        "id": "classical-oil",
+        "label": "Classical Oil",
+        "modifier": "Render as a rich Old Masters oil painting with dramatic brushwork, deep chiaroscuro, and saturated amber, ultramarine, and crimson tones.",
+    },
+    {
+        "id": "romantic-landscape",
+        "label": "Romantic Landscape",
+        "modifier": "Render as a luminous Romantic landscape with sweeping sky, radiant atmosphere, and vivid sunset golds, cerulean blues, and emerald highlights.",
+    },
+    {
+        "id": "dark-romantic",
+        "label": "Dark Romantic",
+        "modifier": "Render as a Dark Romantic scene with moonlit drama, storm energy, and intense cobalt, obsidian, and molten-gold accents.",
+    },
+    {
+        "id": "pre-raphaelite",
+        "label": "Pre-Raphaelite",
+        "modifier": "Render in a Pre-Raphaelite style with jewel-like color, intricate detail, luminous skin tones, and vivid botanical richness.",
+    },
+    {
+        "id": "art-nouveau",
+        "label": "Art Nouveau",
+        "modifier": "Render in vivid Art Nouveau language with flowing line rhythm, elegant symbolism, and saturated peacock blues, coral, and antique gold.",
+    },
+    {
+        "id": "ukiyoe-woodblock",
+        "label": "Ukiyo-e Woodblock",
+        "modifier": "Render as a high-contrast Ukiyo-e woodblock reinterpretation with bold contour shapes, punchy wave motion, and vivid indigo, vermilion, and turquoise.",
+    },
+    {
+        "id": "film-noir",
+        "label": "Film Noir",
+        "modifier": "Render with film-noir cinematic tension using dramatic light shafts, high contrast, and selective vivid color pops in teal, amber, and scarlet.",
+    },
+    {
+        "id": "botanical-engraving",
+        "label": "Botanical Engraving",
+        "modifier": "Render as a natural-history engraving hybrid with precise linework, hand-colored detail, and vivid mineral pigments over warm parchment tones.",
+    },
+    {
+        "id": "gothic-stained-glass",
+        "label": "Gothic Stained Glass",
+        "modifier": "Render in stained-glass Gothic style with radiant jewel-color panes, luminous backlight, and crisp narrative symbolism.",
+    },
+    {
+        "id": "impressionist",
+        "label": "Impressionist",
+        "modifier": "Render in expressive Impressionist brushstrokes with broken color, luminous atmosphere, and vibrant cobalt, saffron, and rose-magenta highlights.",
+    },
+    {
+        "id": "expressionist",
+        "label": "Expressionist",
+        "modifier": "Render in bold Expressionist style with emotionally charged color blocking, energetic strokes, and high-contrast saturated hues.",
+    },
+    {
+        "id": "baroque-drama",
+        "label": "Baroque Drama",
+        "modifier": "Render as Baroque drama with theatrical movement, intense light direction, and rich ruby, gold, emerald, and deep-blue color tension.",
+    },
+    {
+        "id": "delicate-watercolour",
+        "label": "Delicate Watercolour",
+        "modifier": "Render as delicate watercolor illustration with transparent luminous layering and vivid floral blues, warm rose, and sunlit ochre accents.",
+    },
+    {
+        "id": "symbolist-dream",
+        "label": "Symbolist Dream",
+        "modifier": "Render as Symbolist dream imagery with poetic surreal forms, glowing color atmosphere, and vibrant violet-blue, coral, and gold light.",
+    },
+    {
+        "id": "renaissance-fresco",
+        "label": "Renaissance Fresco",
+        "modifier": "Render as a Renaissance fresco-inspired scene with monumental forms, warm fresco pigments, and high-clarity color depth.",
+    },
+    {
+        "id": "russian-realist",
+        "label": "Russian Realist",
+        "modifier": "Render in Russian Realist style with narrative human focus, tactile brushwork, and rich contrasting earth reds, cyan blues, and warm highlights.",
+    },
 ]
+
+FIXED_VARIANT_STYLE_IDS: list[str] = [
+    "sevastopol-dramatic-conflict",
+    "cossack-epic-journey",
+]
+
+CURATED_VARIANT_STYLE_IDS: list[str] = [
+    "golden-atmosphere",
+    "dark-romantic",
+    "gentle-nostalgia",
+    "art-nouveau-symbolic",
+    "ukiyoe-reimagining",
+    "noir-tension",
+    "natural-history-study",
+    "gothic-stained-glass",
+]
+
+# Compatibility alias used by tests and downstream imports.
+PRIMARY_VARIANT_STYLE_IDS: list[str] = [
+    *FIXED_VARIANT_STYLE_IDS,
+    *CURATED_VARIANT_STYLE_IDS,
+]
+
+PROMPT_LIBRARY_BUILTINS: list[dict[str, str]] = [
+    {
+        "id": "sevastopol-dramatic-conflict",
+        "label": "Sevastopol / Dramatic Conflict",
+        "modifier": "Compose a dramatic historical conflict tableau inspired by Sevastopol sketches, with kinetic brushwork, heroic silhouettes, and vivid cobalt, fire-orange, and brass highlights.",
+    },
+    {
+        "id": "cossack-epic-journey",
+        "label": "Cossack / Epic Journey",
+        "modifier": "Compose an epic Cossack-style journey scene with sweeping movement, mounted energy, atmospheric dust, and saturated ultramarine, crimson, and gold accents.",
+    },
+    {
+        "id": "golden-atmosphere",
+        "label": "Golden Atmosphere",
+        "modifier": "Compose a luminous golden-hour narrative with painterly depth, warm atmospheric glow, and vibrant amber, teal, and rose highlights.",
+    },
+    {
+        "id": "dark-romantic",
+        "label": "Dark Romantic",
+        "modifier": "Compose a moody Dark Romantic interpretation with storm drama, moonlit contrast, and electric cobalt plus gilded focal light.",
+    },
+    {
+        "id": "gentle-nostalgia",
+        "label": "Gentle Nostalgia",
+        "modifier": "Compose a nostalgic yet vivid period scene with tender emotional storytelling, painterly softness, and rich but elegant color harmony.",
+    },
+    {
+        "id": "art-nouveau-symbolic",
+        "label": "Art Nouveau Symbolic",
+        "modifier": "Compose a symbolic Art Nouveau interpretation with flowing ornament language translated into scene elements and vibrant peacock-turquoise-gold chroma.",
+    },
+    {
+        "id": "ukiyoe-reimagining",
+        "label": "Ukiyo-e Reimagining",
+        "modifier": "Compose a bold Ukiyo-e reinterpretation with stylized waves/forms, strong line rhythm, and highly saturated indigo, vermilion, and mint contrast.",
+    },
+    {
+        "id": "noir-tension",
+        "label": "Noir Tension",
+        "modifier": "Compose a noir suspense scene with dramatic shadows, cinematic composition, and selective vivid color accents for focal tension.",
+    },
+    {
+        "id": "natural-history-study",
+        "label": "Natural History Study",
+        "modifier": "Compose as a natural-history study hybrid with precision detail, specimen-like clarity, and vivid hand-colored pigments.",
+    },
+    {
+        "id": "gothic-stained-glass",
+        "label": "Gothic Stained Glass",
+        "modifier": "Compose as radiant stained-glass narrative imagery with jewel-tone luminosity and crisp symbolic storytelling.",
+    },
+]
+
+_BUILTIN_BY_ID = {row["id"]: row for row in PROMPT_LIBRARY_BUILTINS}
+_STYLE_POOL_BY_ID = {row["id"]: row for row in STYLE_POOL}
+
+
+def _seeded_fisher_yates(rows: list[dict[str, str]], seed_token: str) -> list[dict[str, str]]:
+    output = list(rows)
+    if len(output) <= 1:
+        return output
+    digest = hashlib.sha1(str(seed_token or "alexandria").encode("utf-8")).hexdigest()
+    rng = random.Random(int(digest[:8], 16))
+    for idx in range(len(output) - 1, 0, -1):
+        swap = rng.randint(0, idx)
+        output[idx], output[swap] = output[swap], output[idx]
+    return output
+
+
+def _style_rows_from_ids(style_ids: list[str]) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    for style_id in style_ids:
+        row = _BUILTIN_BY_ID.get(style_id) or _STYLE_POOL_BY_ID.get(style_id)
+        if isinstance(row, dict):
+            rows.append(row)
+    return rows
+
+
+def select_diverse_styles(count: int, *, seed_token: str = "") -> list[dict[str, str]]:
+    """Return style rows with a deterministic 2+3+5 plan for the first 10 variants."""
+    wanted = max(0, int(count))
+    if wanted <= 0:
+        return []
+
+    output: list[dict[str, str]] = []
+    seen: set[str] = set()
+
+    def _push_unique(rows: list[dict[str, str]], cap: int | None = None) -> None:
+        nonlocal output
+        remaining = cap if cap is not None else len(rows)
+        for row in rows:
+            style_id = str(row.get("id", "")).strip()
+            if not style_id or style_id in seen:
+                continue
+            output.append(row)
+            seen.add(style_id)
+            if len(output) >= wanted:
+                return
+            remaining -= 1
+            if remaining <= 0:
+                return
+
+    # 1) Fixed anchors.
+    _push_unique(_style_rows_from_ids(FIXED_VARIANT_STYLE_IDS))
+    if len(output) >= wanted:
+        return output[:wanted]
+
+    # 2) Curated middle styles (pick 3, deterministic shuffle per title/prompt).
+    curated_rows = _seeded_fisher_yates(_style_rows_from_ids(CURATED_VARIANT_STYLE_IDS), f"{seed_token}::curated")
+    _push_unique(curated_rows, cap=3)
+    if len(output) >= wanted:
+        return output[:wanted]
+
+    # 3) Wildcards from broader style pool, excluding fixed/curated ids.
+    reserved = set(FIXED_VARIANT_STYLE_IDS) | set(CURATED_VARIANT_STYLE_IDS)
+    wildcard_pool = [
+        row
+        for row in STYLE_POOL
+        if str(row.get("id", "")).strip() and str(row.get("id", "")).strip() not in reserved
+    ]
+    wildcard_rows = _seeded_fisher_yates(wildcard_pool, f"{seed_token}::wildcards")
+    _push_unique(wildcard_rows, cap=5)
+    if len(output) >= wanted:
+        return output[:wanted]
+
+    # 4) Fill remainder from full style inventory, then cycle if needed.
+    full_pool: list[dict[str, str]] = []
+    full_seen: set[str] = set()
+    for row in PROMPT_LIBRARY_BUILTINS + STYLE_POOL:
+        style_id = str(row.get("id", "")).strip()
+        if not style_id or style_id in full_seen:
+            continue
+        full_pool.append(row)
+        full_seen.add(style_id)
+    if not full_pool:
+        return []
+
+    _push_unique(_seeded_fisher_yates(full_pool, f"{seed_token}::full"))
+    cycle = 1
+    while len(output) < wanted:
+        cycle_rows = _seeded_fisher_yates(full_pool, f"{seed_token}::cycle::{cycle}")
+        for row in cycle_rows:
+            output.append(row)
+            if len(output) >= wanted:
+                break
+        cycle += 1
+    return output
+
+
+def build_diversified_prompt(title: str, author: str, style: dict[str, str]) -> str:
+    """Build a title-aware diversified prompt with strict scene-only output rules."""
+    label = str(style.get("label", "Classical Illustration")).strip()
+    modifier = str(style.get("modifier", "")).strip()
+    base = (
+        f'Create a beautiful, highly detailed illustration for the classic book "{title}" by {author}. '
+        "Identify the story's most iconic scene, character, or symbolic moment, then depict that moment as a vivid narrative scene "
+        "for a luxury classic edition cover. Keep one clear focal subject with dynamic depth and strong storytelling. "
+        f"Style direction: {label}. {modifier} "
+        "Output rules: scene artwork only, no text, no letters, no words, no logos, no labels, no banners, no plaques, no ornamental borders, no decorative frames."
+    )
+    return _ensure_prompt_constraints(base)
 
 
 @dataclass
@@ -125,7 +412,20 @@ def _strip_forbidden(text: str, title: str, author: str) -> str:
     return text
 
 
+def _remove_conflicting_directions(prompt: str) -> str:
+    text = str(prompt or "")
+    for pattern, replacement in _PHRASE_REPLACEMENTS:
+        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+    for pattern in _REMOVAL_PATTERNS:
+        text = re.sub(pattern, "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s*,\s*,+", ", ", text)
+    text = re.sub(r"\s{2,}", " ", text)
+    text = re.sub(r"\s+,", ",", text)
+    return text.strip(" ,")
+
+
 def _ensure_prompt_constraints(prompt: str) -> str:
+    prompt = _remove_conflicting_directions(prompt)
     prompt = re.sub(r"\s+", " ", prompt).strip().rstrip(",")
     low = prompt.lower()
 
@@ -137,14 +437,25 @@ def _ensure_prompt_constraints(prompt: str) -> str:
         low = prompt.lower()
     if "no border" not in low and "no frame" not in low:
         prompt += f", {REQUIRED_PHRASE_NO_FRAME}"
+        low = prompt.lower()
+    if REQUIRED_PHRASE_VIVID not in low:
+        prompt += f", {REQUIRED_PHRASE_VIVID}"
 
-    while _word_count(prompt) < 40:
-        prompt += ", warm cinematic atmosphere, balanced composition, intricate period detail"
+    while _word_count(prompt) < 44:
+        prompt += ", warm cinematic atmosphere, bold color contrast, intricate period detail"
 
-    if _word_count(prompt) > 80:
-        prompt = " ".join(prompt.split()[:80]).rstrip(",")
+    if _word_count(prompt) > 92:
+        prompt = " ".join(prompt.split()[:92]).rstrip(",")
 
-    return prompt
+    # Cleanup artifacts introduced when forbidden tokens are stripped from "no ..." directives.
+    prompt = re.sub(r"\bno\s*,\s*no\b", "no", prompt, flags=re.IGNORECASE)
+    prompt = re.sub(r"\bno,\s*(?=no\b)", "", prompt, flags=re.IGNORECASE)
+    prompt = re.sub(r"\bno,\s*(?=[\.,;:!?]|$)", "", prompt, flags=re.IGNORECASE)
+    prompt = re.sub(r",\s*no\s*,", ", ", prompt, flags=re.IGNORECASE)
+    prompt = re.sub(r",\s*,+", ", ", prompt)
+    prompt = re.sub(r"\s+,", ",", prompt)
+    prompt = re.sub(r"\s+", " ", prompt)
+    return prompt.strip(" ,")
 
 
 def enforce_prompt_constraints(prompt: str) -> str:
@@ -157,11 +468,16 @@ def diversify_prompt(base_prompt: str, variant_index: int) -> str:
     text = re.sub(r"\s+", " ", str(base_prompt or "")).strip()
     if not text:
         return text
-    token = max(0, int(variant_index) - 1)
-    directive = VARIATION_DIRECTIVES[token % len(VARIATION_DIRECTIVES)].strip()
-    if not directive:
+    token = max(1, int(variant_index))
+    style_rows = select_diverse_styles(token, seed_token=text[:180])
+    if not style_rows:
         return text
-    return f"{text} {directive}".strip()
+    style = style_rows[token - 1]
+    modifier = str(style.get("modifier", "")).strip()
+    label = str(style.get("label", "")).strip()
+    if not modifier:
+        return text
+    return f"{text} Style variation {token} ({label}): {modifier}".strip()
 
 
 def _motif_for_book(book: dict[str, Any]) -> BookMotif:

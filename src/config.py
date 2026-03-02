@@ -52,8 +52,15 @@ LLM_PROVIDER = os.getenv("LLM_PROVIDER", "anthropic").strip().lower()
 LLM_MODEL = os.getenv("LLM_MODEL", "claude-sonnet-4-5-20250929").strip()
 LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "2000"))
 LLM_COST_PER_1K_TOKENS = float(os.getenv("LLM_COST_PER_1K_TOKENS", "0.003"))
-GDRIVE_OUTPUT_FOLDER_ID = os.getenv("GDRIVE_OUTPUT_FOLDER_ID", "1CWxCE3dP2AmQRy-w9MowP0J7AWNuAYdW")
-GDRIVE_SOURCE_FOLDER_ID = os.getenv("GDRIVE_SOURCE_FOLDER_ID", "1ybFYDJk7Y3VlbsEjRAh1LOfdyVsHM_cS").strip()
+# Prefer DRIVE_* env vars, keep GDRIVE_* aliases for backwards compatibility.
+GDRIVE_OUTPUT_FOLDER_ID = os.getenv(
+    "DRIVE_OUTPUT_FOLDER_ID",
+    os.getenv("GDRIVE_OUTPUT_FOLDER_ID", "1CWxCE3dP2AmQRy-w9MowP0J7AWNuAYdW"),
+)
+GDRIVE_SOURCE_FOLDER_ID = os.getenv(
+    "DRIVE_SOURCE_FOLDER_ID",
+    os.getenv("GDRIVE_SOURCE_FOLDER_ID", "1ybFYDJk7Y3VlbsEjRAh1LOfdyVsHM_cS"),
+).strip()
 GDRIVE_INPUT_FOLDER_ID = os.getenv("GDRIVE_INPUT_FOLDER_ID", GDRIVE_SOURCE_FOLDER_ID).strip()
 GDRIVE_MOCKUPS_FOLDER_ID = os.getenv("GDRIVE_MOCKUPS_FOLDER_ID", "")
 GDRIVE_AMAZON_FOLDER_ID = os.getenv("GDRIVE_AMAZON_FOLDER_ID", "")
@@ -74,10 +81,56 @@ ALL_MODELS = [
     m.strip()
     for m in os.getenv(
         "ALL_MODELS",
-        "openrouter/google/gemini-2.5-flash-image,openrouter/openai/gpt-5-image-mini,openrouter/openai/gpt-5-image,fal/fal-ai/flux-2/klein/4b,fal/fal-ai/flux-2,openai/gpt-image-1-mini,openai/gpt-image-1,google/gemini-2.5-flash-image,google/gemini-3-pro-image-preview",
+        (
+            "openrouter/openai/gpt-5-image,"
+            "openrouter/sourceful/riverflow-v2-pro,"
+            "openrouter/sourceful/riverflow-v2-max-preview,"
+            "openrouter/black-forest-labs/flux.2-max,"
+            "openrouter/black-forest-labs/flux.2-flex,"
+            "openrouter/bytedance-seed/seedream-4.5,"
+            "openrouter/sourceful/riverflow-v2-standard-preview,"
+            "openrouter/black-forest-labs/flux.2-pro,"
+            "openrouter/sourceful/riverflow-v2-fast-preview,"
+            "openrouter/google/gemini-3-pro-image-preview,"
+            "openrouter/black-forest-labs/flux.2-klein-4b,"
+            "openrouter/openai/gpt-5-image-mini,"
+            "openrouter/google/gemini-3.1-flash-image-preview,"
+            "openrouter/sourceful/riverflow-v2-fast,"
+            "openrouter/google/gemini-2.5-flash-image,"
+            "google/gemini-3-pro-image-preview,"
+            "google/gemini-3.1-flash-image-preview,"
+            "google/gemini-2.5-flash-image"
+        ),
     ).split(",")
     if m.strip()
 ]
+
+# These models are required regardless of ALL_MODELS env overrides.
+REQUIRED_OPENROUTER_MODELS: list[str] = [
+    "openrouter/openai/gpt-5-image",
+    "openrouter/sourceful/riverflow-v2-pro",
+    "openrouter/sourceful/riverflow-v2-max-preview",
+    "openrouter/black-forest-labs/flux.2-max",
+    "openrouter/black-forest-labs/flux.2-flex",
+    "openrouter/bytedance-seed/seedream-4.5",
+    "openrouter/sourceful/riverflow-v2-standard-preview",
+    "openrouter/black-forest-labs/flux.2-pro",
+    "openrouter/sourceful/riverflow-v2-fast-preview",
+    "openrouter/google/gemini-3-pro-image-preview",
+    "openrouter/black-forest-labs/flux.2-klein-4b",
+    "openrouter/openai/gpt-5-image-mini",
+    "openrouter/google/gemini-3.1-flash-image-preview",
+    "openrouter/sourceful/riverflow-v2-fast",
+    "openrouter/google/gemini-2.5-flash-image",
+]
+
+REQUIRED_GEMINI_MODELS: list[str] = [
+    "google/gemini-3-pro-image-preview",
+    "google/gemini-3.1-flash-image-preview",
+    "google/gemini-2.5-flash-image",
+]
+
+REQUIRED_MODELS_ORDER: list[str] = [*REQUIRED_OPENROUTER_MODELS, *REQUIRED_GEMINI_MODELS]
 
 MODEL_PROVIDER_MAP: dict[str, str] = {
     "flux-2-pro": "openrouter",
@@ -89,14 +142,28 @@ MODEL_PROVIDER_MAP: dict[str, str] = {
     "nano-banana-pro": "openrouter",
     "openrouter/google/gemini-2.5-flash-image": "openrouter",
     "openrouter/google/gemini-3-pro-image-preview": "openrouter",
+    "openrouter/google/gemini-3.1-flash-image-preview": "openrouter",
     "openrouter/openai/gpt-5-image-mini": "openrouter",
     "openrouter/openai/gpt-5-image": "openrouter",
+    "openrouter/sourceful/riverflow-v2-pro": "openrouter",
+    "openrouter/sourceful/riverflow-v2-max-preview": "openrouter",
+    "openrouter/sourceful/riverflow-v2-standard-preview": "openrouter",
+    "openrouter/sourceful/riverflow-v2-fast-preview": "openrouter",
+    "openrouter/sourceful/riverflow-v2-fast": "openrouter",
+    "openrouter/bytedance-seed/seedream-4.5": "openrouter",
+    "openrouter/black-forest-labs/flux.2-max": "openrouter",
+    "openrouter/black-forest-labs/flux.2-flex": "openrouter",
+    "openrouter/black-forest-labs/flux.2-pro": "openrouter",
+    "openrouter/black-forest-labs/flux.2-klein-4b": "openrouter",
     "fal/fal-ai/flux-2/klein/4b": "fal",
     "fal/fal-ai/flux-2": "fal",
     "fal/fal-ai/flux-2-pro": "fal",
     "openai/gpt-image-1-mini": "openai",
     "openai/gpt-image-1": "openai",
     "openai/gpt-image-1.5": "openai",
+    "google/gemini-3-pro-image-preview": "google",
+    "google/gemini-3.1-flash-image-preview": "google",
+    "google/gemini-2.5-flash-image": "google",
     "google/imagen-4.0-fast-generate-001": "google",
     "google/imagen-4.0-generate-001": "google",
     "google/imagen-4.0-ultra-generate-001": "google",
@@ -112,8 +179,19 @@ MODEL_COST_USD: dict[str, float] = {
     "nano-banana-pro": 0.067,
     "google/gemini-2.5-flash-image": 0.003,
     "google/gemini-3-pro-image-preview": 0.02,
+    "google/gemini-3.1-flash-image-preview": 0.006,
     "openai/gpt-5-image-mini": 0.012,
     "openai/gpt-5-image": 0.04,
+    "sourceful/riverflow-v2-pro": 0.15,
+    "sourceful/riverflow-v2-max-preview": 0.075,
+    "sourceful/riverflow-v2-standard-preview": 0.035,
+    "sourceful/riverflow-v2-fast-preview": 0.03,
+    "sourceful/riverflow-v2-fast": 0.04,
+    "bytedance-seed/seedream-4.5": 0.04,
+    "black-forest-labs/flux.2-max": 0.07,
+    "black-forest-labs/flux.2-flex": 0.06,
+    "black-forest-labs/flux.2-pro": 0.03,
+    "black-forest-labs/flux.2-klein-4b": 0.014,
     "fal-ai/flux-2/klein/4b": 0.0025,
     "fal-ai/flux-2": 0.012,
     "fal-ai/flux-2-pro": 0.045,
@@ -125,9 +203,43 @@ MODEL_COST_USD: dict[str, float] = {
     "imagen-4.0-ultra-generate-001": 0.08,
 }
 
+MODEL_MODALITY: dict[str, str] = {
+    "openrouter/openai/gpt-5-image": "both",
+    "openrouter/sourceful/riverflow-v2-pro": "image",
+    "openrouter/sourceful/riverflow-v2-max-preview": "image",
+    "openrouter/black-forest-labs/flux.2-max": "image",
+    "openrouter/black-forest-labs/flux.2-flex": "image",
+    "openrouter/bytedance-seed/seedream-4.5": "image",
+    "openrouter/sourceful/riverflow-v2-standard-preview": "image",
+    "openrouter/black-forest-labs/flux.2-pro": "image",
+    "openrouter/sourceful/riverflow-v2-fast-preview": "image",
+    "openrouter/google/gemini-3-pro-image-preview": "both",
+    "openrouter/black-forest-labs/flux.2-klein-4b": "image",
+    "openrouter/openai/gpt-5-image-mini": "both",
+    "openrouter/google/gemini-3.1-flash-image-preview": "both",
+    "openrouter/sourceful/riverflow-v2-fast": "image",
+    "openrouter/google/gemini-2.5-flash-image": "both",
+    # Normalized provider model ids.
+    "openai/gpt-5-image": "both",
+    "sourceful/riverflow-v2-pro": "image",
+    "sourceful/riverflow-v2-max-preview": "image",
+    "black-forest-labs/flux.2-max": "image",
+    "black-forest-labs/flux.2-flex": "image",
+    "bytedance-seed/seedream-4.5": "image",
+    "sourceful/riverflow-v2-standard-preview": "image",
+    "black-forest-labs/flux.2-pro": "image",
+    "sourceful/riverflow-v2-fast-preview": "image",
+    "google/gemini-3-pro-image-preview": "both",
+    "black-forest-labs/flux.2-klein-4b": "image",
+    "openai/gpt-5-image-mini": "both",
+    "google/gemini-3.1-flash-image-preview": "both",
+    "sourceful/riverflow-v2-fast": "image",
+    "google/gemini-2.5-flash-image": "both",
+}
+
 VARIANTS_PER_COVER = int(os.getenv("VARIANTS_PER_COVER", "5"))
 MAX_GENERATION_VARIANTS = int(os.getenv("MAX_GENERATION_VARIANTS", "50"))
-BATCH_CONCURRENCY = int(os.getenv("BATCH_CONCURRENCY", "2"))
+BATCH_CONCURRENCY = int(os.getenv("BATCH_CONCURRENCY", "5"))
 REQUEST_DELAY = float(os.getenv("REQUEST_DELAY", "1.0"))
 MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
 PROVIDER_CIRCUIT_FAILURE_THRESHOLD = int(os.getenv("PROVIDER_CIRCUIT_FAILURE_THRESHOLD", "3"))
@@ -163,7 +275,7 @@ GEN_HEIGHT = int(os.getenv("GEN_HEIGHT", "1024"))
 GEN_OUTPUT_FORMAT = os.getenv("GEN_OUTPUT_FORMAT", "png").strip().lower()
 
 MIN_QUALITY_SCORE = float(os.getenv("MIN_QUALITY_SCORE", "0.6"))
-MAX_COST_USD = float(os.getenv("MAX_COST_USD", "200.00"))
+MAX_COST_USD = float(os.getenv("BUDGET_LIMIT_USD", os.getenv("MAX_COST_USD", "200.00")))
 
 BOOK_SCOPE_LIMIT = int(os.getenv("BOOK_SCOPE_LIMIT", "20"))
 MAX_EXPORT_VARIANTS = int(os.getenv("MAX_EXPORT_VARIANTS", "20"))
@@ -656,6 +768,7 @@ class Config:
 
     model_provider_map: dict[str, str] = field(default_factory=lambda: MODEL_PROVIDER_MAP.copy())
     model_cost_usd: dict[str, float] = field(default_factory=lambda: MODEL_COST_USD.copy())
+    model_modality: dict[str, str] = field(default_factory=lambda: MODEL_MODALITY.copy())
 
     failures_path: Path = FAILURES_PATH
     generation_plan_path: Path = GENERATION_PLAN_PATH
@@ -712,6 +825,19 @@ class Config:
         normalized = model.split("/", 1)[-1] if "/" in model else model
         return float(self.model_cost_usd.get(normalized, self.model_cost_usd.get(model, 0.04)))
 
+    def get_model_modality(self, model: str) -> str:
+        token = str(model or "").strip()
+        normalized = token.split("/", 1)[-1] if "/" in token else token
+        values = [
+            self.model_modality.get(token),
+            self.model_modality.get(normalized),
+            self.model_modality.get(f"openrouter/{normalized}"),
+        ]
+        for item in values:
+            if str(item or "").strip().lower() in {"both", "image"}:
+                return str(item).strip().lower()
+        return "image"
+
 
 RuntimeConfig = Config
 
@@ -720,6 +846,18 @@ def get_config(catalog_id: str | None = None) -> Config:
     ensure_runtime_dirs()
     cfg = Config()
     cfg.all_models = _sanitize_all_models(cfg.all_models)
+    for model in REQUIRED_MODELS_ORDER:
+        if model not in cfg.all_models:
+            cfg.all_models.append(model)
+    ordered_models: list[str] = []
+    seen_models: set[str] = set()
+    for model in [*REQUIRED_MODELS_ORDER, *cfg.all_models]:
+        token = str(model or "").strip()
+        if not token or token in seen_models:
+            continue
+        seen_models.add(token)
+        ordered_models.append(token)
+    cfg.all_models = ordered_models
     if str(cfg.ai_model or "").strip().lower().startswith("replicate/"):
         cfg.ai_model = cfg.all_models[0] if cfg.all_models else ""
     cfg.variants_per_cover = max(1, int(cfg.variants_per_cover or 1))

@@ -373,6 +373,17 @@ def test_parse_variant():
     assert qr._parse_variant("foo") == 0
 
 
+def test_project_path_if_exists_accepts_project_root_relative_token():
+    probe = qr.PROJECT_ROOT / "tmp" / "project_path_resolution_probe.txt"
+    probe.parent.mkdir(parents=True, exist_ok=True)
+    probe.write_text("ok", encoding="utf-8")
+    try:
+        resolved = qr._project_path_if_exists("/tmp/project_path_resolution_probe.txt")
+        assert resolved == probe
+    finally:
+        probe.unlink(missing_ok=True)
+
+
 def test_parse_variant_number():
     assert qr._parse_variant_number("Variant-4") == 4
     assert qr._parse_variant_number("bad") is None
@@ -860,6 +871,303 @@ def test_collect_selected_variant_files(tmp_path: Path):
         catalog_path=catalog,
     )
     assert sorted(files) == sorted(["Book One/Variant-2/cover.ai", "Book One/Variant-2/cover.jpg", "Book One/Variant-2/cover.pdf"])
+
+
+def test_seed_builtin_prompts_creates_templates_and_is_idempotent(tmp_path: Path):
+    cfg = _build_runtime_for_startup_checks(tmp_path)
+    seeded = qr._seed_builtin_prompts(runtime=cfg, actor="test", overwrite=False)
+    assert seeded["ok"] is True
+    assert int(seeded["total_builtins"]) >= 10
+    assert int(seeded["created"]) >= 0
+    assert int(seeded["updated"]) >= 0
+    library_rows = qr.PromptLibrary(cfg.prompt_library_path).get_prompts()
+    names = {str(row.name) for row in library_rows}
+    assert "Sevastopol / Dramatic Conflict" in names
+    assert "Cossack / Epic Journey" in names
+
+    second = qr._seed_builtin_prompts(runtime=cfg, actor="test", overwrite=False)
+    assert second["ok"] is True
+    assert int(second["created"]) == 0
+    assert int(second["skipped"]) >= int(seeded["total_builtins"])
+
+
+def test_seed_builtin_prompts_repairs_malformed_builtin_rows_without_overwrite(tmp_path: Path):
+    cfg = _build_runtime_for_startup_checks(tmp_path)
+    cfg.prompt_library_path.write_text(
+        json.dumps(
+            {
+                "style_anchors": [
+                    {
+                        "name": "fixture-anchor",
+                        "description": "fixture",
+                        "style_text": "fixture",
+                        "tags": ["fixture"],
+                    }
+                ],
+                "prompts": [
+                    {
+                        "id": "builtin-malformed-1",
+                        "name": "Sevastopol / Dramatic Conflict",
+                        "prompt_template": (
+                            "Create an illustration for {title} by {author}, no, no text, no, no frame, "
+                            "dramatic composition."
+                        ),
+                        "style_anchors": ["sevastopol-dramatic-conflict"],
+                        "negative_prompt": "text, no, no, frame, border",
+                        "source_book": "builtin",
+                        "source_model": "openrouter/google/gemini-3-pro-image-preview",
+                        "quality_score": 0.4,
+                        "saved_by": "test",
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                        "notes": "malformed fixture",
+                        "tags": ["builtin", "builtin_v2", "builtin_v2:sevastopol-dramatic-conflict"],
+                        "category": "builtin",
+                    }
+                ],
+                "versions": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    seeded = qr._seed_builtin_prompts(runtime=cfg, actor="test", overwrite=False)
+    assert seeded["ok"] is True
+    assert int(seeded.get("repaired", 0)) >= 1
+    assert int(seeded["updated"]) >= 1
+
+    rows = qr.PromptLibrary(cfg.prompt_library_path).get_prompts(tags=["builtin_v2:sevastopol-dramatic-conflict"])
+    assert rows
+    repaired = rows[0]
+    lowered_prompt = str(repaired.prompt_template).lower()
+    lowered_negative = str(repaired.negative_prompt).lower()
+    assert "{title}" in repaired.prompt_template
+    assert "no, no" not in lowered_prompt
+    assert "no, no" not in lowered_negative
+    assert "no text" in lowered_prompt
+    assert "no border" in lowered_prompt or "no frame" in lowered_prompt
+
+
+def test_dashboard_recent_results_includes_prompt_and_style_tags(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    cfg = _build_runtime_for_startup_checks(tmp_path)
+    preview = cfg.tmp_dir / "composited" / "1" / "model" / "variant_1.jpg"
+    preview.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (64, 64), (12, 34, 56)).save(preview, format="JPEG")
+
+    monkeypatch.setattr(
+        qr,
+        "_project_path_if_exists",
+        lambda token: preview if str(token or "").strip() else None,
+    )
+    monkeypatch.setattr(qr, "_to_project_relative", lambda _path: "tmp/composited/1/model/variant_1.jpg")
+    items = [
+        {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "book_number": 1,
+            "book_title": "Moby Dick",
+            "model": "openrouter/google/gemini-3-pro-image-preview",
+            "variant": 1,
+            "prompt": "Cossack epic journey with dramatic cobalt lighting",
+            "quality_score": 0.82,
+            "cost": 0.01,
+            "image_path": "tmp/generated/1/model/variant_1.png",
+            "composited_path": "tmp/composited/1/model/variant_1.jpg",
+        }
+    ]
+    rows = qr._dashboard_recent_results(items=items, runtime=cfg, limit=10)
+    assert len(rows) == 1
+    assert rows[0]["book_title"] == "Moby Dick"
+    assert "thumbnail_url" in rows[0]
+    assert "Cossack" in rows[0]["style_tags"]
+
+
+def test_dashboard_recent_results_orders_newest_first(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    cfg = _build_runtime_for_startup_checks(tmp_path)
+    preview = cfg.tmp_dir / "composited" / "1" / "model" / "variant_1.jpg"
+    preview.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (64, 64), (18, 52, 86)).save(preview, format="JPEG")
+
+    monkeypatch.setattr(qr, "_project_path_if_exists", lambda token: preview if str(token or "").strip() else None)
+    monkeypatch.setattr(qr, "_to_project_relative", lambda _path: "tmp/composited/1/model/variant_1.jpg")
+
+    items = [
+        {
+            "timestamp": "2026-03-01T09:00:00+00:00",
+            "book_number": 1,
+            "book_title": "Older Result",
+            "model": "openrouter/google/gemini-3-pro-image-preview",
+            "variant": 1,
+            "prompt": "Older style prompt",
+            "quality_score": 0.7,
+            "cost": 0.01,
+            "image_path": "tmp/generated/1/model/variant_1.png",
+            "composited_path": "tmp/composited/1/model/variant_1.jpg",
+        },
+        {
+            "timestamp": "2026-03-01T10:00:00+00:00",
+            "book_number": 2,
+            "book_title": "Newest Result",
+            "model": "openrouter/google/gemini-3-pro-image-preview",
+            "variant": 1,
+            "prompt": "Newest style prompt",
+            "quality_score": 0.8,
+            "cost": 0.01,
+            "image_path": "tmp/generated/1/model/variant_1.png",
+            "composited_path": "tmp/composited/1/model/variant_1.jpg",
+        },
+    ]
+
+    rows = qr._dashboard_recent_results(items=items, runtime=cfg, limit=10)
+    assert len(rows) == 2
+    assert rows[0]["book_title"] == "Newest Result"
+    assert rows[1]["book_title"] == "Older Result"
+
+
+def test_dashboard_recent_results_ignores_unresolved_duplicate_until_valid_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    cfg = _build_runtime_for_startup_checks(tmp_path)
+    preview = cfg.tmp_dir / "composited" / "7" / "openrouter__google__gemini-3-pro-image-preview" / "variant_3.jpg"
+    preview.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (64, 64), (33, 66, 99)).save(preview, format="JPEG")
+
+    def _fake_project_path(token: str | Path | None):  # type: ignore[no-untyped-def]
+        raw = str(token or "").strip()
+        if not raw or "missing-asset" in raw:
+            return None
+        path = Path(raw)
+        if path.exists():
+            return path
+        maybe = qr.PROJECT_ROOT / raw.lstrip("/")
+        if maybe.exists():
+            return maybe
+        return None
+
+    monkeypatch.setattr(qr, "_project_path_if_exists", _fake_project_path)
+    monkeypatch.setattr(qr, "_to_project_relative", lambda _path: "tmp/composited/7/openrouter__google__gemini-3-pro-image-preview/variant_3.jpg")
+    monkeypatch.setattr(qr.job_db_store, "list_jobs", lambda **_kwargs: [])
+
+    items = [
+        {
+            "timestamp": "2026-03-02T10:00:00+00:00",
+            "book_number": 7,
+            "book_title": "Stale",
+            "model": "openrouter/google/gemini-3-pro-image-preview",
+            "variant": 3,
+            "image_path": "missing-asset.png",
+            "composited_path": "missing-asset.jpg",
+            "prompt": "broken path row",
+        },
+        {
+            "timestamp": "2026-03-02T09:00:00+00:00",
+            "book_number": 7,
+            "book_title": "Valid",
+            "model": "openrouter/google/gemini-3-pro-image-preview",
+            "variant": 3,
+            "image_path": "",
+            "composited_path": str(preview),
+            "prompt": "valid fallback row",
+        },
+    ]
+
+    rows = qr._dashboard_recent_results(items=items, runtime=cfg, limit=10)
+    assert len(rows) == 1
+    assert rows[0]["book_title"] == "Valid"
+    assert rows[0]["image_url"].endswith("variant_3.jpg")
+
+
+def test_dashboard_recent_results_falls_back_to_file_discovery_when_items_unresolved(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    cfg = _build_runtime_for_startup_checks(tmp_path)
+    discovered = cfg.tmp_dir / "composited" / "2" / "openrouter__google__gemini-2.5-flash-image" / "variant_1.jpg"
+    discovered.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (64, 64), (55, 77, 99)).save(discovered, format="JPEG")
+
+    def _fake_project_path(token: str | Path | None):  # type: ignore[no-untyped-def]
+        raw = str(token or "").strip()
+        if not raw or "missing-asset" in raw:
+            return None
+        path = Path(raw)
+        if path.exists():
+            return path
+        maybe = qr.PROJECT_ROOT / raw.lstrip("/")
+        if maybe.exists():
+            return maybe
+        return None
+
+    monkeypatch.setattr(qr, "_project_path_if_exists", _fake_project_path)
+    monkeypatch.setattr(qr.job_db_store, "list_jobs", lambda **_kwargs: [])
+
+    rows = qr._dashboard_recent_results(
+        items=[
+            {
+                "timestamp": "2026-03-02T10:00:00+00:00",
+                "book_number": 2,
+                "book_title": "Unresolved persisted row",
+                "model": "openrouter/google/gemini-2.5-flash-image",
+                "variant": 1,
+                "image_path": "missing-asset.png",
+                "composited_path": "missing-asset.jpg",
+                "prompt": "",
+            }
+        ],
+        runtime=cfg,
+        limit=10,
+    )
+    assert rows
+    assert any(int(row.get("book_number", 0)) == 2 for row in rows)
+    assert any(str(row.get("image_url", "")).endswith(".jpg") for row in rows)
+
+
+def test_dashboard_recent_results_falls_back_to_composited_files_when_records_empty(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    cfg = _build_runtime_for_startup_checks(tmp_path)
+    preview = cfg.tmp_dir / "composited" / "2" / "openrouter__google__gemini-2.5-flash-image" / "variant_1.jpg"
+    preview.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (64, 64), (44, 88, 132)).save(preview, format="JPEG")
+    monkeypatch.setattr(qr.state_db_store, "list_generation_records", lambda **_kwargs: [])
+    monkeypatch.setattr(qr.job_db_store, "list_jobs", lambda **_kwargs: [])
+
+    rows = qr._dashboard_recent_results(items=[], runtime=cfg, limit=10)
+    assert len(rows) >= 1
+    assert any(int(row.get("book_number", 0)) == 2 for row in rows)
+    assert any(str(row.get("image_url", "")).endswith(".jpg") for row in rows)
+
+
+def test_prune_stale_generated_variants_for_book_keeps_current_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    cfg = _build_runtime_for_startup_checks(tmp_path)
+    generated_root = cfg.tmp_dir / "generated" / "2" / "model-a"
+    generated_root.mkdir(parents=True, exist_ok=True)
+    keep_file = generated_root / "variant_1.png"
+    stale_file = generated_root / "variant_2.png"
+    Image.new("RGB", (64, 64), (10, 20, 30)).save(keep_file, format="PNG")
+    Image.new("RGB", (64, 64), (40, 50, 60)).save(stale_file, format="PNG")
+
+    monkeypatch.setattr(qr, "_project_path_if_exists", lambda token: Path(token) if str(token or "").strip() else None)
+    rows = [{"image_path": str(keep_file)}]
+    keep_paths = qr._current_run_generated_paths(runtime=cfg, rows=rows)
+    qr._prune_stale_generated_variants_for_book(runtime=cfg, book_number=2, keep_paths=keep_paths)
+
+    assert keep_file.exists()
+    assert not stale_file.exists()
+
+
+def test_assert_composite_validation_within_limits_allows_edge_artifact_only(tmp_path: Path):
+    cfg = _build_runtime_for_startup_checks(tmp_path)
+    report_path = cfg.tmp_dir / "composited" / "3" / "composite_validation.json"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report = {
+        "book_number": 3,
+        "total": 1,
+        "invalid": 1,
+        "items": [
+            {
+                "output_path": "tmp/composited/3/model/variant_1.jpg",
+                "valid": False,
+                "issues": ["edge_artifact_risk"],
+            }
+        ],
+    }
+    report_path.write_text(json.dumps(report), encoding="utf-8")
+    qr._assert_composite_validation_within_limits(runtime=cfg, book_number=3)
 
 
 def _build_runtime_for_startup_checks(tmp_path: Path) -> config.Config:

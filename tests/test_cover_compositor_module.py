@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from src import cover_compositor as cc
 
@@ -235,6 +235,22 @@ def test_color_match_returns_original_when_ring_empty(tmp_path: Path):
     assert matched is illustration
 
 
+def test_strip_border_adapts_for_internal_frame_artifacts():
+    plain = Image.new("RGBA", (240, 240), (90, 120, 160, 255))
+    framed = Image.new("RGBA", (240, 240), (90, 120, 160, 255))
+    draw = ImageDraw.Draw(framed, "RGBA")
+    draw.rectangle((24, 24, 216, 216), outline=(240, 220, 170, 255), width=8)
+    draw.rectangle((36, 36, 204, 204), outline=(200, 176, 132, 255), width=5)
+
+    plain_stripped = cc._strip_border(plain, border_percent=0.05)
+    framed_stripped = cc._strip_border(framed, border_percent=0.05)
+
+    # Base strip is 5% per side => 216x216. Framed image should trigger stronger adaptive crop.
+    assert plain_stripped.size == (216, 216)
+    assert framed_stripped.size[0] < plain_stripped.size[0]
+    assert framed_stripped.size[1] < plain_stripped.size[1]
+
+
 def test_main_book_and_batch_paths(monkeypatch, tmp_path: Path):
     regions_path = tmp_path / "regions.json"
     regions_path.write_text(json.dumps({"covers": []}), encoding="utf-8")
@@ -279,3 +295,123 @@ def test_validate_composite_output_detects_alignment_and_bleed(tmp_path: Path):
     )
     assert validation.alignment_ok is False
     assert validation.valid is False
+
+
+def test_global_compositing_mask_is_used_only_for_canonical_size():
+    assert cc._load_global_compositing_mask((700, 500)) is None
+    mask = cc._load_global_compositing_mask((3784, 2777))
+    assert mask is not None
+    assert mask.size == (3784, 2777)
+
+
+def test_combine_masks_uses_stricter_alpha():
+    primary = Image.new("L", (3, 3), 220)
+    secondary = Image.new("L", (3, 3), 120)
+    combined = cc._combine_masks(primary, secondary)
+    arr = np.array(combined)
+    assert arr.min() == 120
+    assert arr.max() == 120
+
+
+def test_composite_single_respects_strict_window_mask(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    cover = tmp_path / "cover.jpg"
+    ill = tmp_path / "ill.png"
+    out = tmp_path / "out.jpg"
+    _make_rgb(cover, color=(30, 40, 60), size=(700, 500))
+    _make_rgba(ill, color=(240, 200, 120, 255), size=(500, 500))
+
+    strict = Image.new("L", (700, 500), 0)
+    draw = ImageDraw.Draw(strict)
+    draw.ellipse((290, 190, 410, 310), fill=255)
+    monkeypatch.setattr(cc, "_load_global_compositing_mask", lambda _size: strict)
+
+    cc.composite_single(
+        cover_path=cover,
+        illustration_path=ill,
+        region={"center_x": 350, "center_y": 250, "radius": 180, "frame_bbox": [150, 50, 550, 450], "region_type": "circle"},
+        output_path=out,
+    )
+    with Image.open(out) as img:
+        arr = np.array(img.convert("RGB"), dtype=np.int16)
+    # Far outside strict mask should remain the original navy-ish color.
+    assert np.abs(arr[40, 40] - np.array([30, 40, 60], dtype=np.int16)).mean() < 8.0
+
+
+def test_detect_medallion_geometry_handles_shifted_ring():
+    cover = Image.new("RGB", (1400, 1000), (23, 41, 74))
+    draw = ImageDraw.Draw(cover)
+    true_center = (990, 610)
+    outer_radius = 212
+    draw.ellipse(
+        (
+            true_center[0] - outer_radius,
+            true_center[1] - outer_radius,
+            true_center[0] + outer_radius,
+            true_center[1] + outer_radius,
+        ),
+        outline=(209, 171, 99),
+        width=18,
+    )
+    draw.ellipse(
+        (
+            true_center[0] - (outer_radius - 20),
+            true_center[1] - (outer_radius - 20),
+            true_center[0] + (outer_radius - 20),
+            true_center[1] + (outer_radius - 20),
+        ),
+        outline=(157, 119, 63),
+        width=6,
+    )
+    region = cc.Region(
+        center_x=930,
+        center_y=560,
+        radius=190,
+        frame_bbox=(760, 390, 1220, 850),
+        region_type="circle",
+    )
+    detected = cc._detect_medallion_geometry(cover=cover, region=region)
+    assert abs(int(detected["center_x"]) - true_center[0]) <= 26
+    assert abs(int(detected["center_y"]) - true_center[1]) <= 26
+    assert abs(int(detected["outer_radius"]) - outer_radius) <= 26
+
+
+def test_resolve_medallion_geometry_keeps_opening_inside_outer_ring(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    cover_path = tmp_path / "cover.jpg"
+    _make_rgb(cover_path, color=(18, 35, 68), size=(3784, 2777))
+    region = cc.Region(
+        center_x=2864,
+        center_y=1620,
+        radius=500,
+        frame_bbox=(2269, 1025, 3459, 2215),
+        region_type="circle",
+    )
+
+    monkeypatch.setattr(
+        cc,
+        "_detect_medallion_geometry",
+        lambda **_kwargs: {"center_x": 2864, "center_y": 1620, "outer_radius": 500, "score": 1},
+    )
+    cc._GEOMETRY_CACHE.clear()
+    with Image.open(cover_path).convert("RGB") as cover:
+        resolved = cc._resolve_medallion_geometry(cover=cover, cover_path=cover_path, region=region)
+
+    assert resolved["outer_radius"] == 500
+    assert 340 <= int(resolved["opening_radius"]) <= 430
+    assert int(resolved["opening_radius"]) <= int(resolved["outer_radius"]) - cc.MIN_OPENING_MARGIN_PX
+
+
+def test_smart_square_crop_reframes_sparse_foreground():
+    image = Image.new("RGBA", (512, 512), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(image, "RGBA")
+    draw.rectangle((28, 44, 138, 184), fill=(242, 198, 116, 255))
+    cropped = cc._smart_square_crop(image)
+    assert cropped.size[0] == cropped.size[1]
+    assert cropped.size[0] < 512
+    arr = np.array(cropped.convert("RGBA"), dtype=np.uint8)
+    alpha = arr[..., 3]
+    ys, xs = np.where(alpha > 10)
+    assert xs.size > 0 and ys.size > 0
+    center_x = (float(xs.min()) + float(xs.max())) / 2.0
+    center_y = (float(ys.min()) + float(ys.max())) / 2.0
+    assert abs(center_x - (cropped.size[0] / 2.0)) <= cropped.size[0] * 0.18
+    assert abs(center_y - (cropped.size[1] / 2.0)) <= cropped.size[1] * 0.18

@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="stylesheet" href="/src/static/shared.css" />
-  <link rel="stylesheet" href="/src/static/prompts.css" />
+  <link rel="stylesheet" href="/src/static/shared.css?v=20260302-designlock" />
+  <link rel="stylesheet" href="/src/static/prompts.css?v=20260302-designlock" />
   <title>Alexandria Prompt Library</title>
 </head>
 <body>
@@ -36,6 +36,7 @@
         </label>
         <button id="refreshBtn" type="button">Refresh</button>
         <button id="newBtn" type="button" class="secondary">New Prompt</button>
+        <button id="seedBuiltinsBtn" type="button" class="secondary">Seed Built-in Prompts</button>
         <button id="exportBtn" type="button" class="ghost">Export JSON</button>
         <label class="ghost" for="importInput">Import JSON</label>
         <input id="importInput" type="file" accept="application/json" class="hidden" />
@@ -165,6 +166,7 @@
       });
       q('refreshBtn').addEventListener('click', () => refresh());
       q('newBtn').addEventListener('click', () => setFormFromPrompt(null));
+      q('seedBuiltinsBtn').addEventListener('click', () => seedBuiltins());
       q('searchInput').addEventListener('input', () => renderList());
       q('categoryFilter').addEventListener('change', () => renderList());
       q('saveBtn').addEventListener('click', () => savePrompt());
@@ -355,6 +357,21 @@
         await refresh();
       } catch (error) {
         q('status').textContent = `Save failed: ${String(error && error.message || error)}`;
+      }
+    }
+
+    async function seedBuiltins() {
+      q('status').textContent = 'Seeding built-in prompts...';
+      try {
+        const payload = await fetchJson(`/api/prompts/seed-builtins?${catalogQuery()}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ overwrite: false }),
+        });
+        q('status').textContent = `Built-ins seeded: ${Number(payload.created || 0)} created, ${Number(payload.updated || 0)} updated, ${Number(payload.skipped || 0)} skipped.`;
+        await refresh();
+      } catch (error) {
+        q('status').textContent = `Seed built-ins failed: ${String(error && error.message || error)}`;
       }
     }
 

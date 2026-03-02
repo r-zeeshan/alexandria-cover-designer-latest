@@ -2,6 +2,113 @@
 
 All notable changes to Alexandria Cover Designer are documented here.
 
+## [2.1.1] - 2026-03-01
+
+### UX Design Lock Reinforcement
+- Updated static asset revision token to `20260302-designlock` across all page HTML links.
+- Added a strict design-lock block to `src/static/shared.css` with `!important` sidebar/layout rules so legacy page CSS cannot force the old top navigation layout.
+- Added compatibility CSS token aliases (`--gold-500`, `--gold-400`, `--text-secondary`) to stabilize modern page styles under shared theming.
+
+### Medallion Bleed Prevention Hardening
+- Tightened medallion opening derivation in `src/cover_compositor.py`:
+  - `DETECTION_OPENING_RATIO` reduced to `0.758`.
+  - Added `MIN_OPENING_MARGIN_PX = 72` guard so punch/opening cannot invade ornament ring.
+  - Updated fallback opening radius logic to use conservative ratio/margin policy.
+- Replaced `config/compositing_mask.png` with a stricter inner-opening mask to enforce scene-only render area.
+- Added compositor regression test to ensure resolved opening radius remains safely inside outer ring geometry.
+
+### Dashboard Reliability
+- Hardened `scripts/quality_review.py::_project_path_if_exists` to resolve legacy root-relative persisted paths (e.g. `/tmp/...`) back to project-relative assets when present.
+- Added dashboard recent-results filesystem fallback scan (`tmp/composited` then `Output Covers`) so cards can populate on cold starts when record history is empty.
+- Added regression test for root-relative persisted path resolution.
+
+### Generation Artifact Guardrails
+- Increased content rejection strictness in `src/image_generator.py`:
+  - kept `MAX_CONTENT_VIOLATION_SCORE` at `0.24` to avoid false-positive rejection storms.
+  - tightened issue thresholds for text/ring/frame/dull outputs.
+- Strengthened scene-only guardrail wording (explicitly blocks inscriptions/calligraphy/seals/emblems).
+- Expanded prompt constraints in `src/prompt_generator.py` to reinforce anti-text and anti-frame generation behavior.
+- Synthetic fallback runs now bypass strict content-guardrail hard rejects (real providers remain strict), preventing no-key demo environments from failing every generation attempt.
+- Fixed prompt assembly quality in `src/image_generator.py`:
+  - removed duplicated provider/model signature output (prevents `openrouter/openrouter/...` token noise),
+  - cleaned malformed `\", no,\"` prompt artifacts that were diluting generation directives,
+  - guardrail text is now injected once (deduplicated) while remaining explicit.
+
+### Documentation Refresh
+- Updated root project docs with current production behavior and enforcement rules:
+  - `PROJECT-STATE.md`
+  - `Project state Alexandria Cover designer.md`
+  - `DEPLOY.md`
+  - `QA-CHECKLIST.md`
+
+### Verification Snapshot
+- Full `pytest` pass after the above changes.
+- Local endpoint checks passed:
+  - `GET /api/health` -> ok
+  - `GET /api/iterate-data?catalog=classics` -> includes all configured Gemini image IDs
+- Local visual proof captured:
+  - `tmp/proof-local-iterate-ui-20260301-v211.png`
+  - `tmp/proof-local-dashboard-ui-20260301-v211.png`
+
+### Delivery Protocol Hardening
+- Updated root project docs to explicitly require every delivery to include:
+  1. direct deployed webapp link, and
+  2. visual proof report path(s).
+
+## [2.1.0] - 2026-03-01
+
+### Design Lock + Deployment Consistency
+- Enforced static asset anti-stale policy in `scripts/quality_review.py`:
+  - `.css`, `.js`, `.html` now serve with `Cache-Control: no-store`.
+  - image/static binaries keep short cache windows only.
+- Added global design-version query tokens across all web UI pages in `src/static/*.html`:
+  - `?v=20260301-newdesign` on shared/page CSS + `navbar.js`.
+- Result: new sidebar-first iterate UI is forced after deploy and old cached UI is prevented.
+
+### Medallion Placement Reliability (Ornaments Always On Top)
+- Kept compositor v9 flow in `src/cover_compositor.py` as hard default:
+  - per-cover medallion auto-detection from ring pixels.
+  - opening radius derived from detected outer ring.
+  - content-aware zoom/crop for sparse outputs.
+  - synthetic inner gold seam ring.
+  - top-cover punched overlay composited last, preserving ornaments in front.
+- Added/retained compositor regression tests for shifted medallion + sparse-content cases.
+
+### Generation Guardrails + Provider Hardening
+- Prompt sanitization tightened in `src/image_generator.py` and `src/prompt_generator.py`:
+  - strips medallion/frame/ornament wording from generation prompts.
+  - enforces scene-only/no-text/no-border constraints.
+  - injects vivid color direction for stronger variation.
+- OpenRouter call path remains modality-aware (`image` vs `both`) with 429 backoff honoring `Retry-After`.
+- Artifact rejection remains strict for text/banner/frame contamination with retry-friendly error flow.
+
+### Gemini Model Coverage + Env Compatibility
+- Extended model coverage to always include all Gemini image models in `src/config.py`:
+  - `openrouter/google/gemini-3-pro-image-preview`
+  - `openrouter/google/gemini-3.1-flash-image-preview`
+  - `openrouter/google/gemini-2.5-flash-image`
+  - `google/gemini-3-pro-image-preview`
+  - `google/gemini-3.1-flash-image-preview`
+  - `google/gemini-2.5-flash-image`
+- Added env alias support in `src/config.py`:
+  - `DRIVE_SOURCE_FOLDER_ID` -> `gdrive_source_folder_id`
+  - `DRIVE_OUTPUT_FOLDER_ID` -> `gdrive_output_folder_id`
+  - `BUDGET_LIMIT_USD` -> runtime budget limit (`max_cost_usd`)
+
+### Dashboard + Prompt UX
+- Latest dashboard cards remain composited-first with persisted prompt + style tags (`scripts/quality_review.py` + `src/static/dashboard.html`).
+- Iterate result cards continue to show:
+  - full prompt text under each generated card,
+  - one-click `Save Prompt`,
+  - style tags for quick scanning.
+
+### Tests + Proof
+- Added config regression coverage in `tests/test_config_module.py` for:
+  - guaranteed Gemini model presence.
+  - env alias compatibility.
+- Re-ran full test suite before redeploy.
+- Captured visual proof artifacts under `tmp/` (iterate UI + composited medallion checks).
+
 ## [2.0.0] - 2026-02-22
 
 ### Prompt 17 - Multi-Catalog and Batch Jobs

@@ -7,17 +7,26 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from src import image_generator as ig
 
 
 class _FakeResponse:
-    def __init__(self, status_code: int, payload: dict | None = None, *, text: str = "", content: bytes = b""):
+    def __init__(
+        self,
+        status_code: int,
+        payload: dict | None = None,
+        *,
+        text: str = "",
+        content: bytes = b"",
+        headers: dict[str, str] | None = None,
+    ):
         self.status_code = status_code
         self._payload = payload or {}
         self.text = text or json.dumps(self._payload)
         self.content = content
+        self.headers = headers or {}
 
     def json(self):  # type: ignore[no-untyped-def]
         return self._payload
@@ -49,6 +58,12 @@ class _Runtime:
             "localhost",
         ]
         self.provider_keys = {key: "key" for key in ["openai", "openrouter", "google", "replicate", "fal"]}
+        self.model_modality = {
+            "openrouter/flux-2-pro": "image",
+            "openrouter/google/gemini-2.5-flash-image": "both",
+            "flux-2-pro": "image",
+            "google/gemini-2.5-flash-image": "both",
+        }
 
         self.data_dir = root / "data"
         self.data_dir.mkdir(parents=True, exist_ok=True)
@@ -84,6 +99,16 @@ class _Runtime:
 
     def get_model_cost(self, _model: str) -> float:
         return 0.05
+
+    def get_model_modality(self, model: str) -> str:
+        token = str(model or "").strip()
+        normalized = token.split("/", 1)[-1] if "/" in token else token
+        return str(
+            self.model_modality.get(token)
+            or self.model_modality.get(normalized)
+            or self.model_modality.get(f"openrouter/{normalized}")
+            or "image"
+        )
 
     def get_api_key(self, provider: str) -> str:
         return self.provider_keys.get(provider, "")
@@ -221,6 +246,56 @@ def test_download_postprocess_and_blank_detection(monkeypatch):
     assert ig._is_blank_or_solid(Image.open(io.BytesIO(_image_bytes((64, 64), gradient=True)))) is False
 
 
+def test_guardrailed_prompt_strips_text_and_frame_directions():
+    raw = "Typography-led circular vignette composition with ribbon banner and title text"
+    guarded = ig._guardrailed_prompt(raw).lower()
+    assert "typography-led" not in guarded
+    assert "circular vignette composition" not in guarded
+    assert "ribbon banner" not in guarded
+    assert "mandatory output rules" in guarded
+    assert "no text" in guarded
+    assert "vivid, high-saturation painterly palette" in guarded
+
+
+def test_content_guardrail_score_flags_rings_text_and_dullness():
+    artifact = Image.new("RGBA", (256, 256), (58, 64, 78, 255))
+    draw = ImageDraw.Draw(artifact, "RGBA")
+    draw.ellipse((14, 14, 241, 241), outline=(240, 236, 225, 255), width=5)
+    draw.ellipse((24, 24, 231, 231), outline=(210, 200, 184, 255), width=4)
+    draw.rectangle((52, 172, 206, 224), fill=(212, 206, 195, 255))
+    for y in range(178, 222, 8):
+        draw.line((64, y, 194, y), fill=(30, 30, 30, 255), width=2)
+
+    score_artifact, issues_artifact, _metrics_artifact = ig._content_guardrail_score(artifact)
+    assert score_artifact > 0.30
+    assert any(
+        token in issues_artifact
+        for token in ("text_or_banner_artifact", "inner_frame_or_ring_artifact", "rectangular_frame_artifact")
+    )
+
+    vibrant = Image.new("RGBA", (256, 256), (0, 0, 0, 255))
+    px = vibrant.load()
+    for y in range(256):
+        for x in range(256):
+            px[x, y] = ((x * 3) % 255, (y * 5) % 255, ((x + y) * 7) % 255, 255)
+    score_vibrant, issues_vibrant, _metrics_vibrant = ig._content_guardrail_score(vibrant)
+    assert score_vibrant < ig.MAX_CONTENT_VIOLATION_SCORE
+    assert "low_vibrancy" not in issues_vibrant
+
+
+def test_content_guardrail_detects_rectangular_internal_frame():
+    framed = Image.new("RGBA", (256, 256), (96, 78, 52, 255))
+    draw = ImageDraw.Draw(framed, "RGBA")
+    draw.rectangle((46, 42, 210, 214), outline=(220, 190, 120, 255), width=6)
+    draw.rectangle((62, 58, 194, 198), outline=(170, 145, 96, 255), width=4)
+    draw.ellipse((80, 92, 180, 192), fill=(145, 132, 118, 255))
+
+    score, issues, metrics = ig._content_guardrail_score(framed)
+    assert score > 0.24
+    assert "rectangular_frame_artifact" in issues
+    assert float(metrics.get("frame_penalty", 0.0)) > 0.20
+
+
 def test_provider_classes_with_mocked_http(tmp_path: Path, monkeypatch):
     png = _image_bytes((48, 48), gradient=True)
     b64 = base64.b64encode(png).decode("ascii")
@@ -265,6 +340,41 @@ def test_provider_classes_with_mocked_http(tmp_path: Path, monkeypatch):
     assert ig.FalProvider(model="fal/flux-pro", api_key="k", runtime=runtime).generate("p", "n", 64, 64).size == (48, 48)
     assert ig.ReplicateProvider(model="version", api_key="k", runtime=runtime).generate("p", "n", 64, 64).size == (48, 48)
     assert ig.GoogleCloudProvider(model="imagen-4", api_key="k", runtime=runtime).generate("p", "n", 64, 64).size == (48, 48)
+
+
+def test_openrouter_modalities_and_429_retry(tmp_path: Path, monkeypatch):
+    runtime = _Runtime(tmp_path)
+    runtime.model_modality["openrouter/google/gemini-2.5-flash-image"] = "both"
+    runtime.model_modality["google/gemini-2.5-flash-image"] = "both"
+    runtime.model_modality["openrouter/flux-2-pro"] = "image"
+    runtime.model_modality["flux-2-pro"] = "image"
+
+    png = _image_bytes((48, 48), gradient=True)
+    b64 = base64.b64encode(png).decode("ascii")
+    calls: list[dict] = []
+
+    def _fake_post(url, headers=None, json=None, timeout=None):  # type: ignore[no-untyped-def]
+        calls.append({"url": url, "json": dict(json or {})})
+        if len(calls) == 1:
+            return _FakeResponse(429, text="rate", headers={"Retry-After": "0"})
+        return _FakeResponse(
+            200,
+            {"choices": [{"message": {"content": [{"type": "output_image", "image_url": f"data:image/png;base64,{b64}"}]}}]},
+        )
+
+    monkeypatch.setattr(ig.requests, "post", _fake_post)
+    monkeypatch.setattr(ig.time, "sleep", lambda _seconds: None)
+
+    gemini = ig.OpenRouterProvider(model="google/gemini-2.5-flash-image", api_key="k", runtime=runtime)
+    image = gemini.generate("p", "n", 64, 64)
+    assert image.size == (48, 48)
+    assert len(calls) == 2
+    assert calls[-1]["json"]["modalities"] == ["image", "text"]
+
+    calls.clear()
+    flux = ig.OpenRouterProvider(model="flux-2-pro", api_key="k", runtime=runtime)
+    _ = flux.generate("p", "n", 64, 64)
+    assert calls[-1]["json"]["modalities"] == ["image"]
 
 
 def test_provider_key_and_error_paths():
@@ -346,6 +456,35 @@ def test_generate_image_prefixed_model_ignores_mismatched_provider(tmp_path: Pat
     )
     assert output
     assert captured["provider"] == "fal"
+
+
+def test_generate_image_skips_hard_content_reject_for_synthetic_fallback(tmp_path: Path, monkeypatch):
+    runtime = _Runtime(tmp_path)
+    monkeypatch.setattr(ig.config, "get_config", lambda: runtime)
+    monkeypatch.setattr(ig._RATE_LIMITER, "wait", lambda *args, **kwargs: None)
+
+    class _SyntheticProvider:
+        name = "synthetic"
+
+        def __init__(self, image):
+            self._image = image
+
+        def generate(self, **_kwargs):  # type: ignore[no-untyped-def]
+            return self._image
+
+    monkeypatch.setattr(
+        ig,
+        "_create_provider_instance",
+        lambda **_kwargs: _SyntheticProvider(Image.open(io.BytesIO(_image_bytes((64, 64), gradient=True)))),
+    )
+    monkeypatch.setattr(
+        ig,
+        "_content_guardrail_score",
+        lambda _image: (0.99, ["text_or_banner_artifact"], {}),
+    )
+
+    output = ig.generate_image("prompt", "negative", "openai/gpt-image-1", {"provider": "openai", "width": 64, "height": 64})
+    assert output
 
 
 def test_generate_image_provider_circuit_breaker(tmp_path: Path, monkeypatch):
@@ -525,7 +664,7 @@ def test_diversify_prompt_for_model_variant_injects_style_and_provider_hint():
     assert "Style direction:" in prompt
     assert "Color direction:" in prompt
     assert "Composition direction:" in prompt
-    assert "conceptual symbolism" in prompt.lower()
+    assert "model signature:" in prompt.lower()
 
 
 def test_generate_all_models_applies_model_specific_diversity(tmp_path: Path, monkeypatch):
@@ -749,6 +888,52 @@ def test_generate_one_success_failover_and_failure(tmp_path: Path, monkeypatch):
     )
     assert result3.success is False
     assert "fatal" in (result3.error or "")
+
+
+def test_generate_one_artifact_error_retries_with_hardened_prompt(tmp_path: Path, monkeypatch):
+    runtime = _Runtime(tmp_path)
+    runtime.provider_keys = {"openai": "k", "openrouter": "k", "fal": "k", "google": "k", "replicate": "k"}
+    runtime.max_retries = 2
+    monkeypatch.setattr(ig.config, "get_config", lambda: runtime)
+    monkeypatch.setattr(ig.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(
+        ig.similarity_detector,
+        "check_prompt_similarity_against_winners",
+        lambda **_kwargs: {"alert": False},
+    )
+    monkeypatch.setattr(
+        ig.similarity_detector,
+        "check_generated_image_against_winners",
+        lambda **_kwargs: {"alert": False, "similarity": 1.0},
+    )
+
+    seen_prompts: list[str] = []
+    attempts = {"n": 0}
+
+    def _artifact_then_success(**kwargs):  # type: ignore[no-untyped-def]
+        attempts["n"] += 1
+        seen_prompts.append(str(kwargs.get("prompt", "")))
+        if attempts["n"] == 1:
+            raise ig.GenerationError("Generated image rejected by content guardrail (0.210): text_or_banner_artifact")
+        return _image_bytes((64, 64), gradient=True)
+
+    monkeypatch.setattr(ig, "generate_image", _artifact_then_success)
+    result = ig._generate_one(
+        book_number=1,
+        variant=4,
+        prompt="Original prompt",
+        negative_prompt="neg",
+        model="openai/gpt-image-1",
+        provider="openai",
+        output_path=tmp_path / "generated" / "1" / "variant_4.png",
+        resume=False,
+    )
+    assert result.success is True
+    assert result.attempts == 2
+    assert len(seen_prompts) == 2
+    assert "Retry instruction" in seen_prompts[1]
+    assert "Retry #1" in seen_prompts[1]
+    assert "Retry instruction" in result.prompt
 
 
 def test_retry_failures_and_plan_helpers(tmp_path: Path, monkeypatch):
@@ -1126,7 +1311,7 @@ def test_generate_single_book_default_prompt_and_model_fallback(tmp_path: Path, 
         library_prompt_id=None,
         dry_run=True,
     )
-    assert captured["prompt"] == "Prompt One"
+    assert "Prompt One" in str(captured.get("prompt", ""))
     assert captured["models"] == [runtime.ai_model]
 
 

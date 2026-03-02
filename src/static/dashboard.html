@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="stylesheet" href="/src/static/shared.css" />
-  <link rel="stylesheet" href="/src/static/dashboard.css" />
+    <link rel="stylesheet" href="/src/static/shared.css?v=20260302-designlock" />
+  <link rel="stylesheet" href="/src/static/dashboard.css?v=20260302-designlock" />
 <title>Alexandria Dashboard</title>
 </head>
 <body>
@@ -30,6 +30,12 @@
     </section>
 
     <section class="cards" id="kpis"></section>
+
+    <section class="card">
+      <h2>Latest Generated Covers</h2>
+      <div id="recentResultsStatus" class="status u-mt-8">Loading latest generations...</div>
+      <div id="recentResults" class="recent-results"></div>
+    </section>
 
     <section class="card projector-card">
       <h2>Cost Projector</h2>
@@ -77,6 +83,7 @@
     let dashboardPayload = null;
     let projectorModels = [];
     let projectorTimer = null;
+    let dashboardRefreshTimer = null;
     function catalogQuery() { return `catalog=${encodeURIComponent(activeCatalog)}`; }
 
     async function init() {
@@ -86,6 +93,10 @@
       await Promise.all([loadDashboardPayload(), loadProjectorModels()]);
       bindProjectorEvents();
       await refreshProjection();
+      if (dashboardRefreshTimer) window.clearInterval(dashboardRefreshTimer);
+      dashboardRefreshTimer = window.setInterval(() => {
+        loadDashboardPayload().catch(() => {});
+      }, 15000);
     }
 
     async function loadCatalogs() {
@@ -106,8 +117,50 @@
       const data = await res.json();
       dashboardPayload = data;
       renderSummary(data.summary || {});
+      renderRecentResults(data.recent_results || []);
       renderCharts(data);
       q('updatedAt').textContent = `Updated: ${new Date(data.generated_at || Date.now()).toLocaleString()}`;
+    }
+
+    function esc(value) {
+      return String(value || '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+    }
+
+    function renderRecentResults(rows) {
+      const status = q('recentResultsStatus');
+      const root = q('recentResults');
+      const list = Array.isArray(rows) ? rows : [];
+      if (!list.length) {
+        status.textContent = 'No generated covers yet.';
+        root.innerHTML = '';
+        return;
+      }
+      status.textContent = `Showing ${list.length} latest generated cover variant(s).`;
+      root.innerHTML = list.map((row) => {
+        const score = Number(row.quality_score || 0);
+        const prompt = String(row.prompt || '').trim();
+        const styleTags = (Array.isArray(row.style_tags) ? row.style_tags : []).slice(0, 3);
+        const tagsHtml = styleTags.length
+          ? `<div class="recent-tags">${styleTags.map((tag) => `<span>${esc(tag)}</span>`).join('')}</div>`
+          : '';
+        return `
+          <article class="recent-card">
+            <img src="${esc(String(row.thumbnail_url || row.image_url || ''))}" alt="${esc(String(row.model || 'model'))}" loading="lazy" />
+            <div class="recent-meta">
+              <strong>${esc(String(row.book_number || ''))}. ${esc(String(row.book_title || 'Book'))}</strong>
+              <div>${esc(String(row.model || 'unknown model'))} · v${esc(String(row.variant || '0'))}</div>
+              <div>quality ${score > 0 ? score.toFixed(2) : 'n/a'} · $${Number(row.cost || 0).toFixed(3)}</div>
+              ${tagsHtml}
+              <div class="recent-prompt">${esc(prompt || 'Prompt not available for this variant.')}</div>
+            </div>
+          </article>
+        `;
+      }).join('');
     }
 
     async function loadProjectorModels() {
@@ -290,6 +343,6 @@
       if (dashboardPayload) renderCharts(dashboardPayload);
     });
   </script>
-  <script src="/src/static/navbar.js"></script>
+  <script src="/src/static/navbar.js?v=20260302-designlock"></script>
 </body>
 </html>

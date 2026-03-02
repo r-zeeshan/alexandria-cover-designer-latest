@@ -75,7 +75,7 @@ def _api_docs_endpoints() -> list[tuple[str, str, str, str, str, str]]:
 
 def _http_status(base_url: str, path: str) -> int:
     try:
-        with urlopen(f"{base_url}{path}", timeout=20) as response:
+        with urlopen(f"{base_url}{path}", timeout=45) as response:
             return int(getattr(response, "status", 200))
     except HTTPError as exc:
         return int(exc.code)

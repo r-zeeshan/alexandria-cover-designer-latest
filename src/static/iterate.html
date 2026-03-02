@@ -3,12 +3,16 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="stylesheet" href="/src/static/shared.css" />
-  <link rel="stylesheet" href="/src/static/iterate.css" />
+    <link rel="stylesheet" href="/src/static/shared.css?v=20260302-designlock" />
+  <link rel="stylesheet" href="/src/static/iterate.css?v=20260302-designlock" />
 <title>Alexandria Iterate</title>
 </head>
 <body class="iterate-page">
   <nav class="nav">
+    <div class="nav-brand">
+      <span class="nav-brand-mark">◫</span>
+      <span class="nav-brand-text">Alexandria</span>
+    </div>
     <a class="active" href="/iterate">Iterate</a>
     <a href="/review">Review</a>
     <a href="/batch">Batch</a>
@@ -45,8 +49,8 @@
     <aside class="card">
       <h2>Controls</h2>
       <div class="mode-toggle">
-        <button id="quickModeBtn" type="button" class="mode-active" title="Fast flow with only the core controls">Quick Generate</button>
-        <button id="advancedModeBtn" type="button" class="secondary" title="Show all controls and advanced tooling">Advanced</button>
+        <button id="quickModeBtn" type="button" class="secondary" title="Fast flow with only the core controls">Quick Generate</button>
+        <button id="advancedModeBtn" type="button" class="mode-active" title="Show all controls and advanced tooling">Advanced</button>
       </div>
 
       <div id="quickControls" class="quick-controls">
@@ -331,7 +335,7 @@
       budgetPresets: [],
       selectedBudgetPreset: 'balanced',
       driveOutputFolderId: '',
-      uiMode: 'quick',
+      uiMode: 'advanced',
       quickModels: [],
       latestJobId: '',
       modelProgress: {},
@@ -739,6 +743,7 @@
         if (params.get('catalog')) app.catalog = params.get('catalog');
         const requestedMode = String(params.get('mode') || '').trim().toLowerCase();
         app.requestedPromptId = String(params.get('prompt_id') || '').trim();
+        if (requestedMode === 'quick') app.uiMode = 'quick';
         if (requestedMode === 'advanced') app.uiMode = 'advanced';
 
         const { res: catalogRes, data: catalogData } = await fetchJson('/api/catalogs', { timeoutMs: 10000 });
@@ -968,7 +973,7 @@
     function composePromptForBook(book, { basePromptOverride = '' } = {}) {
       const template = currentTemplate();
       const components = (book && typeof book.prompt_components === 'object' && book.prompt_components) ? book.prompt_components : {};
-      const fallbackBase = `Classical medallion illustration for ${book && book.title ? book.title : 'this title'}`;
+      const fallbackBase = `Cinematic full-bleed narrative scene for ${book && book.title ? book.title : 'this title'}, single dominant focal subject, vivid painterly color, no text, no logos, no borders or frames`;
       const basePrompt = String(basePromptOverride || components.base || book && book.default_prompt || fallbackBase).trim();
       const templateModifier = String((template && template.prompt_modifier) || components.template || '').trim();
       const genreModifier = String(components.genre_modifier || '').trim();
@@ -1590,8 +1595,9 @@
       }
       if (app.promptSource === 'template') {
         app.selectedLibraryPromptId = '';
-        const composed = composePromptForBook(book, { basePromptOverride: book.default_prompt || `Classical medallion illustration for ${book.title}` });
-        qs('promptEditor').value = composed.prompt || (book.default_prompt || `Classical medallion illustration for ${book.title}`);
+        const fallbackBase = `Cinematic full-bleed narrative scene for ${book.title}, single dominant focal subject, vivid painterly color, no text, no logos, no borders or frames`;
+        const composed = composePromptForBook(book, { basePromptOverride: book.default_prompt || fallbackBase });
+        qs('promptEditor').value = composed.prompt || (book.default_prompt || fallbackBase);
         qs('promptQuality').textContent = 'Prompt quality: n/a (template mode)';
         renderPromptComposition(book, composed);
         return;
@@ -1769,7 +1775,7 @@
         const anchor = app.anchors.find(a => a.name === name);
         return anchor ? anchor.style_text : '';
       }).filter(Boolean);
-      qs('promptEditor').value = `Create a circular medallion illustration for ${book.title}. ${parts.join(', ')}`;
+      qs('promptEditor').value = `Create a vivid, scene-first illustration for ${book.title}. ${parts.join(', ')}, no text, no letters, no words, no logos, no labels, no banners, no plaques, no frame, no border, no decorative ornaments.`;
       qs('promptQuality').textContent = 'Prompt quality: n/a (style-anchor mix)';
     }
 
@@ -2125,7 +2131,7 @@
             generation_time: Number(existing.generation_time || 0),
             cost: Number(existing.cost || app.modelCosts[model] || 0),
             image_path: payload.image_path || existing.image_path || '',
-            composited_path: payload.composited_path || existing.composited_path || payload.image_path || '',
+            composited_path: payload.composited_path || existing.composited_path || '',
             prompt: existing.prompt || '',
             success: true,
           });
@@ -2626,6 +2632,51 @@
       return `<span class="print-badge print-badge-warn">print: ${warnings} warning${warnings === 1 ? '' : 's'}</span>`;
     }
 
+    function styleTagsFromPrompt(prompt) {
+      const text = String(prompt || '').toLowerCase();
+      if (!text) return [];
+      const mapping = [
+        ['sevastopol', 'Sevastopol'],
+        ['cossack', 'Cossack'],
+        ['art nouveau', 'Art Nouveau'],
+        ['ukiyo', 'Ukiyo-e'],
+        ['woodblock', 'Ukiyo-e'],
+        ['noir', 'Noir'],
+        ['botanical', 'Botanical'],
+        ['gothic', 'Gothic'],
+        ['stained glass', 'Stained Glass'],
+        ['impression', 'Impressionist'],
+        ['expression', 'Expressionist'],
+        ['baroque', 'Baroque'],
+        ['watercolour', 'Watercolour'],
+        ['watercolor', 'Watercolour'],
+        ['symbolist', 'Symbolist'],
+        ['renaissance', 'Renaissance'],
+        ['realist', 'Realist'],
+        ['oil painting', 'Classical Oil'],
+        ['romantic', 'Romantic'],
+      ];
+      const out = [];
+      mapping.forEach(([needle, label]) => {
+        if (text.includes(needle) && !out.includes(label)) out.push(label);
+      });
+      return out.slice(0, 3);
+    }
+
+    function resolvePrimaryPreviewPath(item) {
+      const composite = String((item && item.composited_path) || '').trim();
+      if (composite) return composite;
+      const raw = String((item && item.image_path) || '').trim();
+      if (!raw) return '';
+      if (raw.includes('/tmp/generated/')) {
+        const guessed = raw
+          .replace('/tmp/generated/', '/tmp/composited/')
+          .replace(/\.png$/i, '.jpg');
+        return guessed;
+      }
+      return raw;
+    }
+
     function renderResults() {
       app.compareSelections.clear();
       const root = qs('results');
@@ -2645,13 +2696,17 @@
         const images = section.querySelector('.images');
 
         grouped[model].forEach((item, idx) => {
-          const imagePath = item.composited_path || item.image_path;
+          const imagePath = resolvePrimaryPreviewPath(item);
           if (!imagePath) return;
           const compareId = `${model}::${Number(item.variant || item.variant_id || idx + 1)}::${idx}`;
           const overlayPath = item.fit_overlay_path || '';
           const stackClass = (app.fitOverlayEnabled && overlayPath) ? 'img-stack show-overlay' : 'img-stack';
           const variantNumber = Number(item.variant || item.variant_id || idx + 1);
           const promptText = String(item.prompt || '').trim();
+          const styleTags = (Array.isArray(item.style_tags) ? item.style_tags : styleTagsFromPrompt(promptText)).slice(0, 3);
+          const styleTagHtml = styleTags.length
+            ? `<div class="style-tags">${styleTags.map(tag => `<span class="style-tag">${escapeHtml(tag)}</span>`).join('')}</div>`
+            : '';
           const activeBook = currentBook();
           const bookNumber = Number(item.book_number || (activeBook && activeBook.number) || 0);
           const previewUrl = `/api/thumbnail?path=${encodeURIComponent(imagePath)}&size=large`;
@@ -2671,12 +2726,13 @@
               ${overlayPath ? `<img class="overlay" src="/${escapeHtml(overlayPath)}" alt="overlay" />` : ''}
             </div>
             <label><input type="checkbox" data-compare-id="${escapeHtml(compareId)}" data-path="${escapeHtml(imagePath)}" data-model="${escapeHtml(model)}" /> compare</label>
-            <div class="img-card-prompt">
-              <button type="button" class="prompt-toggle" data-prompt-toggle>Show Prompt ▾</button>
+            ${styleTagHtml}
+            <div class="img-card-prompt expanded">
               <div class="prompt-text">${escapeHtml(promptText || 'Prompt not available for this variant.')}</div>
             </div>
             <div class="img-card-actions">
               <button type="button" class="btn-select-winner" data-select-winner="${variantNumber}" data-select-model="${escapeHtml(model)}">★ Select Winner</button>
+              <button type="button" class="btn-save-result-prompt" data-save-result-prompt="${variantNumber}" data-save-model="${escapeHtml(model)}">★ Save Prompt</button>
               <button type="button" class="btn-regenerate" data-regenerate-model="${escapeHtml(model)}">↻ Regenerate</button>
               <button type="button" class="btn-download" data-download-variant="${variantNumber}" data-download-model="${escapeHtml(model)}">⬇ Download</button>
               <button type="button" class="btn-download-source" data-source-variant="${variantNumber}" data-source-model="${escapeHtml(model)}">⬇ Source</button>
@@ -2701,8 +2757,6 @@
             });
           }
           card.querySelector('input[data-compare-id]').addEventListener('change', handleCompareToggle);
-          const promptToggle = card.querySelector('[data-prompt-toggle]');
-          if (promptToggle) promptToggle.addEventListener('click', () => togglePromptPanel(promptToggle));
           const copyBtn = card.querySelector('[data-copy-prompt]');
           if (copyBtn) {
             copyBtn.addEventListener('click', () => {
@@ -2728,6 +2782,19 @@
               } catch (_) {
                 btnStopLoading(winnerBtn, false);
               }
+            });
+          }
+          const savePromptBtn = card.querySelector('[data-save-result-prompt]');
+          if (savePromptBtn) {
+            savePromptBtn.addEventListener('click', async () => {
+              if (!btnStartLoading(savePromptBtn, 'Saving...')) return;
+              const ok = await saveResultPrompt({
+                promptText,
+                bookNumber,
+                model,
+                variantNumber,
+              });
+              btnStopLoading(savePromptBtn, ok);
             });
           }
           const regenBtn = card.querySelector('[data-regenerate-model]');
@@ -3018,10 +3085,18 @@
       const btn = qs('savePromptBtn');
       if (!btnStartLoading(btn, 'Saving...')) return;
       try {
+        const editorPrompt = String(qs('promptEditor').value || '').trim();
+        let template = editorPrompt
+          .replaceAll(String(book.title || ''), '{title}')
+          .replaceAll(String(book.author || ''), '{author}')
+          .trim();
+        if (!template.includes('{title}')) {
+          template = `For "{title}" by {author}: ${template}`.trim();
+        }
         const payload = {
           catalog: app.catalog,
           name: `Iterate ${book.number}`,
-          prompt_template: qs('promptEditor').value.replace(book.title, '{title}'),
+          prompt_template: template,
           tags: ['iterative'],
           style_anchors: Array.from(app.selectedAnchors),
         };
@@ -3039,6 +3114,48 @@
       } catch (err) {
         btnStopLoading(btn, false);
         showToast('Error saving prompt: ' + (err.message || err), 'error');
+      }
+    }
+
+    async function saveResultPrompt({ promptText, bookNumber, model, variantNumber }) {
+      const book = currentBook();
+      const title = String((book && book.title) || `Book ${bookNumber || ''}`).trim();
+      const author = String((book && book.author) || '').trim();
+      const raw = String(promptText || '').trim();
+      if (!raw) {
+        showToast('This result has no prompt to save.', 'error');
+        return false;
+      }
+      let template = raw
+        .replaceAll(title, '{title}')
+        .replaceAll(author, '{author}')
+        .trim();
+      if (!template.includes('{title}')) {
+        template = `For "{title}" by {author}: ${template}`.trim();
+      }
+      const payload = {
+        catalog: app.catalog,
+        name: `${title} — ${model} v${Number(variantNumber || 0)}`,
+        prompt_template: template,
+        tags: ['iterative', 'result_card', String(model || '').trim().toLowerCase()],
+        style_anchors: [],
+        notes: `Saved from result card (variant ${Number(variantNumber || 0)}).`,
+      };
+      try {
+        const res = await fetch(`/api/save-prompt?${catalogQuery()}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          showToast('Failed to save result prompt.', 'error');
+          return false;
+        }
+        showToast('Result prompt saved.', 'success', 1800);
+        return true;
+      } catch (err) {
+        showToast('Error saving result prompt: ' + ((err && err.message) || err), 'error');
+        return false;
       }
     }
 
@@ -3462,6 +3579,6 @@
 
     init();
   </script>
-  <script src="/src/static/navbar.js"></script>
+  <script src="/src/static/navbar.js?v=20260302-designlock"></script>
 </body>
 </html>
