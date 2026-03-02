@@ -21,13 +21,19 @@ function qualityClass(score) {
   return 'low';
 }
 
+function applyPromptPlaceholders(promptText, book) {
+  return String(promptText || '')
+    .replaceAll('{title}', String(book?.title || ''))
+    .replaceAll('{author}', String(book?.author || ''));
+}
+
 function resolvePrompt(templateObj, book, customPrompt) {
-  if (customPrompt && customPrompt.trim()) return customPrompt.trim();
-  const base = templateObj?.prompt_template || `Create a vivid circular illustration for "${book.title}" by ${book.author}.`;
-  return String(base)
-    .replaceAll('{title}', book.title)
-    .replaceAll('{author}', book.author)
-    .concat(' No text, no letters, no logos, no border, no frame, no ribbons, vivid colors.');
+  const custom = String(customPrompt || '').trim();
+  if (custom) {
+    return applyPromptPlaceholders(custom, book).trim();
+  }
+  const base = templateObj?.prompt_template || `Create a colorful circular medallion illustration for "{title}" by {author}.`;
+  return `${applyPromptPlaceholders(base, book)} No text, no letters, no logos, no border, no frame, colorful and richly detailed, no empty space.`.trim();
 }
 
 function renderModelCheckboxes(defaultChecked = 3) {
@@ -45,6 +51,7 @@ window.Pages.iterate = {
     const content = document.getElementById('content');
     let books = DB.dbGetAll('books');
     if (!books.length) books = await DB.loadBooks('classics');
+    await DB.loadPrompts('classics');
 
     const prompts = DB.dbGetAll('prompts');
     const options = books
@@ -120,6 +127,8 @@ window.Pages.iterate = {
     const modeToggle = document.getElementById('iterModeToggle');
     const advanced = document.getElementById('iterAdvanced');
     const variantsEl = document.getElementById('iterVariants');
+    const promptSelEl = document.getElementById('iterPromptSel');
+    const customPromptEl = document.getElementById('iterPrompt');
 
     modeToggle?.addEventListener('change', () => {
       advanced.classList.toggle('hidden', !modeToggle.checked);
@@ -140,6 +149,18 @@ window.Pages.iterate = {
 
     document.querySelectorAll('.iter-model-check').forEach((el) => el.addEventListener('change', updateCost));
     variantsEl?.addEventListener('change', updateCost);
+    promptSelEl?.addEventListener('change', () => {
+      if (!customPromptEl) return;
+      const promptId = String(promptSelEl.value || '').trim();
+      if (!promptId) {
+        customPromptEl.value = '';
+        return;
+      }
+      const selected = DB.dbGet('prompts', promptId);
+      if (selected?.prompt_template) {
+        customPromptEl.value = String(selected.prompt_template);
+      }
+    });
     updateCost();
 
     document.getElementById('iterCancelBtn')?.addEventListener('click', () => JobQueue.cancelAll());
@@ -172,12 +193,12 @@ window.Pages.iterate = {
     }
 
     const variantCount = Number(document.getElementById('iterVariants')?.value || 1);
-    const promptId = Number(document.getElementById('iterPromptSel')?.value || 0);
+    const promptId = String(document.getElementById('iterPromptSel')?.value || '').trim();
     const customPrompt = document.getElementById('iterPrompt')?.value || '';
     const book = books.find((b) => Number(b.id) === bookId);
     if (!book) return;
 
-    const templateObj = DB.dbGet('prompts', promptId);
+    const templateObj = promptId ? DB.dbGet('prompts', promptId) : null;
     const styleSelections = StyleDiversifier.selectDiverseStyles(selectedModels.length * variantCount);
 
     const jobs = [];
@@ -387,17 +408,52 @@ window.Pages.iterate = {
     a.click();
   },
 
-  savePromptFromJob(jobId) {
+  refreshPromptDropdown(selectedId = '') {
+    const promptSel = document.getElementById('iterPromptSel');
+    if (!promptSel) return;
+    const prompts = DB.dbGetAll('prompts');
+    promptSel.innerHTML = ['<option value="">Default auto</option>']
+      .concat(prompts.map((p) => `<option value="${p.id}">${p.name}</option>`))
+      .join('');
+    if (selectedId) {
+      promptSel.value = String(selectedId);
+    }
+  },
+
+  async savePromptFromJob(jobId) {
     const job = DB.dbGet('jobs', jobId);
     if (!job?.prompt) return;
-    DB.dbPut('prompts', {
-      name: `Saved Prompt ${new Date().toLocaleString()}`,
-      prompt_template: job.prompt,
-      category: 'Saved',
-      created_at: new Date().toISOString(),
-      usage_count: 0,
-      win_count: 0,
-    });
-    Toast.success('Prompt saved');
+    const book = DB.dbGet('books', job.book_id);
+    const title = String(book?.title || '').trim();
+    const author = String(book?.author || '').trim();
+    let template = String(job.prompt || '').trim();
+    if (title) template = template.replaceAll(title, '{title}');
+    if (author) template = template.replaceAll(author, '{author}');
+    if (!template.includes('{title}')) {
+      template = `For "{title}" by {author}: ${template}`.trim();
+    }
+
+    try {
+      const response = await fetch('/api/save-prompt?catalog=classics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: `${book?.title || `Book ${job.book_id}`} - ${modelIdToLabel(job.model)} v${job.variant}`,
+          prompt_template: template,
+          category: 'Saved',
+          tags: ['iterative', 'result_card', String(job.model || '').trim().toLowerCase()],
+          style_anchors: job.style_id && job.style_id !== 'none' ? [job.style_id] : [],
+          notes: `Saved from iterate result card (${job.model} v${job.variant}).`,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      await DB.loadPrompts('classics');
+      this.refreshPromptDropdown();
+      Toast.success('Prompt saved');
+    } catch (err) {
+      Toast.error(`Prompt save failed: ${err.message || err}`);
+    }
   },
 };
