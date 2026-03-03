@@ -40,25 +40,29 @@ Serving layer:
 - `src/static/shared.css` contains a design-lock block with `!important` sidebar/layout rules so legacy page CSS cannot revert to the old top-nav layout.
 
 ### 3.2 Medallion Safety (Art Behind Ornaments)
-PROMPT-07E is now implemented (2026-03-03).
+**PNG Template approach is now in progress (2026-03-03).**
 
-Current compositor behavior:
-1. Global restrictive mask is disabled:
-   - `config/compositing_mask.png` renamed to `config/compositing_mask.png.disabled`
-2. Known medallion geometry remains authoritative (from `cover_regions.json`).
-3. Center crop is deterministic (content-aware recentering removed):
-   - backend `_smart_square_crop()` now always crops centered square
-   - frontend source crop now always crops centered square
-4. Aggressive fill constants are active:
-   - backend: `DETECTION_OPENING_RATIO=0.96`, `OPENING_SAFETY_INSET_PX=0`, `OVERLAY_PUNCH_INSET_PX=-4`
-   - frontend: `OPENING_RATIO=0.96`, `OPENING_SAFETY_INSET=0`, template punch radius = `openingRadius + 4`
-5. Frontend logging/version:
-   - compositor logs are now `[Compositor v12] ...`
+Previous parameter-tuning approaches (07A–07D) all failed because two independent masking systems (`compositing_mask.png` + geometric circles) contradict each other. The fix is architectural: pre-process covers into PNG templates with transparent medallion centers, then composite as a simple three-layer stack.
 
-Resulting geometry intent:
-- art fills close to opening radius (~480px on canonical covers),
-- punch is slightly larger than art circle, avoiding original-cover bleed at the edge,
-- centered placement is consistent across books/variants.
+**PROMPT-07E** — Batch Preprocessing Script:
+- Creates `src/create_png_templates.py`
+- Converts all 99 source cover JPGs into PNG templates
+- Punches transparent circle at (2864, 1620) with r=465
+- 4x supersampled anti-aliased edges
+- Output: `config/templates/cover_XXX_template.png` (x99)
+
+**PROMPT-07F** — Compositor Pipeline Replacement:
+- Modifies `src/cover_compositor.py` medallion branch only
+- New three-layer pipeline: canvas + art + template (frame always on top)
+- Adds `_simple_center_crop()` (replaces `_smart_square_crop()` in medallion path)
+- Adds `_find_template_for_cover()` for template lookup
+- Falls back to legacy pipeline if template missing
+- Rectangle and custom_mask branches remain UNCHANGED
+
+Resulting architecture:
+- Frame is ALWAYS the topmost layer — art CANNOT bleed through (Bug 3 eliminated)
+- Simple center crop — consistent centering across all books (Bug 2 eliminated)
+- Art sized to `TEMPLATE_PUNCH_RADIUS * 2 + 20` — fills medallion opening (Bug 1 eliminated)
 
 Known consensus defaults:
 - `cx = 2864`

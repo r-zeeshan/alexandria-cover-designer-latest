@@ -1,52 +1,50 @@
-# Codex Message for PROMPT-07E
+# Codex Message for PROMPT-07E (Batch PNG Templates)
 
 ## What to paste in the Codex chat:
 
 ---
 
-**CRITICAL: Preserve the current design/UI/UX exactly as it is.** Only change the specific files listed in PROMPT-07E.
+**CRITICAL: Preserve the current design/UI/UX exactly as it is.** Only create the specific files listed in PROMPT-07E.
 
-Read `Codex Prompts/PROMPT-07E-COMPOSITOR-FIX.md` in the repo.
+Read `Codex Prompts/PROMPT-07E-BATCH-PNG-TEMPLATES.md` in the repo.
 
-**THE PROBLEMS:** (1) Art appears too small inside the medallion, (2) art appears off-center — each image has different visual positioning, (3) original cover's background artwork is visible around the generated art.
+**GOAL:** Create `src/create_png_templates.py` — a standalone script that converts all 99 source cover JPGs into PNG templates with transparent medallion centers.
 
-**Root causes:** `config/compositing_mask.png` restricts art to ~380px radius. Content-aware cropping (`_smart_square_crop()`) shifts the crop center per image causing inconsistent centering. Cover overlay punch (462px) is smaller than art clip (464px) creating a gap where original cover shows.
+**WHAT THIS SCRIPT DOES:**
 
-**FOUR CHANGES:**
+For each cover JPG in `config/covers/`:
+1. Open the JPG, convert to RGBA
+2. Create a white (opaque) grayscale mask at the cover's dimensions
+3. Draw a filled black circle at center (2864, 1620) with radius 465px — using 4x supersampling for anti-aliased edges
+4. Apply the mask as the alpha channel
+5. Save as `config/templates/{stem}_template.png`
 
-1. **Rename** `config/compositing_mask.png` to `config/compositing_mask.png.disabled` — This is the MOST IMPORTANT change. The mask is too restrictive and makes art tiny.
+**KEY CONSTANTS:**
+- `TEMPLATE_PUNCH_RADIUS = 465`
+- `CENTER_X = 2864`, `CENTER_Y = 1620`
+- `SUPERSAMPLE_FACTOR = 4`
+- Output directory: `config/templates/`
 
-2. **Python backend** (`src/cover_compositor.py`) — Change 3 constants near the top:
-   - `DETECTION_OPENING_RATIO` from `0.965` to `0.96`
-   - `OPENING_SAFETY_INSET_PX` from `18` to `0`
-   - `OVERLAY_PUNCH_INSET_PX` from `20` to `-4` (YES, negative! This makes the punch 4px BIGGER than the opening)
+**REQUIREMENTS:**
+- Standalone module: `python -m src.create_png_templates`
+- CLI args: `--punch-radius`, `--source-dir`, `--force`
+- Idempotent: skip existing templates unless `--force`
+- Read per-cover geometry from `config/cover_regions.json` (one cover differs by 2px)
+- Log results: created/skipped/failed counts
+- Uses only PIL/Pillow (already in requirements)
+- Creates `config/templates/` directory if it doesn't exist
 
-3. **Fix centering** (`src/cover_compositor.py`) — Replace `_smart_square_crop()` with a simple center crop. Remove all foreground detection / energy center logic. Just crop a centered square from the image. This ensures every image is consistently centered in the medallion.
-
-4. **JS frontend** (`src/static/js/compositor.js`) — Change 2 constants:
-   - `OPENING_RATIO` from `0.965` to `0.96`
-   - `OPENING_SAFETY_INSET` from `18` to `0`
-   - Fix `buildCoverTemplate()`: change the punch radius to `geo.openingRadius + 4`
-   - If JS has a content-aware crop function, simplify it to center crop too
-   - Bump version strings from `v10` to `v12`
-
-5. **Model grid** — Add `.model-grid` CSS (grid layout with card borders) in `style.css`. Change `checkbox-group` to `model-grid` in `iterate.js`. See prompt for exact CSS.
+**CREATES:** `src/create_png_templates.py` + `config/templates/` directory
+**DOES NOT MODIFY:** Any existing file
 
 **HOW TO VERIFY:**
-
-After deploying, generate covers for Book #1, #9, and #25 with any model. For EACH:
-- Does the art FILL most of the medallion circle? (Should fill to ~480px from center)
-- Is there ANY original cover artwork visible around the generated art? (Should be NONE)
-- Is the art CENTERED the same way in all three? (All should have identical edge ratios)
-- Is there a thin gold frame border visible? (Should be the outermost ~16px ring)
-
-**CRITICAL:** Compare all three covers side by side. The circle size and position should be IDENTICAL across all covers. Only the art content should differ.
-
-If the original cover artwork is STILL visible: check that `config/compositing_mask.png` was actually renamed.
-If centering still varies: check that `_smart_square_crop()` was actually simplified to center crop.
+1. Run: `python -m src.create_png_templates`
+2. Check: `ls config/templates/*.png | wc -l` → should be 99
+3. Open any template PNG — should show full cover with clean transparent circle at medallion center
+4. Zoom to circle edge at 100% — should be smooth, no jagged pixels
 
 ```bash
-git add -A && git commit -m "fix: bigger art circle, center crop, no mask (07E)" && git push
+git add -A && git commit -m "feat: batch PNG template generator (PROMPT-07E)" && git push
 ```
 
 ---
