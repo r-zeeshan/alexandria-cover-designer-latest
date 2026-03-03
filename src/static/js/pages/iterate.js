@@ -32,6 +32,57 @@ function fallbackCardText(status) {
   return 'No preview yet';
 }
 
+function isRenderableImageSource(value) {
+  if (!value) return false;
+  if (typeof value === 'string') return Boolean(window.normalizeAssetUrl ? window.normalizeAssetUrl(value) : String(value).trim());
+  if (value instanceof Blob) return !value.type || value.type.startsWith('image/');
+  return true;
+}
+
+function decodeAttrToken(token) {
+  try {
+    return decodeURIComponent(String(token || ''));
+  } catch {
+    return '';
+  }
+}
+
+function resolvePreviewSources(job, keyPrefix = 'display', preferRaw = false) {
+  const sources = [];
+  const seen = new Set();
+  const pushSource = (value, suffix) => {
+    if (!isRenderableImageSource(value)) return;
+    const src = getBlobUrl(value, `${job.id}-${keyPrefix}-${suffix}`);
+    if (!src || seen.has(src)) return;
+    seen.add(src);
+    sources.push(src);
+  };
+
+  if (preferRaw) {
+    pushSource(job.generated_image_blob, 'raw');
+    pushSource(job.composited_image_blob, 'composite');
+  } else {
+    pushSource(job.composited_image_blob, 'composite');
+    pushSource(job.generated_image_blob, 'raw');
+  }
+
+  try {
+    const parsed = JSON.parse(String(job.results_json || '{}'));
+    const row = parsed?.result || {};
+    if (preferRaw) {
+      pushSource(row.image_path || row.generated_path, 'row-raw');
+      pushSource(row.composited_path, 'row-composite');
+    } else {
+      pushSource(row.composited_path, 'row-composite');
+      pushSource(row.image_path || row.generated_path, 'row-raw');
+    }
+  } catch {
+    // ignore malformed historical rows
+  }
+
+  return sources;
+}
+
 function applyPromptPlaceholders(promptText, book) {
   return String(promptText || '')
     .replaceAll('{title}', String(book?.title || ''))
@@ -345,7 +396,9 @@ window.Pages.iterate = {
     const completed = jobs.filter((job) => job.status === 'completed').length;
     if (count) count.textContent = `${completed} completed · ${jobs.length} total`;
     grid.innerHTML = jobs.map((job) => {
-      const src = getBlobUrl(job.composited_image_blob || job.generated_image_blob, `${job.id}-display`);
+      const previewSources = resolvePreviewSources(job, 'display', false);
+      const src = previewSources[0] || '';
+      const fallbackSrc = previewSources[1] || '';
       const hasPreview = Boolean(src);
       const quality = Number(job.quality_score || 0);
       const status = String(job.status || 'queued');
@@ -354,7 +407,7 @@ window.Pages.iterate = {
       return `
         <div class="result-card ${hasPreview ? '' : 'result-card-empty'}" ${hasPreview ? `data-view="${job.id}"` : ''}>
           ${hasPreview
-            ? `<img class="thumb" src="${src}" alt="result" />`
+            ? `<img class="thumb" src="${src}" alt="result" data-fallback-src="${encodeURIComponent(fallbackSrc)}" data-status="${status}" />`
             : `<div class="thumb thumb-fallback">${fallbackCardText(status)}</div>`}
           <div class="card-body">
             <div class="flex justify-between">
@@ -376,6 +429,29 @@ window.Pages.iterate = {
       `;
     }).join('');
 
+    grid.querySelectorAll('img.thumb').forEach((img) => {
+      img.addEventListener('error', () => {
+        if (!img.dataset.fallbackTried) {
+          img.dataset.fallbackTried = '1';
+          const next = decodeAttrToken(img.dataset.fallbackSrc || '');
+          if (next && next !== img.src) {
+            img.src = next;
+            return;
+          }
+        }
+        const status = String(img.dataset.status || 'completed');
+        const card = img.closest('.result-card');
+        if (card) {
+          card.classList.add('result-card-empty');
+          card.removeAttribute('data-view');
+        }
+        const fallback = document.createElement('div');
+        fallback.className = 'thumb thumb-fallback';
+        fallback.textContent = fallbackCardText(status);
+        img.replaceWith(fallback);
+      });
+    });
+
     grid.querySelectorAll('[data-view]').forEach((el) => {
       el.addEventListener('click', (event) => {
         if (event.target.closest('button')) return;
@@ -390,8 +466,8 @@ window.Pages.iterate = {
   viewFull(jobId, mode = 'composite') {
     const job = DB.dbGet('jobs', jobId);
     if (!job) return;
-    const composite = getBlobUrl(job.composited_image_blob || job.generated_image_blob, `${job.id}-composite`);
-    const raw = getBlobUrl(job.generated_image_blob || job.composited_image_blob, `${job.id}-raw`);
+    const composite = resolvePreviewSources(job, 'view-composite', false)[0] || '';
+    const raw = resolvePreviewSources(job, 'view-raw', true)[0] || composite;
     const state = { mode };
 
     const overlay = document.createElement('div');
@@ -429,7 +505,8 @@ window.Pages.iterate = {
   downloadComposite(jobId) {
     const job = DB.dbGet('jobs', jobId);
     if (!job) return;
-    const href = getBlobUrl(job.composited_image_blob || job.generated_image_blob, `${job.id}-dlc`);
+    const href = resolvePreviewSources(job, 'download-composite', false)[0] || '';
+    if (!href) return;
     const a = document.createElement('a');
     a.href = href;
     a.download = `${job.book_id}-${job.model.replaceAll('/', '_')}-v${job.variant}-composite.jpg`;
@@ -439,7 +516,8 @@ window.Pages.iterate = {
   downloadGenerated(jobId) {
     const job = DB.dbGet('jobs', jobId);
     if (!job) return;
-    const href = getBlobUrl(job.generated_image_blob || job.composited_image_blob, `${job.id}-dlg`);
+    const href = resolvePreviewSources(job, 'download-raw', true)[0] || '';
+    if (!href) return;
     const a = document.createElement('a');
     a.href = href;
     a.download = `${job.book_id}-${job.model.replaceAll('/', '_')}-v${job.variant}-raw.jpg`;

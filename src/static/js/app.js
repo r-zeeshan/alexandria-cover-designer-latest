@@ -444,13 +444,37 @@ window.timeAgo = (iso) => {
   return `${Math.floor(h / 24)}d ago`;
 };
 
+window.normalizeAssetUrl = (value) => {
+  const token = String(value || '').trim();
+  if (!token) return '';
+  if (token.startsWith('blob:') || token.startsWith('data:') || /^https?:\/\//i.test(token)) return token;
+  if (token.startsWith('/')) return token;
+  return `/${token.replace(/^\.?\//, '')}`;
+};
+
 window.blobUrls = new Map();
 window.getBlobUrl = (data, key) => {
   if (!data) return '';
-  if (typeof data === 'string') return data;
-  if (key && window.blobUrls.has(key)) return window.blobUrls.get(key);
-  const url = URL.createObjectURL(data instanceof Blob ? data : new Blob([data]));
-  if (key) window.blobUrls.set(key, url);
+  if (typeof data === 'string') return window.normalizeAssetUrl(data);
+
+  const blob = data instanceof Blob ? data : new Blob([data]);
+  if (blob.type && !blob.type.startsWith('image/')) return '';
+
+  if (key && window.blobUrls.has(key)) {
+    const cached = window.blobUrls.get(key);
+    if (cached?.data === data && cached?.url) return cached.url;
+    if (cached?.url) {
+      try {
+        URL.revokeObjectURL(cached.url);
+      } catch {
+        // ignore
+      }
+    }
+    window.blobUrls.delete(key);
+  }
+
+  const url = URL.createObjectURL(blob);
+  if (key) window.blobUrls.set(key, { data, url });
   return url;
 };
 
@@ -469,10 +493,18 @@ async function fetchImageBlob(src, signal, options = {}) {
   if (!src || typeof src !== 'string') return null;
   const retries = Math.max(0, Number(options.retries || 0));
   const delayMs = Math.max(0, Number(options.delayMs || 0));
+  const looksLikeImagePath = /\.(png|jpe?g|webp|gif|bmp|avif)(\?|$)/i.test(src);
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     try {
       const response = await fetch(src, { cache: 'no-store', signal });
-      if (response.ok) return await response.blob();
+      if (response.ok) {
+        const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+        const blob = await response.blob();
+        const blobType = String(blob.type || '').toLowerCase();
+        const isImage = blobType.startsWith('image/');
+        const likelyImage = !blobType && !contentType && looksLikeImagePath;
+        if (isImage || likelyImage) return blob;
+      }
     } catch {
       // Ignore transient network errors; retry loop handles backoff.
     }
