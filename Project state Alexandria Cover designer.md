@@ -40,24 +40,35 @@ Serving layer:
 - `src/static/shared.css` contains a design-lock block with `!important` sidebar/layout rules so legacy page CSS cannot revert to the old top-nav layout.
 
 ### 3.2 Medallion Safety (Art Behind Ornaments)
-Compositing now uses known geometry from `config/cover_regions.json` as the primary source of truth (PROMPT-07C). Detection tuning is no longer the production path.
 
-Current behavior:
+**STATUS: BROKEN — PROMPT-07D pending implementation.**
+
+Three rounds of fixes have failed (07B parameter tuning x2, 07C known geometry). Root cause finally identified:
+
+**The gold frame is NOT a perfect circle.** Decorative scrollwork creates an irregular opening:
+- Minimum opening radius: ~380px (tightest scrollwork)
+- Maximum opening radius: ~460px (widest points)
+- Previous `OPENING_RATIO=0.965` produced clipRadius=464px — exceeding the actual opening at most angles
+
+**PROMPT-07D fix:** Pixel-perfect frame mask (`config/compositing_mask.png`) + conservative circular clip (`OPENING_RATIO=0.74`, clipRadius=366px).
+
+Current behavior (PROMPT-07C, still deployed):
 - frontend compositor loads `/api/cover-regions` on startup via `Compositor.loadRegions()`,
 - frontend `smartComposite` resolves `bookId -> {cx, cy, radius}` from registry/consensus and does not call detection,
-- backend `_resolve_medallion_geometry()` uses `region.center_x/center_y/radius` directly whenever available and returns cached known geometry,
-- opening radius remains conservative relative to known outer radius,
-- generated art is clipped first, then template overlay is composited on top so ornaments stay in front.
+- backend `_resolve_medallion_geometry()` uses `region.center_x/center_y/radius` directly,
+- **BUT circular clip at 464px still bleeds past the irregular frame opening**
 
 Known consensus defaults:
 - `cx = 2864`
 - `cy = 1620`
 - `radius = 500`
 
-Live verification checkpoints:
-- `/api/cover-regions?catalog=classics` returns `99` covers + consensus region,
-- `window.Compositor.getKnownGeometry(1|9|25)` returns known coordinates from registry,
-- deployed `compositor.js` contains `[Compositor v10]` known-geometry logs and no `[Compositor v9] Detection:` log strings.
+Pending PROMPT-07D changes:
+- `config/compositing_mask.png` already updated with pixel-perfect mask (RGBA, alpha=255 for opening, alpha=0 for frame)
+- `src/static/img/frame_mask.png` already in place (grayscale L mode, 0=opening, 255=frame)
+- Python backend already has `_load_global_compositing_mask()` infrastructure to use the mask
+- JS compositor needs mask loading + pixel-level clipping (v11)
+- Both compositors get conservative `OPENING_RATIO=0.74` as belt-and-suspenders
 
 ### 3.3 Prompt/Generation Hardening
 `src/image_generator.py` + `src/prompt_generator.py` enforce:
@@ -176,9 +187,10 @@ Completed in this workspace session:
 - Provider-side image models can still occasionally emit pseudo-typography; current guardrails and retry hardening reduce this risk but cannot mathematically guarantee zero artifact probability from upstream model outputs.
 
 ## 8. Next Recommended Work
-1. Run a live canary (10-book sample) with active provider keys and capture fresh composited proofs.
-2. Add a dedicated visual regression check for ornament-overdraw using the composited output set.
-3. Keep the revision token centralized in one constant to avoid accidental per-page drift.
+1. **CRITICAL:** Implement PROMPT-07D (pixel-perfect frame mask compositor fix). Paste `Codex Prompts/CODEX-MESSAGE-PROMPT-07D.md` into a new Codex conversation.
+2. Run a live canary (10-book sample) with active provider keys and capture fresh composited proofs.
+3. Add a dedicated visual regression check for ornament-overdraw using the composited output set.
+4. Keep the revision token centralized in one constant to avoid accidental per-page drift.
 
 ## 9. Mandatory Delivery Protocol
 For every user-facing completion message:
