@@ -1738,6 +1738,18 @@ def _serialize_generation_results(
 
     for row in results:
         image_rel = _to_project_relative(row.image_path) if row.image_path else None
+        # Persist raw AI art to a durable location for download ZIPs.
+        persisted_raw_path = None
+        if row.image_path and Path(row.image_path).exists():
+            raw_art_dir = runtime.output_dir / "raw_art" / str(row.book_number)
+            raw_art_dir.mkdir(parents=True, exist_ok=True)
+            dest = raw_art_dir / f"variant_{row.variant}_{row.model.replace('/', '_')}.png"
+            try:
+                shutil.copy2(str(row.image_path), str(dest))
+                persisted_raw_path = _to_project_relative(dest)
+                logger.info("Persisted raw AI art to %s", dest)
+            except Exception as exc:
+                logger.warning("Failed to persist raw AI art: %s", exc)
         composed = None
         if row.image_path:
             candidate = _resolve_composited_candidate(row.image_path, runtime=runtime)
@@ -1750,6 +1762,7 @@ def _serialize_generation_results(
                 "model": row.model,
                 "prompt": row.prompt,
                 "image_path": image_rel,
+                "raw_art_path": persisted_raw_path,
                 "composited_path": composed,
                 "composited_pdf_path": None,
                 "composited_ai_path": None,
@@ -6294,6 +6307,12 @@ def serve_review_webapp(
                         endpoint=path,
                     )
                 try:
+                    logger.info(
+                        "Building variant download ZIP: book=%d variant=%d model=%s",
+                        book_number,
+                        variant,
+                        model,
+                    )
                     zip_path, filename = _build_variant_download_zip(
                         runtime=runtime_req,
                         book_number=book_number,
@@ -6301,10 +6320,19 @@ def serve_review_webapp(
                         model=model,
                     )
                 except FileNotFoundError as exc:
+                    logger.error("Variant download failed: %s", exc)
                     return self._send_error(
                         code="VARIANT_FILES_NOT_FOUND",
                         message=str(exc),
                         status=HTTPStatus.NOT_FOUND,
+                        endpoint=path,
+                    )
+                except Exception as exc:
+                    logger.exception("Unexpected error building variant download ZIP")
+                    return self._send_error(
+                        code="DOWNLOAD_BUILD_ERROR",
+                        message=f"Failed to build download package: {exc}",
+                        status=HTTPStatus.INTERNAL_SERVER_ERROR,
                         endpoint=path,
                     )
                 return self._send_file(
@@ -11914,9 +11942,23 @@ def _source_image_for_variant(
     model: str = "",
     record: dict[str, Any] | None = None,
 ) -> Path | None:
-    medallion_png = _project_path_if_exists((record or {}).get("image_path")) if isinstance(record, dict) else None
-    if medallion_png is not None and medallion_png.exists():
-        return medallion_png
+    # 1) Most reliable: persisted raw-art path from generation record.
+    if isinstance(record, dict):
+        raw_art = _project_path_if_exists(record.get("raw_art_path"))
+        if raw_art is not None and raw_art.exists():
+            return raw_art
+    # 2) Original generated image path from generation record.
+    if isinstance(record, dict):
+        medallion_png = _project_path_if_exists(record.get("image_path"))
+        if medallion_png is not None and medallion_png.exists():
+            return medallion_png
+    # 3) Durable output directory fallback.
+    raw_art_dir = runtime.output_dir / "raw_art" / str(int(book_number))
+    if raw_art_dir.exists():
+        candidates = sorted(raw_art_dir.glob(f"variant_{int(variant)}_*.png"))
+        if candidates:
+            return candidates[-1]
+    # 4) Legacy/generated tmp directory fallback.
     generated_dir = runtime.tmp_dir / "generated" / str(int(book_number))
     if model:
         model_dir = generated_dir / image_generator._model_to_directory(model)  # type: ignore[attr-defined]
@@ -12035,8 +12077,13 @@ def _build_variant_download_zip(
         model=model,
         record=record,
     )
-    if generated_raw_image is None and isinstance(record, dict):
-        generated_raw_image = _project_path_if_exists(record.get("image_path"))
+    # Avoid duplicate raw payloads when both references point to the source cover.
+    if (
+        generated_raw_image is not None
+        and source_raw_image is not None
+        and generated_raw_image.resolve() == source_raw_image.resolve()
+    ):
+        generated_raw_image = None
 
     if cover_ai is None and isinstance(record, dict):
         for key in ("composited_ai_path", "composite_ai_url", "ai_path"):

@@ -46,7 +46,7 @@ FALLBACK_RADIUS = 500
 TEMPLATE_PUNCH_RADIUS = 465
 TEMPLATE_FALLBACK_PUNCH_RADIUS = 420
 TEMPLATE_SUPERSAMPLE_FACTOR = 4
-ART_BLEED_PX = 60  # Extra px on each side beyond punch radius to cover AA transition
+ART_BLEED_PX = 140  # Extra px on each side beyond punch radius; must absorb center-crop + border-strip.
 FRAME_MASK_PATH = Path(__file__).resolve().parent.parent / "config" / "frame_mask.png"
 
 _GEOMETRY_CACHE: dict[str, dict[str, int]] = {}
@@ -796,10 +796,8 @@ def composite_single(
         canvas = Image.new("RGBA", (cover_w, cover_h), (*fill_rgb, 255))
 
         # ── 4. Prepare AI art: simple center crop, scale to fill ──
-        if frame_mask is not None:
-            art_diameter = FALLBACK_RADIUS * 2 + (ART_BLEED_PX * 2)  # 500*2+120 = 1120px
-        else:
-            art_diameter = active_punch_radius * 2 + (ART_BLEED_PX * 2)
+        # ALWAYS use FALLBACK_RADIUS for art sizing to fully cover the visible medallion opening.
+        art_diameter = FALLBACK_RADIUS * 2 + (ART_BLEED_PX * 2)  # 500*2+280 = 1280px
         art = _simple_center_crop(illustration)
         art = art.resize((art_diameter, art_diameter), Image.LANCZOS)
 
@@ -1191,7 +1189,8 @@ def _strip_border(image: Image.Image, border_percent: float = 0.05) -> Image.Ima
     """Crop a symmetric outer strip to remove AI-added frame/border artifacts."""
     base_percent = max(0.0, min(0.20, float(border_percent or 0.0)))
     adaptive_extra = _adaptive_border_strip_percent(image)
-    percent = max(0.0, min(0.24, base_percent + adaptive_extra))
+    # Cap total strip at 12% to avoid over-cropping that can reveal white gaps.
+    percent = max(0.0, min(0.12, base_percent + adaptive_extra))
     if percent <= 0:
         return image
     width, height = image.size

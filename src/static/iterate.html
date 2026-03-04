@@ -2356,59 +2356,97 @@
         : 'No winner selected for this book yet.';
     }
 
+    const DOWNLOAD_TIMEOUT_MS = 120000;
+
+    function filenameFromContentDisposition(headerValue, fallbackName) {
+      const header = String(headerValue || '');
+      if (!header) return fallbackName;
+      const utf8Match = header.match(/filename\*=UTF-8''([^;]+)/i);
+      if (utf8Match && utf8Match[1]) {
+        try {
+          return decodeURIComponent(utf8Match[1].trim().replace(/^"+|"+$/g, '')) || fallbackName;
+        } catch (_) {}
+      }
+      const plainMatch = header.match(/filename="?([^";]+)"?/i);
+      if (plainMatch && plainMatch[1]) return plainMatch[1].trim();
+      return fallbackName;
+    }
+
+    function triggerBlobDownload(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    }
+
+    async function fetchDownloadBlob(url) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), DOWNLOAD_TIMEOUT_MS);
+      try {
+        const resp = await fetch(url, { signal: controller.signal });
+        if (!resp.ok) {
+          let errorMsg = `HTTP ${resp.status}`;
+          try {
+            const payload = await resp.json();
+            errorMsg = payload.error || payload.message || errorMsg;
+          } catch (_) {}
+          throw new Error(errorMsg);
+        }
+        const blob = await resp.blob();
+        if (blob.size === 0) throw new Error('Empty response - ZIP build may have failed on server');
+        return { resp, blob };
+      } finally {
+        clearTimeout(timeout);
+      }
+    }
+
     async function downloadVariant(book, variant, model, btn) {
-      if (!btnStartLoading(btn, 'Preparing...')) return;
+      if (!btnStartLoading(btn, 'Preparing ZIP...')) return;
       try {
         const params = new URLSearchParams({
           book: String(book),
           variant: String(variant),
         });
         if (model) params.set('model', String(model));
-        const resp = await fetch(`/api/variant-download?${params.toString()}&${catalogQuery()}`);
-        if (!resp.ok) {
-          const payload = await resp.json().catch(() => ({}));
-          throw new Error(payload.error || payload.message || `HTTP ${resp.status}`);
-        }
-        const blob = await resp.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `book_${book}_variant_${variant}.zip`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
+        const { resp, blob } = await fetchDownloadBlob(`/api/variant-download?${params.toString()}&${catalogQuery()}`);
+        const filename = filenameFromContentDisposition(
+          resp.headers.get('content-disposition'),
+          `book_${book}_variant_${variant}.zip`
+        );
+        triggerBlobDownload(blob, filename);
         btnStopLoading(btn, true);
         showToast('Variant download ready.', 'success', 2200);
       } catch (err) {
         btnStopLoading(btn, false);
-        showToast('Download failed: ' + ((err && err.message) || err || 'unknown error'), 'error');
+        const msg = err && err.name === 'AbortError'
+          ? 'Download timed out. Try again or use "Download This Book" instead.'
+          : 'Download failed: ' + ((err && err.message) || err || 'unknown error');
+        showToast(msg, 'error', 5000);
       }
     }
 
     async function downloadWinner(bookNumber, btn) {
       if (!bookNumber || Number(bookNumber) <= 0) return;
-      if (!btnStartLoading(btn, 'Preparing...')) return;
+      if (!btnStartLoading(btn, 'Preparing ZIP...')) return;
       try {
-        const resp = await fetch(`/api/winner-download?book=${encodeURIComponent(bookNumber)}&${catalogQuery()}`);
-        if (!resp.ok) {
-          const payload = await resp.json().catch(() => ({}));
-          throw new Error(payload.error || payload.message || `HTTP ${resp.status}`);
-        }
-        const blob = await resp.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `book_${bookNumber}_winner.zip`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
+        const { resp, blob } = await fetchDownloadBlob(`/api/winner-download?book=${encodeURIComponent(bookNumber)}&${catalogQuery()}`);
+        const filename = filenameFromContentDisposition(
+          resp.headers.get('content-disposition'),
+          `book_${bookNumber}_winner.zip`
+        );
+        triggerBlobDownload(blob, filename);
         btnStopLoading(btn, true);
         showToast('Winner package download ready.', 'success', 2200);
       } catch (err) {
         btnStopLoading(btn, false);
-        showToast('Winner download failed: ' + ((err && err.message) || err || 'unknown error'), 'error');
+        const msg = err && err.name === 'AbortError'
+          ? 'Winner package download timed out. Please try again.'
+          : 'Winner download failed: ' + ((err && err.message) || err || 'unknown error');
+        showToast(msg, 'error', 5000);
       }
     }
 
@@ -2421,76 +2459,61 @@
           model: String(model || ''),
           catalog: app.catalog,
         });
-        const resp = await fetch(`/api/source-download?${params.toString()}`);
-        if (!resp.ok) {
-          const payload = await resp.json().catch(() => ({}));
-          throw new Error(payload.error || payload.message || `HTTP ${resp.status}`);
-        }
-        const blob = await resp.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `book_${book}_${model}_source_variant_${variant}.png`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
+        const { resp, blob } = await fetchDownloadBlob(`/api/source-download?${params.toString()}`);
+        const filename = filenameFromContentDisposition(
+          resp.headers.get('content-disposition'),
+          `book_${book}_${model}_source_variant_${variant}.png`
+        );
+        triggerBlobDownload(blob, filename);
         btnStopLoading(btn, true);
         showToast('Source image download ready.', 'success', 2000);
       } catch (err) {
         btnStopLoading(btn, false);
-        showToast('Source download failed: ' + ((err && err.message) || err || 'unknown error'), 'error');
+        const msg = err && err.name === 'AbortError'
+          ? 'Source image download timed out. Please try again.'
+          : 'Source download failed: ' + ((err && err.message) || err || 'unknown error');
+        showToast(msg, 'error', 5000);
       }
     }
 
     async function downloadBookVariants(bookNumber, btn) {
       if (!bookNumber || Number(bookNumber) <= 0) return;
-      if (!btnStartLoading(btn, 'Preparing...')) return;
+      if (!btnStartLoading(btn, 'Preparing ZIP...')) return;
       try {
-        const resp = await fetch(`/api/download-book?book=${encodeURIComponent(bookNumber)}&${catalogQuery()}`);
-        if (!resp.ok) {
-          const payload = await resp.json().catch(() => ({}));
-          throw new Error(payload.error || payload.message || `HTTP ${resp.status}`);
-        }
-        const blob = await resp.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `book_${bookNumber}_all_variants.zip`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
+        const { resp, blob } = await fetchDownloadBlob(`/api/download-book?book=${encodeURIComponent(bookNumber)}&${catalogQuery()}`);
+        const filename = filenameFromContentDisposition(
+          resp.headers.get('content-disposition'),
+          `book_${bookNumber}_all_variants.zip`
+        );
+        triggerBlobDownload(blob, filename);
         btnStopLoading(btn, true);
         showToast('Book package ready.', 'success', 2000);
       } catch (err) {
         btnStopLoading(btn, false);
-        showToast('Book package failed: ' + ((err && err.message) || err || 'unknown error'), 'error');
+        const msg = err && err.name === 'AbortError'
+          ? 'Book package download timed out. Please try again.'
+          : 'Book package failed: ' + ((err && err.message) || err || 'unknown error');
+        showToast(msg, 'error', 5000);
       }
     }
 
     async function downloadApproved(btn) {
-      if (!btnStartLoading(btn, 'Preparing...')) return;
+      if (!btnStartLoading(btn, 'Preparing ZIP...')) return;
       try {
-        const resp = await fetch(`/api/download-approved?${catalogQuery()}`);
-        if (!resp.ok) {
-          const payload = await resp.json().catch(() => ({}));
-          throw new Error(payload.error || payload.message || `HTTP ${resp.status}`);
-        }
-        const blob = await resp.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `approved_covers_${app.catalog}.zip`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
+        const { resp, blob } = await fetchDownloadBlob(`/api/download-approved?${catalogQuery()}`);
+        const filename = filenameFromContentDisposition(
+          resp.headers.get('content-disposition'),
+          `approved_covers_${app.catalog}.zip`
+        );
+        triggerBlobDownload(blob, filename);
         btnStopLoading(btn, true);
         showToast('Approved package ready.', 'success', 2200);
       } catch (err) {
         btnStopLoading(btn, false);
-        showToast('Approved download failed: ' + ((err && err.message) || err || 'unknown error'), 'error');
+        const msg = err && err.name === 'AbortError'
+          ? 'Approved package download timed out. Please try again.'
+          : 'Approved download failed: ' + ((err && err.message) || err || 'unknown error');
+        showToast(msg, 'error', 5000);
       }
     }
 
