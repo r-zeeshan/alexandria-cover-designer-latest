@@ -381,7 +381,7 @@ Deployment ID: `c4c2133e-adaa-4cfc-a430-02c5e7f921c6`
   - `/Users/timzengerink/proofs/proof-local-review-covers-loaded-20260304.png`
 
 ### 3.0.10 Drive Selection Mismatch Fix Proof (2026-03-04)
-- Deployment: `3cdffe4a-9d0e-47d2-8d5d-a15cf559dfe1`
+- Deployment: `cdab0ddb-49b0-4a47-ab8d-00e08d44f447`
 - Live URL: `https://web-production-900a7.up.railway.app`
 - Verification:
   - `POST /api/generate` with `book=2` and intentionally wrong `selected_cover_id` (book 990 cover) now returns `HTTP 200`.
