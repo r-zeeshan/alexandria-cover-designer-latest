@@ -40,6 +40,7 @@ COPY config/book_catalog_test-catalog.json config/book_catalog_test-catalog.json
 COPY config/book_prompts_test-catalog.json config/book_prompts_test-catalog.json
 COPY config/cover_regions.json config/cover_regions.json
 COPY config/cover_regions_test-catalog.json config/cover_regions_test-catalog.json
+COPY config/frame_mask.png config/frame_mask.png
 COPY config/prompt_templates.json config/prompt_templates.json
 COPY config/prompt_library.json config/prompt_library.json
 COPY config/cover_templates.json config/cover_templates.json
