@@ -215,9 +215,14 @@ def composite_cover_pdf(
         smask = np.frombuffer(smask_raw, dtype=np.uint8).reshape(height, width)
 
         ai_cmyk = _load_ai_art_cmyk(ai_art_path=art_path, width=width, height=height)
+
+        # Frame protection: zero AI pixels outside art-safe SMask zone before composite.
+        ai_cmyk[smask < SMASK_FRAME_MIN] = [0, 0, 0, 0]
+        frame_zone_mask = (smask >= SMASK_FRAME_MIN) & (smask <= SMASK_FRAME_MAX)
+        ai_cmyk[frame_zone_mask] = [0, 0, 0, 0]
+
         composite = ai_cmyk.copy()
-        # Keep all non-opaque SMask pixels from the source to preserve the ring and
-        # edge antialiasing exactly; replace only fully opaque inner art pixels.
+        # Preserve source CMYK for all non-opaque SMask pixels (ring + antialiasing).
         preserve_mask = smask <= SMASK_FRAME_MAX
         composite[preserve_mask] = source_cmyk[preserve_mask]
 

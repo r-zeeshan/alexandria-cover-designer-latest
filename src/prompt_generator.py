@@ -24,15 +24,45 @@ DEFAULT_CATALOG_PATH = Path("config/book_catalog.json")
 DEFAULT_TEMPLATES_PATH = Path("config/prompt_templates.json")
 DEFAULT_OUTPUT_PATH = Path("config/book_prompts.json")
 
-REQUIRED_PHRASE_COMPOSITION = "full-bleed narrative scene, circular medallion vignette, centered focal subject, edge-to-edge narrative detail"
+REQUIRED_PHRASE_COMPOSITION = "full-bleed narrative scene, centered focal subject, edge-to-edge narrative detail"
 REQUIRED_PHRASE_TEXT = (
-    "no text, no letters, no words, no typography, no logos, no labels, no title treatment, no watermark, no inscriptions, no calligraphy"
+    "no text, no letters, no words, no typography"
 )
 REQUIRED_PHRASE_NO_FRAME = (
-    "no border, no frame, no decorative edge, no ornamental border, no ribbon banner, no plaque, no seal, no emblem, scene artwork only"
+    "no border, no frame, no decorative edge. "
+    "CRITICAL: The artwork must NOT contain any circular border, frame, wreath, "
+    "garland, vine ring, floral ring, or ANY decorative edge element. "
+    "The scene fills the full rectangular canvas edge-to-edge with NO circular "
+    "cropping or circular framing of any kind. "
+    "Paint the scene as if it extends infinitely beyond the canvas edges."
 )
 REQUIRED_PHRASE_VIVID = "vivid, high-saturation painterly color palette, colorful, richly colored, rich contrast"
 REQUIRED_PHRASE_NO_EMPTY = "no empty space, no plain backgrounds"
+REQUIRED_PHRASE_CANVAS = (
+    "The final image must be a FULL rectangular canvas of solid painted scene — "
+    "no circular boundaries, no vignette edges, no decorative rings. "
+    "Think of this as a square painting that will later be cropped into a circle, "
+    "NOT as a circular medallion with its own frame."
+)
+REQUIRED_PHRASE_NO_FRAME_RUNTIME = (
+    "no border, no frame, no circular border, no circular frame, no wreath, no garland, no vine ring, no floral ring"
+)
+REQUIRED_PHRASE_CANVAS_RUNTIME = (
+    "full rectangular canvas, no vignette edges, no decorative rings"
+)
+
+REQUIRED_NEGATIVE_BORDER_TERMS: tuple[str, ...] = (
+    "circular border",
+    "circular frame",
+    "wreath",
+    "garland",
+    "vine ring",
+    "floral ring",
+    "decorative edge",
+    "ornamental ring",
+    "medallion border",
+    "scalloped edge",
+)
 
 _PHRASE_REPLACEMENTS: tuple[tuple[str, str], ...] = (
     (r"\bcircular vignette composition\b", "full-bleed narrative scene"),
@@ -46,8 +76,11 @@ _REMOVAL_PATTERNS: tuple[str, ...] = (
     r"\bgilt ornament language\b",
     r"\bornamental(?:\s+border|\s+frame|\s+edge)?\b",
     r"\bdecorative(?:\s+edge|\s+frame|\s+border)?\b",
+    r"\bcircular(?:\s+medallion|\s+vignette|\s+frame|\s+boundary|\s+cropping)?\b",
     r"\binner(?:\s+frame|\s+border|\s+ring)?\b",
     r"\bcircular frame\b",
+    r"\bdecorative rings?\b",
+    r"\bmedallion with (?:its )?own frame\b",
     r"\bribbon(?:\s+banner)?\b",
     r"\bscroll(?:work)?\b",
     r"\bnameplate\b",
@@ -213,20 +246,27 @@ def build_diversified_prompt(title: str, author: str, style: dict[str, str]) -> 
         modifier
         or "Classical illustration using ruby red, emerald green, cobalt blue, amber gold, and ivory highlights."
     )
+    canvas_directive = (
+        "The final image must be a FULL rectangular canvas of solid painted scene — "
+        "no circular boundaries, no vignette edges, no decorative rings. "
+        "Think of this as a square painting that will later be cropped into a circle, "
+        "NOT as a circular medallion with its own frame."
+    )
     base = " ".join(
         [
             f'Create a breathtaking, richly colored illustration for the classic book "{title}" by {author}. Style direction: {label}.',
             "Identify the single most iconic, dramatic, and visually striking scene from this specific story — the moment readers remember most vividly.",
-            "Depict that scene as a luminous circular medallion illustration in a full-bleed narrative scene for a luxury leather-bound edition.",
+            "No border, no frame, no decorative edge.",
+            "Depict that scene as a luminous full-bleed narrative illustration for a luxury leather-bound edition.",
             "Adapt all motifs, costumes, architecture, and symbols strictly to this specific book; avoid cross-book visual clichés.",
-            "Fill the entire circular composition with rich detail and vivid color — no empty space, no plain backgrounds.",
+            "Fill the entire rectangular composition with rich detail and vivid color — no empty space, no plain backgrounds.",
             "The artwork must feel like a museum-quality painting that captures the emotional heart of the story.",
             style_modifier,
-            "CRITICAL COMPOSITION RULES: The image must be a perfect circular vignette, subject centered, filling the entire circle edge-to-edge.",
-            "Edges fade softly into transparency outside the circle.",
+            "CRITICAL COMPOSITION RULES: Keep one dominant focal subject and edge-to-edge scene detail.",
             "NO text, NO letters, NO words anywhere in the image.",
             "The scene must be COLORFUL and DETAILED — avoid monochrome, avoid sparse compositions.",
             "Keep one dominant focal subject, layered depth, dense detail.",
+            canvas_directive,
         ]
     )
     return _ensure_prompt_constraints(base)
@@ -314,6 +354,18 @@ def _strip_forbidden(text: str, title: str, author: str) -> str:
     return text
 
 
+def _ensure_negative_prompt_terms(negative_prompt: str) -> str:
+    tokens = [token.strip() for token in str(negative_prompt or "").split(",") if token.strip()]
+    seen = {token.lower() for token in tokens}
+    for term in REQUIRED_NEGATIVE_BORDER_TERMS:
+        key = term.lower()
+        if key in seen:
+            continue
+        tokens.append(term)
+        seen.add(key)
+    return ", ".join(tokens)
+
+
 def _remove_conflicting_directions(prompt: str) -> str:
     text = str(prompt or "")
     for pattern, replacement in _PHRASE_REPLACEMENTS:
@@ -335,8 +387,10 @@ def _ensure_prompt_constraints(prompt: str) -> str:
         required_prefix.append(REQUIRED_PHRASE_COMPOSITION)
     if REQUIRED_PHRASE_TEXT not in low:
         required_prefix.append(REQUIRED_PHRASE_TEXT)
-    if "no border" not in low and "no frame" not in low:
-        required_prefix.append("no border, no frame")
+    if "no border" not in low or "no frame" not in low:
+        required_prefix.append(REQUIRED_PHRASE_NO_FRAME_RUNTIME)
+    if "full rectangular canvas" not in low:
+        required_prefix.append(REQUIRED_PHRASE_CANVAS_RUNTIME)
     if REQUIRED_PHRASE_VIVID not in low:
         required_prefix.append(REQUIRED_PHRASE_VIVID)
     if REQUIRED_PHRASE_NO_EMPTY not in low:
@@ -671,7 +725,7 @@ def generate_prompts_for_book(book_entry: dict, templates: dict) -> list[BookPro
     motif = _motif_for_book(book_entry)
     variants_cfg = templates["variants"]
     style_groups = templates["style_groups"]
-    negative_prompt = templates["negative_prompt"]
+    negative_prompt = _ensure_negative_prompt_terms(str(templates["negative_prompt"]))
 
     variant_plan = [
         (1, "1_iconic_scene_sketch", "scene_description", _limit_words(motif.iconic_scene)),

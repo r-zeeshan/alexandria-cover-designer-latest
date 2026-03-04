@@ -17,7 +17,7 @@
     }
   },
 
-  "negative_prompt": "text, letters, words, typography, title text, logos, labels, watermark, signature, border, frame, decorative edge, ornamental border, circular frame, ribbon banner, plaque, seal, medallion text, photorealistic, 3d render, cartoon, anime, comic, digital art, modern, neon, flat colors, low quality, blurry, deformed, ugly, bad anatomy, distorted hands, extra fingers, mutated, obviously AI-generated, stock photo, generic",
+  "negative_prompt": "text, letters, words, typography, title text, logos, labels, watermark, signature, border, frame, decorative edge, ornamental border, circular frame, circular border, wreath, garland, vine ring, floral ring, ornamental ring, medallion border, scalloped edge, ribbon banner, plaque, seal, medallion text, photorealistic, 3d render, cartoon, anime, comic, digital art, modern, neon, flat colors, low quality, blurry, deformed, ugly, bad anatomy, distorted hands, extra fingers, mutated, obviously AI-generated, stock photo, generic",
 
   "variants": {
     "1_iconic_scene_sketch": {
