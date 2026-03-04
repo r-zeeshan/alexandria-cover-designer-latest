@@ -1,6 +1,6 @@
 # Alexandria Cover Designer — Project State
 
-Last updated: `2026-03-03`
+Last updated: `2026-03-04`
 Version track: `v2.1.x` (current runtime reports `2.1.1`)
 
 ## 1. Current Goal (Production)
@@ -40,32 +40,41 @@ Serving layer:
 - `src/static/shared.css` contains a design-lock block with `!important` sidebar/layout rules so legacy page CSS cannot revert to the old top-nav layout.
 
 ### 3.2 Medallion Safety (Art Behind Ornaments)
-**PNG Template approach is now active (2026-03-03).**
+**Diff-based frame mask approach is now active (2026-03-04). See `VERIFICATION-PROTOCOL.md`.**
 
-Previous parameter-tuning approaches (07A–07D) all failed because two independent masking systems (`compositing_mask.png` + geometric circles) contradict each other. The fix is architectural: pre-process covers into PNG templates with transparent medallion centers, then composite as a simple three-layer stack.
+Approaches 07A through 07H all failed visual inspection. The core problem: a circle punch at r=465 cuts into the ornamental frame at 87% of angles because the frame's inner edge varies from 378–480px (irregular scrollwork). The "punch a hole" approach is fundamentally flawed.
 
-**PROMPT-07E** — Batch Preprocessing Script:
-- Added `src/create_png_templates.py`
-- Local run: `python -m src.create_png_templates --source-dir 'Input Covers'`
-- Result: `99 created, 0 skipped, 0 failed`
-- Produces RGBA PNG templates with transparent medallion centers (r=465, 4x supersampling)
+**PROMPT-07I** — Diff-Based Frame Mask Compositing (CURRENT):
+Tim tested 7 approaches with Perplexity; Approach 7 is the winner. Key insight: instead of punching a hole in the cover, ERASE the art content inside the medallion and place new art BEHIND the intact cover.
 
-**PROMPT-07F** — Compositor Pipeline Replacement:
-- Updated `src/cover_compositor.py` medallion branch to three-layer pipeline: canvas + art + template
-- Added `_simple_center_crop()` and `_find_template_for_cover()`
-- Added `_legacy_medallion_composite()` fallback for template-missing cases
-- Added on-demand template generation helper (`_create_template_for_cover()`) so deployment does not require bundling 99 PNG binaries
-- Rectangle and custom_mask branches remain UNCHANGED
+Architecture:
+- Layer 1 (bottom): AI art oversized + navy background
+- Layer 2 (top): Original cover with art pixels made transparent via diff mask
 
-Resulting architecture:
-- Frame is ALWAYS the topmost layer — art CANNOT bleed through (Bug 3 eliminated)
-- Simple center crop — consistent centering across all books (Bug 2 eliminated)
-- Art sized to `TEMPLATE_PUNCH_RADIUS * 2 + 20` — fills medallion opening (Bug 1 eliminated)
+Diff mask generation (`scripts/generate_frame_mask.py`):
+- Compare two source covers pixel-by-pixel (identical frame, different art)
+- Pixels that differ = art (make transparent)
+- Pixels identical = frame (keep opaque)
+- Cap at r=485, morphological cleanup, Gaussian blur edges
+
+Result: Ornaments are NEVER modified — they naturally sit on top of the art layer. Frame inner edge irregularity is irrelevant because the mask follows the actual pixel boundary, not a geometric circle.
+
+**PROMPT-07I-B** — Download Naming:
+- Updates `resolveBookMetadataForJob()` in `iterate.js` to use `file_base` from catalog
+- ZIP structure mirrors source cover folder naming
+
+Full history: `Codex Prompts/Alexandria_Compositing_Report.pdf`
+
+**MANDATORY VERIFICATION (NON-NEGOTIABLE):**
+Every compositor change must pass `scripts/verify_composite.py` before committing. See `VERIFICATION-PROTOCOL.md`. Both Claude Cowork and Codex must run this — no exceptions. The script checks: dimensions, ornament zone pixel-identity (99.5%), art zone pixel-difference (90%), centering (within 5px of medallion center), and transition quality (<2% harsh pixels).
 
 Known consensus defaults:
 - `cx = 2864`
 - `cy = 1620`
 - `radius = 500`
+- Frame inner edge: 378–480px (varies by angle)
+- Art zone: r < 370px
+- Ornament zone: r > 480px
 
 ### 3.3 Prompt/Generation Hardening
 `src/image_generator.py` + `src/prompt_generator.py` enforce:
@@ -186,16 +195,22 @@ Completed in this workspace session:
    - local compositor runs for books `1`, `9`, `25` log `Using PNG template: ...`,
    - on-demand template generation path verified (`Generated PNG template: ...`),
    - composite summary remains successful (`processed_books=3`, `failed_books=0`).
+16. PROMPT-07I verification infrastructure (2026-03-04):
+   - `scripts/verify_composite.py` — automated 5-check visual regression test (dimensions, ornament zone, art zone, centering, transition quality).
+   - `VERIFICATION-PROTOCOL.md` — mandatory rules for both Claude Cowork and Codex.
+   - Both agents must run `verify_composite.py` before any compositor commit — no exceptions.
 
 ## 7. Known Constraints / Honest Caveats
 - In production, direct Google provider is currently failing key validation (`Your API key was reported as leaked`); these models are disabled in UI connectivity state until key replacement.
 - Provider-side image models can still occasionally emit pseudo-typography; current guardrails and retry hardening reduce this risk but cannot mathematically guarantee zero artifact probability from upstream model outputs.
 
 ## 8. Next Recommended Work
-1. Run a live canary (10-book sample) with active provider keys and capture fresh composited proofs.
-2. Add a dedicated visual regression check for medallion edge consistency (books 1/9/25 baseline triptych).
-3. Keep the revision token centralized in one constant to avoid accidental per-page drift.
-4. Optional: pre-generate templates on deploy for faster first composite latency.
+1. **Deploy PROMPT-07I via Codex** — diff-based frame mask compositor. Run `scripts/verify_composite.py` on output before committing.
+2. **Deploy PROMPT-07I-B via Codex** — download naming fix.
+3. **Fix prompt variation** — `_motif_for_book()` in `src/prompt_generator.py` only covers ~25 books; ~70+ get generic "period costume" prompts. Needs book-specific content diversity.
+4. **Fix dropdown titles** — many books show as "Untitled" in the iterate page dropdown.
+5. Run a live canary (10-book sample) with active provider keys and capture fresh composited proofs.
+6. Keep the revision token centralized in one constant to avoid accidental per-page drift.
 
 ## 9. Mandatory Delivery Protocol
 For every user-facing completion message:

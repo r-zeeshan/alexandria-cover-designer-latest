@@ -1,6 +1,6 @@
 # Project State Pointer
 
-Last updated: `2026-03-03`
+Last updated: `2026-03-04`
 
 Canonical project state file:
 
@@ -13,7 +13,8 @@ Quick status snapshot:
 - In-memory DB + CGI-compatible persistence layer is active (`src/static/js/db.js`, `/cgi-bin/settings.py`, `/cgi-bin/catalog.py` route handlers).
 - UI shell is locked to the new sidebar design with anti-stale controls (`Cache-Control: no-store` + `?v=20260302-designlock`).
 - CSP now allows required frontend dependencies (`fonts.googleapis.com`, `fonts.gstatic.com`, `cdn.jsdelivr.net`, `cdnjs.cloudflare.com`) so Chart.js/JSZip/Inter load correctly.
-- PROMPT-07E/07F PNG Template approach is now active: `src/create_png_templates.py` exists and local run generated 99 templates; `src/cover_compositor.py` medallion branch now uses three-layer template compositing with legacy fallback + on-demand template generation. Previous parameter-tuning approach (07A-07D) is abandoned.
+- COMPOSITOR STATUS (2026-03-04): Approaches 07A through 07H all failed visual inspection. PROMPT-07I (diff-based frame mask + art-behind-cover architecture) is the current approach — tested through 7 approaches by Tim, Approach 7 confirmed working. See `Codex Prompts/Alexandria_Compositing_Report.pdf` for full history. PROMPT-07I-B fixes download naming to match source cover file names.
+- MANDATORY VERIFICATION: Every compositor change must pass `scripts/verify_composite.py` before committing. See `VERIFICATION-PROTOCOL.md`. Both Claude Cowork and Codex must run this script — no exceptions.
 - Prompt assembly is hardened against malformed constraints and duplicated provider/model signatures.
 - Dashboard recent cards are prompt-aware/style-tag-aware and backfill from filesystem when persisted rows are sparse.
 - Required model inventory is force-enforced at runtime (15 OpenRouter production models + Gemini direct IDs), even when `ALL_MODELS` env is stale.
