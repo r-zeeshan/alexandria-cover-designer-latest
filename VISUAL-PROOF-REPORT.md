@@ -2,17 +2,21 @@
 
 Last updated: `2026-03-04`
 Deployment URL: `https://web-production-900a7.up.railway.app`
-Deployment ID: `6e587f48-40dd-42c9-b084-ba30337e9d16`
+Deployment ID: `58267a2d-62b4-418c-b4ea-c8296210e45f`
 
 ## 1.5 PROMPT-11 White Gap + Download/Raw Fixes (2026-03-04)
 - Git commit (master):
   - `2ac1018` — white-gap bleed/crop fix, durable raw-art persistence, robust download handlers, deterministic frame mask
 - Railway deploy:
   - `6e587f48-40dd-42c9-b084-ba30337e9d16` (`SUCCESS`)
+  - `58267a2d-62b4-418c-b4ea-c8296210e45f` (`SUCCESS`, final parity deploy from latest master head)
 - Live health:
   - `status: ok`
   - `healthy: true`
-  - `books_cataloged: 999`
+  - `books_cataloged: 99` (`/api/health`)
+- Live iterate UI check:
+  - top-right badge shows `999 books`
+  - catalog status line shows `99 books loaded (catalog).`
 - Mandatory strict compositor verification:
   - `bash scripts/test_compositor_integration.sh 1`
   - result: `ALL CHECKS PASSED` (strict PDF mode, 9 checks)
@@ -24,9 +28,9 @@ Deployment ID: `6e587f48-40dd-42c9-b084-ba30337e9d16`
   - md5 differs (`same False`) and sizes differ (`2108478` vs `4808591`)
 - Visual proof artifacts:
   - live iterate page with generated cover card:
-    - `/Users/timzengerink/proofs/2026-03-04-prompt11-final/live-iterate-prompt11.png`
+    - `/Users/timzengerink/proofs/2026-03-04-prompt11-final/live-iterate-prompt11-final-deploy.png`
   - live cover card crop:
-    - `/Users/timzengerink/proofs/2026-03-04-prompt11-final/live-cover-card-prompt11.png`
+    - `/Users/timzengerink/proofs/2026-03-04-prompt11-final/live-cover-card-prompt11-final-deploy.png`
   - strict compositor composite output:
     - `/Users/timzengerink/proofs/2026-03-04-prompt11-final/compositor-test-output.jpg`
   - strict compositor raw art input:
