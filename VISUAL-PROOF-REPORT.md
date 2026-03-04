@@ -380,6 +380,16 @@ Deployment ID: `c4c2133e-adaa-4cfc-a430-02c5e7f921c6`
   - `/Users/timzengerink/proofs/proof-local-iterate-no-left-gap-20260304.png`
   - `/Users/timzengerink/proofs/proof-local-review-covers-loaded-20260304.png`
 
+### 3.0.10 Drive Selection Mismatch Fix Proof (2026-03-04)
+- Deployment: `3cdffe4a-9d0e-47d2-8d5d-a15cf559dfe1`
+- Live URL: `https://web-production-900a7.up.railway.app`
+- Verification:
+  - `POST /api/generate` with `book=2` and intentionally wrong `selected_cover_id` (book 990 cover) now returns `HTTP 200`.
+  - Queued job payload is normalized to the correct cover id for book 2: `selected_cover_id=1vqzzuKlwgtv0G0fFcUknKO36fn8ttxEK`.
+  - `GET /api/health` returns `status=ok`.
+- Visual proof:
+  - `/Users/timzengerink/proofs/2026-03-04-09f-fix/proof-live-review-covers-20260304-09f-fix.png`
+
 ### 3.1 Live UI Screenshots
 - `tmp/proof-live-iterate-20260302-prompt06.png`
 - `tmp/proof-live-dashboard-20260302-prompt06.png`
