@@ -2,7 +2,35 @@
 
 Last updated: `2026-03-04`
 Deployment URL: `https://web-production-900a7.up.railway.app`
-Deployment ID: `7373b253-be3a-4f1c-8e0c-e52f60b75c00`
+Deployment ID: `6e587f48-40dd-42c9-b084-ba30337e9d16`
+
+## 1.5 PROMPT-11 White Gap + Download/Raw Fixes (2026-03-04)
+- Git commit (master):
+  - `2ac1018` — white-gap bleed/crop fix, durable raw-art persistence, robust download handlers, deterministic frame mask
+- Railway deploy:
+  - `6e587f48-40dd-42c9-b084-ba30337e9d16` (`SUCCESS`)
+- Live health:
+  - `status: ok`
+  - `healthy: true`
+  - `books_cataloged: 999`
+- Mandatory strict compositor verification:
+  - `bash scripts/test_compositor_integration.sh 1`
+  - result: `ALL CHECKS PASSED` (strict PDF mode, 9 checks)
+- Full regression suite:
+  - `.venv/bin/pytest` -> `688 passed`
+  - `pytest -q tests/test_frame_mask_integrity.py` -> `PASS`
+- ZIP raw/source validation (live code path):
+  - package contains both `source_images/` (generated raw) and `source_files/` (source raw)
+  - md5 differs (`same False`) and sizes differ (`2108478` vs `4808591`)
+- Visual proof artifacts:
+  - live iterate page with generated cover card:
+    - `/Users/timzengerink/proofs/2026-03-04-prompt11-final/live-iterate-prompt11.png`
+  - live cover card crop:
+    - `/Users/timzengerink/proofs/2026-03-04-prompt11-final/live-cover-card-prompt11.png`
+  - strict compositor composite output:
+    - `/Users/timzengerink/proofs/2026-03-04-prompt11-final/compositor-test-output.jpg`
+  - strict compositor raw art input:
+    - `/Users/timzengerink/proofs/2026-03-04-prompt11-final/compositor-test-raw-art.png`
 
 ## 1.4 PROMPT-10 Frame/Prompt/ZIP Fix (2026-03-04)
 - Git commit (master):
