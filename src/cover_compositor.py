@@ -795,6 +795,8 @@ def composite_single(
             radius=clip_radius,
             feather_px=INNER_FEATHER_PX,
         )
+        if strict_window_mask is not None:
+            clip_mask = _combine_masks(clip_mask, strict_window_mask)
         art_layer.putalpha(clip_mask)
 
         result = Image.alpha_composite(canvas, art_layer)
@@ -1209,6 +1211,7 @@ def _region_from_dict(region: dict[str, Any]) -> Region:
 
 def _strip_border(image: Image.Image, border_percent: float = 0.05) -> Image.Image:
     """Crop a symmetric outer strip to remove AI-added frame/border artifacts."""
+    image = _trim_uniform_edge_bars(image)
     base_percent = max(0.0, min(0.20, float(border_percent or 0.0)))
     adaptive_extra = _adaptive_border_strip_percent(image)
     # Cap total strip at 12% to avoid over-cropping that can reveal white gaps.
@@ -1228,6 +1231,79 @@ def _strip_border(image: Image.Image, border_percent: float = 0.05) -> Image.Ima
         return image
     cropped = image.crop((left, top, right, bottom))
     return cropped
+
+
+def _trim_uniform_edge_bars(image: Image.Image) -> Image.Image:
+    """Trim solid-looking edge bars (white/black letterboxing) before normal border strip."""
+    rgb = np.array(image.convert("RGB"), dtype=np.float32)
+    if rgb.size == 0:
+        return image
+    h, w = rgb.shape[:2]
+    if h < 64 or w < 64:
+        return image
+
+    gray = rgb.mean(axis=2)
+    cy0, cy1 = int(h * 0.25), int(h * 0.75)
+    cx0, cx1 = int(w * 0.25), int(w * 0.75)
+    center_patch = gray[cy0:cy1, cx0:cx1]
+    center_mean = float(center_patch.mean()) if center_patch.size else float(gray.mean())
+
+    row_std = gray.std(axis=1)
+    row_mean = gray.mean(axis=1)
+    row_edge = np.abs(np.diff(gray, axis=1)).mean(axis=1)
+
+    col_std = gray.std(axis=0)
+    col_mean = gray.mean(axis=0)
+    col_edge = np.abs(np.diff(gray, axis=0)).mean(axis=0)
+
+    row_bar = (
+        (row_std < 10.0)
+        & (row_edge < 8.0)
+        & ((row_mean > 230.0) | (row_mean < 25.0))
+        & (np.abs(row_mean - center_mean) >= 24.0)
+    )
+    col_bar = (
+        (col_std < 10.0)
+        & (col_edge < 8.0)
+        & ((col_mean > 230.0) | (col_mean < 25.0))
+        & (np.abs(col_mean - center_mean) >= 24.0)
+    )
+
+    def _run_len(mask: np.ndarray, forward: bool) -> int:
+        if mask.size == 0:
+            return 0
+        max_len = int(mask.size * 0.24)
+        run = 0
+        seq = mask if forward else mask[::-1]
+        for flag in seq[:max_len]:
+            if not bool(flag):
+                break
+            run += 1
+        return run
+
+    min_row_run = max(6, int(round(h * 0.03)))
+    min_col_run = max(6, int(round(w * 0.03)))
+
+    top = _run_len(row_bar, True)
+    bottom = _run_len(row_bar, False)
+    left = _run_len(col_bar, True)
+    right = _run_len(col_bar, False)
+
+    top = top if top >= min_row_run else 0
+    bottom = bottom if bottom >= min_row_run else 0
+    left = left if left >= min_col_run else 0
+    right = right if right >= min_col_run else 0
+
+    if top == 0 and bottom == 0 and left == 0 and right == 0:
+        return image
+
+    new_left = int(np.clip(left, 0, max(0, w - 2)))
+    new_top = int(np.clip(top, 0, max(0, h - 2)))
+    new_right = int(np.clip(w - right, new_left + 1, w))
+    new_bottom = int(np.clip(h - bottom, new_top + 1, h))
+    if (new_right - new_left) < 64 or (new_bottom - new_top) < 64:
+        return image
+    return image.crop((new_left, new_top, new_right, new_bottom))
 
 
 def _adaptive_border_strip_percent(image: Image.Image) -> float:

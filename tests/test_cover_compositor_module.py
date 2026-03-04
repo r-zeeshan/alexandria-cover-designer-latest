@@ -251,6 +251,22 @@ def test_strip_border_adapts_for_internal_frame_artifacts():
     assert framed_stripped.size[1] < plain_stripped.size[1]
 
 
+def test_strip_border_trims_white_letterbox_bars():
+    img = Image.new("RGBA", (240, 240), (40, 80, 120, 255))
+    arr = np.array(img, dtype=np.uint8)
+    arr[:36, :, :3] = 245
+    arr[-36:, :, :3] = 245
+    arr[:36, :, 3] = 255
+    arr[-36:, :, 3] = 255
+    letterboxed = Image.fromarray(arr, mode="RGBA")
+
+    stripped = cc._strip_border(letterboxed, border_percent=0.05)
+
+    # Baseline would be 216x216; with bar trim, height should shrink more.
+    assert stripped.size[0] <= 216
+    assert stripped.size[1] < 216
+
+
 def test_main_book_and_batch_paths(monkeypatch, tmp_path: Path):
     regions_path = tmp_path / "regions.json"
     regions_path.write_text(json.dumps({"covers": []}), encoding="utf-8")
