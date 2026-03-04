@@ -252,8 +252,6 @@ async function _extractVariantArchiveAssets({ bookId, variant, model }) {
     if (compositeFile) out.compositeBlob = await compositeFile.async('blob');
     if (generatedRawFile) out.rawBlob = await generatedRawFile.async('blob');
     if (sourceRawFile) out.sourceBlob = await sourceRawFile.async('blob');
-    if (!out.sourceBlob && generatedRawFile) out.sourceBlob = await generatedRawFile.async('blob');
-    if (!out.rawBlob && sourceRawFile) out.rawBlob = await sourceRawFile.async('blob');
     if (pdfFile) out.pdfBlob = await pdfFile.async('blob');
     if (aiFile) out.aiBlob = await aiFile.async('blob');
     return out;
@@ -728,6 +726,7 @@ window.Pages.iterate = {
     const variantCount = Number(document.getElementById('iterVariants')?.value || 1);
     const promptId = String(document.getElementById('iterPromptSel')?.value || '').trim();
     const customPrompt = document.getElementById('iterPrompt')?.value || '';
+    const promptSource = String(customPrompt || '').trim() ? 'custom' : 'template';
     const books = DB.dbGetAll('books');
     const book = books.find((b) => Number(b.id) === bookId);
     if (!book) return;
@@ -754,6 +753,7 @@ window.Pages.iterate = {
           prompt,
           style_id: style?.id || 'none',
           style_label: style?.label || 'Default',
+          prompt_source: promptSource,
           selected_cover_id: selectedCoverId,
           selected_cover_book_number: selectedCoverBookNumber,
           quality_score: null,

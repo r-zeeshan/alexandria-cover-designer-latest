@@ -206,6 +206,46 @@ def _guardrailed_prompt(prompt: str) -> str:
     return " ".join(text.split())
 
 
+def _prompt_reference_tokens(value: str) -> list[str]:
+    tokens = re.findall(r"[a-z0-9]+", str(value or "").lower())
+    return [token for token in tokens if len(token) >= 4]
+
+
+def _validate_prompt_relevance(prompt: str, book_title: str, book_author: str) -> str:
+    """Ensure prompt keeps strong title/author anchoring before provider dispatch."""
+    base_prompt = " ".join(str(prompt or "").split())
+    title = str(book_title or "").strip()
+    author = str(book_author or "").strip()
+    if not title:
+        return base_prompt
+
+    prompt_lower = base_prompt.lower()
+    title_tokens = _prompt_reference_tokens(title)
+    author_tokens = _prompt_reference_tokens(author)
+    token_pool = title_tokens + author_tokens
+    has_reference = any(token in prompt_lower for token in token_pool if token)
+    if has_reference:
+        return base_prompt
+
+    motif_scene = ""
+    try:
+        motif = prompt_generator._motif_for_book({"title": title, "author": author})  # type: ignore[attr-defined]
+        motif_scene = str(getattr(motif, "iconic_scene", "") or "").strip()
+    except Exception:
+        motif_scene = ""
+
+    prefix_parts = [f"Book cover illustration for '{title}'"]
+    if author:
+        prefix_parts[0] = f"{prefix_parts[0]} by {author}"
+    if motif_scene:
+        prefix_parts.append(f"Primary scene anchor: {motif_scene}")
+    prefix = ". ".join(prefix_parts).strip().rstrip(".") + "."
+    logger.warning("Prompt lacked explicit book reference. Prepending title/motif anchor for '%s'.", title)
+    if not base_prompt:
+        return prefix
+    return f"{prefix} {base_prompt}".strip()
+
+
 def _is_artifact_generation_error(message: str) -> bool:
     token = str(message or "").strip().lower()
     if not token:
@@ -1261,6 +1301,8 @@ def generate_all_models(
     variants_per_model: int,
     output_dir: Path,
     *,
+    book_title: str = "",
+    book_author: str = "",
     resume: bool = True,
     dry_run: bool = False,
     provider_override: str | None = None,
@@ -1324,6 +1366,11 @@ def generate_all_models(
                 provider=provider,
                 variant=variant,
                 model_index=model_index,
+            )
+            diversified_prompt = _validate_prompt_relevance(
+                diversified_prompt,
+                book_title=book_title,
+                book_author=book_author,
             )
             seed = _variant_seed(rng=rng, book_number=book_number, model=model, variant=variant)
             if resume and image_path.exists():
@@ -1646,6 +1693,7 @@ def generate_single_book(
     payload = _load_prompts_payload(prompts_path)
     book_entry = _find_book_entry(payload, book_number)
     title = str(book_entry.get("title", f"Book {book_number}"))
+    author = str(book_entry.get("author", "")).strip()
 
     base_variant = _find_variant(book_entry, prompt_variant)
     selected_negative_prompt = negative_prompt or str(base_variant.get("negative_prompt", ""))
@@ -1682,6 +1730,8 @@ def generate_single_book(
         models=active_models,
         variants_per_model=variants,
         output_dir=output_dir,
+        book_title=title,
+        book_author=author,
         resume=resume,
         dry_run=dry_run,
         provider_override=provider_override,

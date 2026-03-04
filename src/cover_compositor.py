@@ -44,6 +44,7 @@ FALLBACK_CENTER_X = 2864
 FALLBACK_CENTER_Y = 1620
 FALLBACK_RADIUS = 500
 TEMPLATE_PUNCH_RADIUS = 465
+TEMPLATE_FALLBACK_PUNCH_RADIUS = 420
 TEMPLATE_SUPERSAMPLE_FACTOR = 4
 ART_BLEED_PX = 60  # Extra px on each side beyond punch radius to cover AA transition
 FRAME_MASK_PATH = Path(__file__).resolve().parent.parent / "config" / "frame_mask.png"
@@ -754,23 +755,29 @@ def composite_single(
         center_x = FALLBACK_CENTER_X   # 2864
         center_y = FALLBACK_CENTER_Y   # 1620
         punch_radius = TEMPLATE_PUNCH_RADIUS  # 465
+        fallback_punch_radius = TEMPLATE_FALLBACK_PUNCH_RADIUS  # 420
 
         # ── 1. Build the template using frame mask or fallback circle ──
         cover_rgba = cover.convert("RGBA")
         tmpl_w, tmpl_h = cover_rgba.size
 
         frame_mask = _load_frame_mask((tmpl_w, tmpl_h))
+        active_punch_radius = punch_radius
         if frame_mask is not None:
             # frame_mask: 255=keep (frame), 0=replace (art hole)
             mask = frame_mask
             logger.info("Using pixel-perfect frame mask from %s", FRAME_MASK_PATH)
         else:
             # Fallback: 4x supersampled anti-aliased circle mask
-            logger.warning("frame_mask.png unavailable, falling back to circle punch r=%d", punch_radius)
+            active_punch_radius = fallback_punch_radius
+            logger.warning(
+                "frame_mask.png unavailable, falling back to conservative circle punch r=%d",
+                active_punch_radius,
+            )
             scale = 4
             mask_large = Image.new("L", (tmpl_w * scale, tmpl_h * scale), 255)
             draw_mask = ImageDraw.Draw(mask_large)
-            cx_s, cy_s, r_s = center_x * scale, center_y * scale, punch_radius * scale
+            cx_s, cy_s, r_s = center_x * scale, center_y * scale, active_punch_radius * scale
             draw_mask.ellipse((cx_s - r_s, cy_s - r_s, cx_s + r_s, cy_s + r_s), fill=0)
             mask = mask_large.resize((tmpl_w, tmpl_h), Image.LANCZOS)
 
@@ -792,7 +799,7 @@ def composite_single(
         if frame_mask is not None:
             art_diameter = FALLBACK_RADIUS * 2 + (ART_BLEED_PX * 2)  # 500*2+120 = 1120px
         else:
-            art_diameter = punch_radius * 2 + (ART_BLEED_PX * 2)  # 465*2+120 = 1050px
+            art_diameter = active_punch_radius * 2 + (ART_BLEED_PX * 2)
         art = _simple_center_crop(illustration)
         art = art.resize((art_diameter, art_diameter), Image.LANCZOS)
 
@@ -816,7 +823,7 @@ def composite_single(
         validation_region = Region(
             center_x=center_x,
             center_y=center_y,
-            radius=max(20, punch_radius),
+            radius=max(20, active_punch_radius),
             frame_bbox=region_obj.frame_bbox,
             region_type="circle",
         )

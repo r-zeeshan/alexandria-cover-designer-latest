@@ -261,14 +261,49 @@ def select_diverse_styles(count: int, *, seed_token: str = "") -> list[dict[str,
     return output
 
 
-def build_diversified_prompt(title: str, author: str, style: dict[str, str]) -> str:
+def build_diversified_prompt(
+    title: str = "",
+    author: str = "",
+    style: dict[str, str] | None = None,
+    *,
+    book_title: str = "",
+    book_author: str = "",
+    book_number: int | None = None,
+    variant_index: int | None = None,
+) -> str:
     """Build a title-aware diversified prompt with strict scene-only output rules."""
-    label = str(style.get("label", "Classical Illustration")).strip() or "Classical Illustration"
-    modifier = str(style.get("modifier", "")).strip()
+    resolved_title = str(book_title or title or "").strip() or "Untitled Book"
+    resolved_author = str(book_author or author or "").strip() or "Unknown Author"
+    style_payload = style if isinstance(style, dict) else {}
+    if not style_payload:
+        seed_token = f"{resolved_title}::{resolved_author}::{int(book_number or 0)}::{int(variant_index or 1)}"
+        selected = select_diverse_styles(1, seed_token=seed_token)
+        style_payload = selected[0] if selected else {}
+
+    label = str(style_payload.get("label", "Classical Illustration")).strip() or "Classical Illustration"
+    modifier = str(style_payload.get("modifier", "")).strip()
     style_modifier = (
         modifier
         or "Classical illustration using ruby red, emerald green, cobalt blue, amber gold, and ivory highlights."
     )
+    motif = _motif_for_book(
+        {
+            "number": int(book_number or 0),
+            "title": resolved_title,
+            "author": resolved_author,
+        }
+    )
+    scene_anchor = _limit_words(str(motif.iconic_scene or "").strip(), max_words=14)
+    motif_symbols = ", ".join(
+        token
+        for token in (
+            str(motif.symbolic_theme or "").strip(),
+            str(motif.character_portrait or "").strip(),
+            str(motif.dramatic_moment or "").strip(),
+        )
+        if token
+    ) or "book-specific narrative details"
+    motif_symbols = _limit_words(motif_symbols, max_words=14)
     canvas_directive = (
         "The final image must be a FULL rectangular canvas of solid painted scene — "
         "no circular boundaries, no vignette edges, no decorative rings. "
@@ -277,7 +312,11 @@ def build_diversified_prompt(title: str, author: str, style: dict[str, str]) -> 
     )
     base = " ".join(
         [
-            f'Create a breathtaking, richly colored illustration for the classic book "{title}" by {author}. Style direction: {label}.',
+            f"Illustration for '{resolved_title}' by {resolved_author}.",
+            f"Style direction: {label}.",
+            f"Primary narrative anchor: {scene_anchor}.",
+            f"Support with subject-specific motifs: {motif_symbols}.",
+            f'Create a breathtaking, richly colored illustration for the classic book "{resolved_title}" by {resolved_author}.',
             "Identify the single most iconic, dramatic, and visually striking scene from this specific story — the moment readers remember most vividly.",
             "No border, no frame, no decorative edge.",
             "Depict that scene as a luminous full-bleed narrative illustration for a luxury leather-bound edition.",

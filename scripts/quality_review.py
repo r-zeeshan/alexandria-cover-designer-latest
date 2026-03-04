@@ -2050,30 +2050,49 @@ def _execute_generation_payload(
         raise ValueError("No models available for generation")
 
     composed_prompt_payload: dict[str, Any] = {}
-    if compose_prompt:
-        book_row = _book_row_for_number(runtime=runtime, book_number=book)
-        if book_row is not None:
+    book_row = _book_row_for_number(runtime=runtime, book_number=book)
+    raw_request_prompt = str(prompt or "").strip()
+    if compose_prompt and book_row is not None:
+        default_diversified_prompt = prompt_generator.build_diversified_prompt(
+            book_title=str(book_row.get("title", "")),
+            book_author=str(book_row.get("author", "")),
+            book_number=book,
+            variant_index=1,
+        )
+        if prompt_source == "custom" and raw_request_prompt:
+            base_prompt_for_composer = raw_request_prompt
+        else:
+            base_prompt_for_composer = default_diversified_prompt
+        if not base_prompt_for_composer:
             default_prompt = ""
             variants_payload = book_row.get("variants", [])
             if isinstance(variants_payload, list) and variants_payload:
                 first_variant = variants_payload[0]
                 if isinstance(first_variant, dict):
                     default_prompt = str(first_variant.get("prompt", "")).strip()
-            composed_prompt_payload = _compose_prompt_for_book(
-                runtime=runtime,
-                book=book_row,
-                base_prompt=str(
-                    prompt
-                    or default_prompt
-                    or (
-                        f"Cinematic full-bleed narrative scene for {book_row.get('title', f'Book {book}')}, "
-                        "single dominant focal subject, vivid painterly color, no text, no logos, no borders or frames"
-                    )
-                ),
-                template_id=template_id,
+            base_prompt_for_composer = (
+                default_prompt
+                or (
+                    f"Cinematic full-bleed narrative scene for {book_row.get('title', f'Book {book}')}, "
+                    "single dominant focal subject, vivid painterly color, no text, no logos, no borders or frames"
+                )
             )
-            if prompt_source == "template" or not str(prompt).strip():
-                prompt = str(composed_prompt_payload.get("prompt", prompt)).strip()
+        composed_prompt_payload = _compose_prompt_for_book(
+            runtime=runtime,
+            book=book_row,
+            base_prompt=str(base_prompt_for_composer),
+            template_id=template_id,
+        )
+        if prompt_source == "template" or not raw_request_prompt:
+            prompt = str(composed_prompt_payload.get("prompt", base_prompt_for_composer)).strip()
+
+    if book_row is not None:
+        prompt = _ensure_prompt_book_context(
+            prompt=prompt,
+            book=book_row,
+            require_motif=(prompt_source != "custom" or not raw_request_prompt),
+        )
+        logger.info("Generation prompt for book %s (%s): %s", book, prompt_source, prompt)
 
     dry_run = forced_dry_run or (not runtime.has_any_api_key())
     job_id = str(payload.get("job_id", "")).strip()
@@ -3996,6 +4015,39 @@ def _book_row_for_number(*, runtime: config.Config, book_number: int) -> dict[st
     return None
 
 
+def _prompt_reference_tokens(value: str) -> list[str]:
+    return [token for token in re.findall(r"[a-z0-9]+", str(value or "").lower()) if len(token) >= 4]
+
+
+def _ensure_prompt_book_context(*, prompt: str, book: dict[str, Any], require_motif: bool = False) -> str:
+    text = " ".join(str(prompt or "").split()).strip()
+    title = str(book.get("title", "") or "").strip()
+    author = str(book.get("author", "") or "").strip()
+    if not title:
+        return text
+
+    text_lower = text.lower()
+    title_tokens = _prompt_reference_tokens(title)
+    author_tokens = _prompt_reference_tokens(author)
+    has_reference = any(token in text_lower for token in (title_tokens + author_tokens) if token)
+    if not has_reference:
+        context = f"Illustration for '{title}'"
+        if author:
+            context = f"{context} by {author}"
+        text = f"{context}. {text}".strip()
+
+    if require_motif:
+        try:
+            motif = prompt_generator._motif_for_book(book)  # type: ignore[attr-defined]
+            scene = str(getattr(motif, "iconic_scene", "") or "").strip()
+        except Exception:
+            scene = ""
+        if scene and scene.lower() not in text.lower():
+            text = f"Primary narrative anchor: {scene}. {text}".strip()
+
+    return prompt_generator.enforce_prompt_constraints(text)
+
+
 def _compose_prompt_for_book(
     *,
     runtime: config.Config,
@@ -4526,6 +4578,12 @@ def _builtin_prompt_seed_rows() -> list[dict[str, str]]:
         )
         constrained_template = constrained_template.replace("BOOKTITLETOKEN", "{title}").replace("BOOKAUTHORTOKEN", "{author}")
         constrained_template = _normalize_constraint_artifacts(constrained_template)
+        if "{title}" not in constrained_template:
+            constrained_template = f'Illustration for "{{title}}" by {{author}}. {constrained_template}'.strip()
+            constrained_template = _normalize_constraint_artifacts(constrained_template)
+        elif "{author}" not in constrained_template:
+            constrained_template = f'For "{{title}}" by {{author}}: {constrained_template}'.strip()
+            constrained_template = _normalize_constraint_artifacts(constrained_template)
         lowered = constrained_template.lower()
         if f"style direction: {label.lower()}" not in lowered:
             constrained_template = f"Style direction: {label}. {modifier} {constrained_template}".strip()
@@ -11986,11 +12044,6 @@ def _build_variant_download_zip(
             if candidate is not None and candidate.exists():
                 cover_ai = candidate
                 break
-
-    if generated_raw_image is None and source_raw_image is not None:
-        generated_raw_image = source_raw_image
-    if source_raw_image is None and generated_raw_image is not None:
-        source_raw_image = generated_raw_image
 
     _, folder_by_book = _catalog_maps(catalog_path=runtime.book_catalog_path)
     folder_name = folder_by_book.get(int(book_number), "")

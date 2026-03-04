@@ -766,6 +766,17 @@ def test_diversify_prompt_for_model_variant_injects_style_and_provider_hint():
     assert "model signature:" in prompt.lower()
 
 
+def test_validate_prompt_relevance_prepends_title_when_missing():
+    prompt = ig._validate_prompt_relevance(
+        "Painterly storm scene with dramatic ocean spray.",
+        book_title="Moby Dick; Or, The Whale",
+        book_author="Herman Melville",
+    ).lower()
+    assert "book cover illustration for 'moby dick; or, the whale'" in prompt
+    assert "primary scene anchor:" in prompt
+    assert "melville" in prompt
+
+
 def test_generate_all_models_applies_model_specific_diversity(tmp_path: Path, monkeypatch):
     runtime = _Runtime(tmp_path)
     monkeypatch.setattr(ig.config, "get_config", lambda: runtime)

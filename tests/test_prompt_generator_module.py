@@ -288,6 +288,19 @@ def test_build_diversified_prompt_applies_scene_only_constraints():
     assert "no frame" in prompt
 
 
+def test_build_diversified_prompt_accepts_named_book_arguments_and_includes_title_anchor():
+    prompt = pg.build_diversified_prompt(
+        book_title="Moby Dick; Or, The Whale",
+        book_author="Herman Melville",
+        book_number=36,
+        variant_index=1,
+    ).lower()
+    assert "illustration for 'moby dick; or, the whale'" in prompt
+    assert "herman melville" in prompt
+    assert "primary narrative anchor" in prompt
+    assert "whale" in prompt
+
+
 def test_diversify_prompt_strips_ornamental_style_instructions(monkeypatch):
     base = pg._ensure_prompt_constraints("scene-first prompt with vivid details")
     monkeypatch.setattr(
