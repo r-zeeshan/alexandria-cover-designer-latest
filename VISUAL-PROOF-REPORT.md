@@ -2,13 +2,14 @@
 
 Last updated: `2026-03-04`
 Deployment URL: `https://web-production-900a7.up.railway.app`
-Deployment ID: `db7f071e-6455-4b42-844b-ea704580956a`
+Deployment ID: `a1cbac07-8f7a-40bd-a83e-3a7eff8649b7`
 
 ## 1.3 Model Label + Default Selection Correction (2026-03-04)
 - Git commit (master):
   - `3e46c82` — enforce single Nano Banana Pro default selection and rename Google-direct Gemini card.
 - Railway deploy:
-  - `db7f071e-6455-4b42-844b-ea704580956a` (`SUCCESS`, latest live)
+  - `db7f071e-6455-4b42-844b-ea704580956a` (`SUCCESS`)
+  - `a1cbac07-8f7a-40bd-a83e-3a7eff8649b7` (`SUCCESS`, final parity redeploy from latest master)
 - Live API verification:
   - `GET /api/models` now returns:
     - `openrouter/google/gemini-2.5-flash-image` -> `Nano Banana Pro`
