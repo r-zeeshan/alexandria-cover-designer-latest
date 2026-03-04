@@ -5,10 +5,15 @@ let _unsubscribe = null;
 let _selectedModelIds = new Set();
 let _defaultModelId = null;
 let _lastVisibleModelIds = [];
+let _defaultSelectedModelIds = [];
 const PREFERRED_DEFAULT_MODELS = [
   'openrouter/google/gemini-2.5-flash-image',
   'google/gemini-2.5-flash-image',
   'nano-banana-pro',
+];
+const RECOMMENDED_PINNED_MODEL_IDS = [
+  'openrouter/google/gemini-2.5-flash-image',
+  'google/gemini-2.5-flash-image',
 ];
 
 function modelIdToLabel(modelId) {
@@ -341,9 +346,17 @@ function modelDescription(model) {
 
 function getRecommendedModelIds(models) {
   const top = models.slice(0, Math.min(15, models.length)).map((model) => normalizedModelId(model));
+  const pinned = RECOMMENDED_PINNED_MODEL_IDS.filter((id) => models.some((model) => normalizedModelId(model) === id));
+  return Array.from(new Set(pinned.concat(top)));
+}
+
+function defaultSelectedModelIds(models) {
+  const pinned = RECOMMENDED_PINNED_MODEL_IDS.filter((id) => models.some((model) => normalizedModelId(model) === id));
+  if (pinned.length >= 2) return pinned.slice(0, 2);
   const preferred = PREFERRED_DEFAULT_MODELS.find((id) => models.some((model) => normalizedModelId(model) === id));
-  if (!preferred) return Array.from(new Set(top));
-  return [preferred].concat(top.filter((id) => id !== preferred));
+  if (preferred) return [preferred];
+  const first = normalizedModelId(models[0] || null);
+  return first ? [first] : [];
 }
 
 function filterModelList(models, filterName) {
@@ -459,6 +472,7 @@ window.Pages.iterate = {
               <button class="filter-chip" data-model-action="clear">Clear</button>
             </div>
             <p class="text-xs text-muted mt-8" id="iterModelSummary"></p>
+            <p class="text-xs text-muted mt-8" id="iterCostBreakdown"></p>
             <div class="model-card-grid" id="iterModelGrid"></div>
           </div>
           <div class="form-row">
@@ -514,9 +528,9 @@ window.Pages.iterate = {
     const modelFilterButtons = Array.from(content.querySelectorAll('[data-model-filter]'));
     const modelActionButtons = Array.from(content.querySelectorAll('[data-model-action]'));
 
-    const preferred = PREFERRED_DEFAULT_MODELS.find((id) => OpenRouter.MODELS.some((model) => normalizedModelId(model) === id));
-    _defaultModelId = preferred || normalizedModelId(OpenRouter.MODELS[0] || null) || null;
-    _selectedModelIds = new Set(_defaultModelId ? [_defaultModelId] : []);
+    _defaultSelectedModelIds = defaultSelectedModelIds(OpenRouter.MODELS);
+    _defaultModelId = _defaultSelectedModelIds[0] || normalizedModelId(OpenRouter.MODELS[0] || null) || null;
+    _selectedModelIds = new Set(_defaultSelectedModelIds);
     _lastVisibleModelIds = [];
     let activeModelFilter = 'recommended';
     let modelSearchText = '';
@@ -580,9 +594,22 @@ window.Pages.iterate = {
       const selected = Array.from(_selectedModelIds);
       const total = selected.reduce((sum, modelId) => sum + Number(OpenRouter.MODEL_COSTS[modelId] || 0) * variants, 0);
       const est = document.getElementById('iterCostEst');
+      const breakdown = document.getElementById('iterCostBreakdown');
       if (est) {
         const worst = total * 3;
         est.textContent = `Est. cost: $${total.toFixed(3)} · worst-case $${worst.toFixed(3)}`;
+      }
+      if (breakdown) {
+        if (!selected.length) {
+          breakdown.textContent = 'No models selected.';
+        } else {
+          const parts = selected.map((modelId) => {
+            const unit = Number(OpenRouter.MODEL_COSTS[modelId] || 0);
+            const subtotal = unit * variants;
+            return `${modelIdToLabel(modelId)} ($${unit.toFixed(3)} × ${variants} = $${subtotal.toFixed(3)})`;
+          });
+          breakdown.textContent = `Cost breakdown: ${parts.join(' + ')} = $${total.toFixed(3)}.`;
+        }
       }
     };
 
@@ -602,8 +629,8 @@ window.Pages.iterate = {
         .join(', ');
       const remaining = Math.max(0, _selectedModelIds.size - 4);
       const selectedSuffix = remaining > 0 ? ` +${remaining} more` : '';
-      const defaultLabel = _defaultModelId ? modelIdToLabel(_defaultModelId) : 'first model';
-      modelSummaryEl.textContent = `${_selectedModelIds.size} model selected · showing ${rendered.visibleCount}/${OpenRouter.MODELS.length}. Default: ${defaultLabel} only. Selected: ${selectedLabels || 'none'}${selectedSuffix}.`;
+      const defaultLabels = _defaultSelectedModelIds.map((id) => modelIdToLabel(id)).join(', ') || 'first model';
+      modelSummaryEl.textContent = `${_selectedModelIds.size} model selected · showing ${rendered.visibleCount}/${OpenRouter.MODELS.length}. Default selection: ${defaultLabels}. Selected: ${selectedLabels || 'none'}${selectedSuffix}.`;
       updateCost();
     };
 
