@@ -8,13 +8,20 @@ let _lastVisibleModelIds = [];
 let _defaultSelectedModelIds = [];
 const PREFERRED_DEFAULT_MODELS = [
   'openrouter/google/gemini-2.5-flash-image',
-  'google/gemini-2.5-flash-image',
   'nano-banana-pro',
+  'google/gemini-2.5-flash-image',
 ];
 const RECOMMENDED_PINNED_MODEL_IDS = [
   'openrouter/google/gemini-2.5-flash-image',
   'google/gemini-2.5-flash-image',
 ];
+const NANO_BANANA_MODEL_IDS = new Set([
+  'openrouter/google/gemini-2.5-flash-image',
+  'nano-banana-pro',
+]);
+const GEMINI_FLASH_DIRECT_MODEL_IDS = new Set([
+  'google/gemini-2.5-flash-image',
+]);
 
 function modelIdToLabel(modelId) {
   const model = OpenRouter.MODELS.find((m) => m.id === modelId);
@@ -319,7 +326,12 @@ function isGeminiModel(model) {
 
 function isNanoModel(model) {
   const token = normalizedModelId(model).toLowerCase();
-  return token.includes('nano-banana') || token.includes('gemini-2.5-flash-image');
+  return NANO_BANANA_MODEL_IDS.has(token);
+}
+
+function isGeminiFlashDirectModel(model) {
+  const token = normalizedModelId(model).toLowerCase();
+  return GEMINI_FLASH_DIRECT_MODEL_IDS.has(token);
 }
 
 function modelCapabilities(model) {
@@ -334,6 +346,7 @@ function modelCapabilities(model) {
 function modelDescription(model) {
   const token = normalizedModelId(model).toLowerCase();
   if (isNanoModel(model)) return 'Best Nano Banana quality tier (recommended default).';
+  if (isGeminiFlashDirectModel(model)) return 'Gemini Flash direct Google provider route.';
   if (token.includes('gpt-5-image-mini')) return 'Lower-cost GPT-5 image generation.';
   if (token.includes('gpt-5-image') || token.includes('gpt-image-1')) return 'Premium multimodal image + text output.';
   if (token.includes('riverflow') && token.includes('fast-preview')) return 'Fast draft variant for quick iteration.';
@@ -351,8 +364,6 @@ function getRecommendedModelIds(models) {
 }
 
 function defaultSelectedModelIds(models) {
-  const pinned = RECOMMENDED_PINNED_MODEL_IDS.filter((id) => models.some((model) => normalizedModelId(model) === id));
-  if (pinned.length >= 2) return pinned.slice(0, 2);
   const preferred = PREFERRED_DEFAULT_MODELS.find((id) => models.some((model) => normalizedModelId(model) === id));
   if (preferred) return [preferred];
   const first = normalizedModelId(models[0] || null);

@@ -4053,7 +4053,7 @@ def _compose_prompt_for_book(
 _MODEL_LABEL_OVERRIDES: dict[str, str] = {
     "nano-banana-pro": "Nano Banana Pro",
     "openrouter/google/gemini-2.5-flash-image": "Nano Banana Pro",
-    "google/gemini-2.5-flash-image": "Nano Banana Pro (Google Direct)",
+    "google/gemini-2.5-flash-image": "Gemini Flash (Google Direct)",
 }
 
 

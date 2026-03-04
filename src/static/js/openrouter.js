@@ -1,4 +1,9 @@
 const DEFAULT_MODEL_COST = 0.01;
+const MODEL_LABEL_OVERRIDES = {
+  'nano-banana-pro': 'Nano Banana Pro',
+  'openrouter/google/gemini-2.5-flash-image': 'Nano Banana Pro',
+  'google/gemini-2.5-flash-image': 'Gemini Flash (Google Direct)',
+};
 
 function _sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -7,10 +12,9 @@ function _sleep(ms) {
 function _labelForModel(modelId, fallback = '') {
   const token = String(modelId || '').trim();
   if (!token) return fallback || 'Model';
+  const override = MODEL_LABEL_OVERRIDES[token];
+  if (override) return override;
   if (fallback) return fallback;
-  if (token === 'openrouter/google/gemini-2.5-flash-image' || token === 'google/gemini-2.5-flash-image' || token === 'nano-banana-pro') {
-    return 'Nano Banana Pro';
-  }
   return token;
 }
 
