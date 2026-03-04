@@ -20,6 +20,7 @@
 !config/book_prompts_test-catalog.json
 !config/cover_regions.json
 !config/cover_regions_test-catalog.json
+!config/frame_mask.png
 !config/prompt_templates.json
 !config/prompt_library.json
 !config/cover_templates.json
