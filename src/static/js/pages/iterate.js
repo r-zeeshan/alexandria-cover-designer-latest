@@ -883,6 +883,7 @@ window.Pages.iterate = {
       const quality = Number(job.quality_score || 0);
       const status = String(job.status || 'queued');
       const showDownloads = hasPreview && status === 'completed';
+      const showComparison = Number(job.book_id || 0) > 0 && status === 'completed';
       const errorText = status === 'failed' ? String(job.error || '').trim() : '';
       return `
         <div class="result-card ${hasPreview ? '' : 'result-card-empty'}" ${hasPreview ? `data-view="${job.id}"` : ''}>
@@ -902,6 +903,7 @@ window.Pages.iterate = {
             <div class="flex gap-4 mt-8">
               <button class="btn btn-secondary btn-sm" data-dl-comp="${job.id}" ${showDownloads ? '' : 'disabled'}>⬇ Download</button>
               <button class="btn btn-secondary btn-sm" data-dl-raw="${job.id}" ${showDownloads ? '' : 'disabled'}>⬇ Raw</button>
+              <button class="btn btn-secondary btn-sm" data-view-qa-book="${Number(job.book_id || 0)}" ${showComparison ? '' : 'disabled'}>Compare</button>
               <button class="btn btn-secondary btn-sm" data-save-prompt="${job.id}">💾 Prompt</button>
             </div>
           </div>
@@ -940,6 +942,12 @@ window.Pages.iterate = {
     });
     grid.querySelectorAll('[data-dl-comp]').forEach((btn) => btn.addEventListener('click', (e) => { e.stopPropagation(); this.downloadComposite(btn.dataset.dlComp); }));
     grid.querySelectorAll('[data-dl-raw]').forEach((btn) => btn.addEventListener('click', (e) => { e.stopPropagation(); this.downloadGenerated(btn.dataset.dlRaw); }));
+    grid.querySelectorAll('[data-view-qa-book]').forEach((btn) => btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const book = Number(btn.dataset.viewQaBook || 0);
+      if (!Number.isFinite(book) || book <= 0) return;
+      window.open(`/api/visual-qa/image/${book}?catalog=classics`, '_blank', 'noopener,noreferrer');
+    }));
     grid.querySelectorAll('[data-save-prompt]').forEach((btn) => btn.addEventListener('click', (e) => { e.stopPropagation(); this.savePromptFromJob(btn.dataset.savePrompt); }));
   },
 

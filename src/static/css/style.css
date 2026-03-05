@@ -675,6 +675,24 @@ tr:hover td {
   gap: 16px;
 }
 
+.visual-qa-card {
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.visual-qa-card:hover {
+  border-color: var(--gold);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.visual-qa-thumb {
+  width: 100%;
+  display: block;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #f8fafc;
+}
+
 .result-card {
   background: #fff;
   border: 2px solid var(--border);

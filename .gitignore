@@ -35,6 +35,7 @@ logs/
 
 # Generated reports
 reports/
+qa_output/**/*.lock
 
 # Editor swap files
 ~$*

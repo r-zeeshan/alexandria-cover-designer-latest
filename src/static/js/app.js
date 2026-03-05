@@ -5,6 +5,7 @@ const PAGES = {
   batch: { title: 'Batch', render: () => window.Pages.batch.render() },
   jobs: { title: 'Jobs', render: () => window.Pages.jobs.render() },
   review: { title: 'Review', render: () => window.Pages.review.render() },
+  'visual-qa': { title: 'Visual QA', render: () => window.Pages['visual-qa'].render() },
   compare: { title: 'Compare', render: () => window.Pages.compare.render() },
   similarity: { title: 'Similarity', render: () => window.Pages.similarity.render() },
   mockups: { title: 'Mockups', render: () => window.Pages.mockups.render() },

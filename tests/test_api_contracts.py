@@ -144,6 +144,7 @@ def test_api_contract_get_endpoints_status_and_content_type():
             "/api/delivery/tracking?limit=5&offset=0",
             "/api/archive/stats",
             "/api/storage/usage",
+            "/api/visual-qa",
             "/api/cache/stats",
         ]
         for path in json_endpoints:
@@ -276,6 +277,7 @@ def test_api_contract_mutation_endpoints_return_json_and_success_flags():
     try:
         checks: list[tuple[str, str, dict[str, Any], int]] = [
             ("/api/drive/schedule?catalog=classics", "POST", {"enabled": True, "interval_hours": 4, "mode": "push"}, 200),
+            ("/api/visual-qa/generate?catalog=classics", "POST", {"book_number": 1}, 200),
             ("/api/similarity/recompute?catalog=classics", "POST", {"threshold": 0.25, "reason": "contract"}, 200),
             ("/api/delivery/enable?catalog=classics", "POST", {}, 200),
             ("/api/delivery/disable?catalog=classics", "POST", {}, 200),

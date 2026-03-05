@@ -7,6 +7,7 @@ import argparse
 from collections import OrderedDict
 import gzip
 import hashlib
+import importlib
 import inspect
 import io
 import json
@@ -194,6 +195,8 @@ _SLOW_REQUEST_LOG_LOCK = threading.Lock()
 _SLOW_REQUEST_THRESHOLD_SECONDS = 5.0
 _PRINT_VALIDATOR_LOCK = threading.Lock()
 _PRINT_VALIDATOR_INSTANCE: print_validator.PrintValidator | None = None
+_VISUAL_QA_RUNNING: set[str] = set()
+_VISUAL_QA_RUNNING_LOCK = threading.Lock()
 
 
 def _budget_presets_for_runtime(runtime: config.Config) -> list[dict[str, Any]]:
@@ -2305,6 +2308,7 @@ def _execute_generation_payload(
     if not dry_run:
         serialized = _hydrate_serialized_result_paths(runtime=runtime, rows=serialized)
         _attach_print_validation_to_rows(runtime=runtime, rows=serialized)
+        _trigger_visual_qa_generation_async(runtime=runtime, book_number=book)
     if job_id:
         for row in serialized:
             if not isinstance(row, dict):
@@ -2458,6 +2462,360 @@ def _quality_scores_path_for_runtime(runtime: config.Config) -> Path:
 
 def _composite_validation_report_path(runtime: config.Config, book_number: int) -> Path:
     return runtime.tmp_dir / "composited" / str(int(book_number)) / "composite_validation.json"
+
+
+def _visual_qa_dir_for_runtime(runtime: config.Config) -> Path:
+    return runtime.tmp_dir / "visual-qa"
+
+
+def _visual_qa_index_path_for_runtime(runtime: config.Config) -> Path:
+    return _visual_qa_dir_for_runtime(runtime) / "index.json"
+
+
+def _qa_output_dir_for_runtime(runtime: config.Config) -> Path:
+    return runtime.project_root / "qa_output" / runtime.catalog_id
+
+
+def _qa_report_path_for_runtime(runtime: config.Config) -> Path:
+    return _qa_output_dir_for_runtime(runtime) / "qa_report.json"
+
+
+def _visual_qa_module():
+    return importlib.import_module("scripts.generate_comparison")
+
+
+def _visual_structural_qa_module():
+    return importlib.import_module("scripts.visual_qa")
+
+
+def _merge_visual_qa_payload(
+    *,
+    existing: dict[str, Any],
+    update: dict[str, Any],
+) -> dict[str, Any]:
+    existing_rows = [row for row in existing.get("comparisons", []) if isinstance(row, dict)]
+    update_rows = [row for row in update.get("comparisons", []) if isinstance(row, dict)]
+    existing_missing = [row for row in existing.get("missing", []) if isinstance(row, dict)]
+    update_missing = [row for row in update.get("missing", []) if isinstance(row, dict)]
+
+    touched_books = {
+        _safe_int(row.get("book_number"), 0)
+        for row in update_rows + update_missing
+        if isinstance(row, dict) and _safe_int(row.get("book_number"), 0) > 0
+    }
+
+    merged_rows = [row for row in existing_rows if _safe_int(row.get("book_number"), 0) not in touched_books]
+    merged_rows.extend(update_rows)
+    merged_rows = _sort_visual_qa_rows(merged_rows)
+
+    merged_missing = [row for row in existing_missing if _safe_int(row.get("book_number"), 0) not in touched_books]
+    merged_missing.extend(update_missing)
+    merged_missing.sort(key=lambda row: _safe_int(row.get("book_number"), 0))
+
+    existing_summary = existing.get("summary", {}) if isinstance(existing.get("summary"), dict) else {}
+    update_summary = update.get("summary", {}) if isinstance(update.get("summary"), dict) else {}
+    total = max(
+        _safe_int(existing_summary.get("total"), 0),
+        _safe_int(update_summary.get("total"), 0),
+        len(merged_rows) + len(merged_missing),
+    )
+    passed = sum(1 for row in merged_rows if str(row.get("verdict", "")).upper() == "PASS")
+    failed = sum(1 for row in merged_rows if str(row.get("verdict", "")).upper() == "FAIL")
+    not_compared = max(_safe_int(update_summary.get("not_compared"), 0), total - len(merged_rows), len(merged_missing))
+
+    return {
+        "generated_at": str(update.get("generated_at", datetime.now(timezone.utc).isoformat())),
+        "comparisons": merged_rows,
+        "missing": merged_missing,
+        "summary": {
+            "total": total,
+            "generated": len(merged_rows),
+            "passed": passed,
+            "failed": failed,
+            "not_compared": not_compared,
+        },
+    }
+
+
+def _merge_structural_qa_payload(
+    *,
+    existing: dict[str, Any],
+    update: dict[str, Any],
+) -> dict[str, Any]:
+    existing_rows = [row for row in existing.get("results", []) if isinstance(row, dict)]
+    update_rows = [row for row in update.get("results", []) if isinstance(row, dict)]
+    existing_missing = [row for row in existing.get("missing", []) if isinstance(row, dict)]
+    update_missing = [row for row in update.get("missing", []) if isinstance(row, dict)]
+
+    touched_books = {
+        _safe_int(row.get("book_number"), 0)
+        for row in update_rows + update_missing
+        if isinstance(row, dict) and _safe_int(row.get("book_number"), 0) > 0
+    }
+
+    merged_rows = [row for row in existing_rows if _safe_int(row.get("book_number"), 0) not in touched_books]
+    merged_rows.extend(update_rows)
+    merged_rows.sort(
+        key=lambda row: (
+            0 if not bool(row.get("passed")) else 1,
+            -_safe_float((row.get("metrics", {}) if isinstance(row.get("metrics"), dict) else {}).get("frame_changed_pct"), 0.0),
+            _safe_int(row.get("book_number"), 0),
+        )
+    )
+
+    merged_missing = [row for row in existing_missing if _safe_int(row.get("book_number"), 0) not in touched_books]
+    merged_missing.extend(update_missing)
+    merged_missing.sort(key=lambda row: _safe_int(row.get("book_number"), 0))
+
+    existing_summary = existing.get("summary", {}) if isinstance(existing.get("summary"), dict) else {}
+    update_summary = update.get("summary", {}) if isinstance(update.get("summary"), dict) else {}
+    total = max(
+        _safe_int(existing_summary.get("total"), 0),
+        _safe_int(update_summary.get("total"), 0),
+        len(merged_rows) + len(merged_missing),
+    )
+    passed = sum(1 for row in merged_rows if bool(row.get("passed")))
+    failed = sum(1 for row in merged_rows if not bool(row.get("passed")))
+    not_compared = max(_safe_int(update_summary.get("not_compared"), 0), total - len(merged_rows), len(merged_missing))
+
+    return {
+        "generated_at": str(update.get("generated_at", datetime.now(timezone.utc).isoformat())),
+        "results": merged_rows,
+        "missing": merged_missing,
+        "summary": {
+            "total": total,
+            "verified": len(merged_rows),
+            "passed": passed,
+            "failed": failed,
+            "not_compared": not_compared,
+        },
+    }
+
+
+def _generate_structural_visual_qa(*, runtime: config.Config, book_number: int | None = None) -> dict[str, Any]:
+    module = _visual_structural_qa_module()
+    catalog_payload = _load_json(runtime.book_catalog_path, [])
+    catalog_rows = catalog_payload if isinstance(catalog_payload, list) else []
+    selected_books = [int(book_number)] if book_number is not None and int(book_number) > 0 else None
+    result = module.run_batch_verification(  # type: ignore[attr-defined]
+        input_covers_dir=runtime.input_dir,
+        composited_dir=runtime.tmp_dir / "composited",
+        output_dir=_qa_output_dir_for_runtime(runtime),
+        golden_dir=_qa_output_dir_for_runtime(runtime) / "golden",
+        catalog=catalog_rows,
+        book_numbers=selected_books,
+    )
+    if not isinstance(result, dict):
+        return {}
+    if selected_books:
+        existing = _load_json(_qa_report_path_for_runtime(runtime), {})
+        if isinstance(existing, dict) and isinstance(existing.get("results"), list):
+            result = _merge_structural_qa_payload(existing=existing, update=result)
+            safe_json.atomic_write_json(_qa_report_path_for_runtime(runtime), result)
+    return result
+
+
+def _generate_visual_qa(*, runtime: config.Config, book_number: int | None = None) -> dict[str, Any]:
+    module = _visual_qa_module()
+    catalog_payload = _load_json(runtime.book_catalog_path, [])
+    catalog_rows = catalog_payload if isinstance(catalog_payload, list) else []
+    selected_books = [int(book_number)] if book_number is not None and int(book_number) > 0 else None
+    result = module.generate_all_comparisons(  # type: ignore[attr-defined]
+        input_covers_dir=runtime.input_dir,
+        composited_dir=runtime.tmp_dir / "composited",
+        output_dir=_visual_qa_dir_for_runtime(runtime),
+        catalog=catalog_rows,
+        book_numbers=selected_books,
+    )
+    if isinstance(result, dict) and selected_books:
+        existing = _load_json(_visual_qa_index_path_for_runtime(runtime), {})
+        if isinstance(existing, dict) and isinstance(existing.get("comparisons"), list):
+            result = _merge_visual_qa_payload(existing=existing, update=result)
+            safe_json.atomic_write_json(_visual_qa_index_path_for_runtime(runtime), result)
+    try:
+        structural = _generate_structural_visual_qa(runtime=runtime, book_number=book_number)
+    except Exception as exc:  # pragma: no cover - diagnostics should not block generation
+        logger.warning("Structural visual QA generation failed for book %s: %s", book_number, exc)
+        structural = {}
+    if isinstance(result, dict):
+        result["structural_qa"] = structural if isinstance(structural, dict) else {}
+        return result
+    return result if isinstance(result, dict) else {}
+
+
+def _sort_visual_qa_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    out = [row for row in rows if isinstance(row, dict)]
+    out.sort(
+        key=lambda row: (
+            0 if str(row.get("verdict", "")).upper() == "FAIL" else 1,
+            -_safe_float(row.get("frame_changed_pct"), 0.0),
+            -_safe_float(row.get("frame_mean_delta"), 0.0),
+            _safe_int(row.get("book_number"), 0),
+        )
+    )
+    return out
+
+
+def _load_visual_qa_payload(
+    *,
+    runtime: config.Config,
+    force_generate: bool = False,
+    book_number: int | None = None,
+) -> dict[str, Any]:
+    index_path = _visual_qa_index_path_for_runtime(runtime)
+    payload = _load_json(index_path, {})
+    comparisons = payload.get("comparisons", []) if isinstance(payload, dict) else []
+    has_target_book = False
+    if isinstance(comparisons, list) and book_number is not None and int(book_number) > 0:
+        has_target_book = any(_safe_int(row.get("book_number"), 0) == int(book_number) for row in comparisons if isinstance(row, dict))
+    if force_generate or not isinstance(payload, dict) or not isinstance(comparisons, list) or (book_number and not has_target_book):
+        payload = _generate_visual_qa(runtime=runtime, book_number=book_number if book_number and book_number > 0 else None)
+        comparisons = payload.get("comparisons", []) if isinstance(payload, dict) else []
+
+    rows = _sort_visual_qa_rows(comparisons if isinstance(comparisons, list) else [])
+    structural_payload = payload.get("structural_qa", {}) if isinstance(payload, dict) and isinstance(payload.get("structural_qa"), dict) else {}
+    if not structural_payload:
+        structural_payload = _load_json(_qa_report_path_for_runtime(runtime), {})
+        if force_generate or (book_number and isinstance(structural_payload, dict)):
+            qa_rows = structural_payload.get("results", []) if isinstance(structural_payload, dict) else []
+            has_target = False
+            if isinstance(qa_rows, list) and book_number and int(book_number) > 0:
+                has_target = any(_safe_int(item.get("book_number"), 0) == int(book_number) for item in qa_rows if isinstance(item, dict))
+            if force_generate or (book_number and not has_target):
+                try:
+                    structural_payload = _generate_structural_visual_qa(runtime=runtime, book_number=book_number if book_number and book_number > 0 else None)
+                except Exception as exc:  # pragma: no cover - diagnostics path
+                    logger.warning("Structural visual QA refresh failed: %s", exc)
+    structural_rows = structural_payload.get("results", []) if isinstance(structural_payload, dict) else []
+    structural_by_book: dict[int, dict[str, Any]] = {}
+    if isinstance(structural_rows, list):
+        for item in structural_rows:
+            if not isinstance(item, dict):
+                continue
+            book_key = _safe_int(item.get("book_number"), 0)
+            if book_key > 0:
+                structural_by_book[book_key] = item
+
+    normalized: list[dict[str, Any]] = []
+    for row in rows:
+        number = _safe_int(row.get("book_number"), 0)
+        if number <= 0:
+            continue
+        path_token = str(row.get("comparison_path", "")).strip()
+        comparison_file = _project_path_if_exists(path_token)
+        if comparison_file is None:
+            abs_token = str(row.get("comparison_abs_path", "")).strip()
+            if abs_token:
+                abs_path = Path(abs_token)
+                if abs_path.exists():
+                    comparison_file = abs_path
+                    path_token = _to_project_relative(abs_path)
+        if comparison_file is None:
+            fallback = _visual_qa_dir_for_runtime(runtime) / f"compare_{number:03d}.jpg"
+            if fallback.exists():
+                comparison_file = fallback
+                path_token = _to_project_relative(fallback)
+        structural_row = structural_by_book.get(number, {})
+        structural_checks = structural_row.get("checks", []) if isinstance(structural_row, dict) else []
+        if not isinstance(structural_checks, list):
+            structural_checks = []
+        failed_checks = structural_row.get("failed_checks", []) if isinstance(structural_row, dict) else []
+        if not isinstance(failed_checks, list):
+            failed_checks = []
+        structural_report_path = ""
+        if isinstance(structural_row, dict):
+            token = str(structural_row.get("report_path", "")).strip()
+            if token:
+                structural_report_path = token
+            else:
+                fallback_report = _qa_output_dir_for_runtime(runtime) / f"qa_{number:03d}.json"
+                if fallback_report.exists():
+                    structural_report_path = _to_project_relative(fallback_report)
+
+        normalized.append(
+            {
+                **row,
+                "book_number": number,
+                "book_title": str(row.get("book_title", f"Book {number}")),
+                "comparison_path": path_token,
+                "frame_changed_pct": _safe_float(row.get("frame_changed_pct"), 0.0),
+                "frame_mean_delta": _safe_float(row.get("frame_mean_delta"), 0.0),
+                "frame_max_delta": _safe_float(row.get("frame_max_delta"), 0.0),
+                "verdict": str(row.get("verdict", "UNKNOWN")).upper() or "UNKNOWN",
+                "image_url": f"/api/visual-qa/image/{number}",
+                "comparison_url": f"/{path_token}" if path_token else "",
+                "has_image": comparison_file is not None and comparison_file.exists(),
+                "structural_passed": bool(structural_row.get("passed")) if isinstance(structural_row, dict) else None,
+                "structural_failed_checks": [str(item) for item in failed_checks if str(item).strip()],
+                "structural_checks": structural_checks,
+                "structural_report_path": structural_report_path,
+            }
+        )
+
+    summary_raw = payload.get("summary", {}) if isinstance(payload, dict) else {}
+    structural_summary_raw = structural_payload.get("summary", {}) if isinstance(structural_payload, dict) else {}
+    summary = {
+        "total": _safe_int(summary_raw.get("total"), len(normalized)),
+        "passed": _safe_int(summary_raw.get("passed"), sum(1 for row in normalized if row.get("verdict") == "PASS")),
+        "failed": _safe_int(summary_raw.get("failed"), sum(1 for row in normalized if row.get("verdict") == "FAIL")),
+        "not_compared": _safe_int(summary_raw.get("not_compared"), max(0, _safe_int(summary_raw.get("total"), len(normalized)) - len(normalized))),
+        "generated": _safe_int(summary_raw.get("generated"), len(normalized)),
+        "structural_verified": _safe_int(structural_summary_raw.get("verified"), 0),
+        "structural_passed": _safe_int(structural_summary_raw.get("passed"), 0),
+        "structural_failed": _safe_int(structural_summary_raw.get("failed"), 0),
+    }
+    missing = payload.get("missing", []) if isinstance(payload, dict) and isinstance(payload.get("missing"), list) else []
+    return {
+        "ok": True,
+        "catalog": runtime.catalog_id,
+        "generated_at": str((payload if isinstance(payload, dict) else {}).get("generated_at", datetime.now(timezone.utc).isoformat())),
+        "comparisons": normalized,
+        "summary": summary,
+        "missing": missing,
+        "structural_qa": structural_payload if isinstance(structural_payload, dict) else {},
+    }
+
+
+def _visual_qa_image_path(*, runtime: config.Config, book_number: int) -> Path | None:
+    if int(book_number) <= 0:
+        return None
+    payload = _load_visual_qa_payload(runtime=runtime, force_generate=False, book_number=book_number)
+    rows = payload.get("comparisons", []) if isinstance(payload, dict) else []
+    if isinstance(rows, list):
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            if _safe_int(row.get("book_number"), 0) != int(book_number):
+                continue
+            candidate = _project_path_if_exists(row.get("comparison_path"))
+            if candidate is not None and candidate.exists():
+                return candidate
+    fallback = _visual_qa_dir_for_runtime(runtime) / f"compare_{int(book_number):03d}.jpg"
+    if fallback.exists():
+        return fallback
+    return None
+
+
+def _trigger_visual_qa_generation_async(*, runtime: config.Config, book_number: int) -> None:
+    if int(book_number) <= 0:
+        return
+    token = f"{runtime.catalog_id}:{int(book_number)}"
+    with _VISUAL_QA_RUNNING_LOCK:
+        if token in _VISUAL_QA_RUNNING:
+            return
+        _VISUAL_QA_RUNNING.add(token)
+
+    def _run() -> None:
+        try:
+            _generate_visual_qa(runtime=runtime, book_number=int(book_number))
+            _invalidate_cache("/api/visual-qa", catalog_id=runtime.catalog_id)
+        except Exception as exc:  # pragma: no cover - non-blocking diagnostic path
+            logger.warning("Visual QA generation failed for book %s: %s", book_number, exc)
+        finally:
+            with _VISUAL_QA_RUNNING_LOCK:
+                _VISUAL_QA_RUNNING.discard(token)
+
+    threading.Thread(target=_run, name=f"visual-qa-{runtime.catalog_id}-{int(book_number)}", daemon=True).start()
 
 
 def _assert_composite_validation_within_limits(*, runtime: config.Config, book_number: int) -> None:
@@ -5747,6 +6105,7 @@ def serve_review_webapp(
                 "/batch",
                 "/jobs",
                 "/review",
+                "/visual-qa",
                 "/compare",
                 "/similarity",
                 "/mockups",
@@ -5791,6 +6150,12 @@ def serve_review_webapp(
                     f"/src/static/{static_rel}",
                     allowed_roots=[PROJECT_ROOT / "src" / "static"],
                     cache_control=_static_cache_control_for(path),
+                )
+            if path.startswith("/tmp/visual-qa/"):
+                return self._serve_project_relative(
+                    path,
+                    allowed_roots=[_visual_qa_dir_for_runtime(runtime_req)],
+                    cache_control="no-store",
                 )
             if path.startswith("/Output Covers/") or path.startswith("/tmp/"):
                 return self._serve_project_relative(
@@ -7057,6 +7422,36 @@ def serve_review_webapp(
                         endpoint=path,
                     )
                 return self._send_file(preview_path, content_type="image/jpeg", cache_control="no-store")
+            if path == "/api/visual-qa":
+                force = str(query.get("force", ["0"])[0] or "").strip().lower() in {"1", "true", "yes", "on"}
+                book_filter = _safe_int(query.get("book_number", ["0"])[0], 0)
+                payload = _load_visual_qa_payload(
+                    runtime=runtime_req,
+                    force_generate=force,
+                    book_number=book_filter if book_filter > 0 else None,
+                )
+                return _cache_and_send(payload)
+            if path.startswith("/api/visual-qa/image/"):
+                token = path.split("/api/visual-qa/image/", 1)[1].strip().split("/", 1)[0]
+                book_number = _safe_int(token, 0)
+                if book_number <= 0:
+                    return self._send_error(
+                        code="INVALID_BOOK_NUMBER",
+                        message="book number must be a positive integer",
+                        details={"received": token},
+                        status=HTTPStatus.BAD_REQUEST,
+                        endpoint=path,
+                    )
+                image_path = _visual_qa_image_path(runtime=runtime_req, book_number=book_number)
+                if image_path is None or not image_path.exists():
+                    return self._send_error(
+                        code="VISUAL_QA_IMAGE_NOT_FOUND",
+                        message=f"No visual QA comparison image found for book {book_number}",
+                        details={"book_number": book_number},
+                        status=HTTPStatus.NOT_FOUND,
+                        endpoint=path,
+                    )
+                return self._send_file(image_path, content_type="image/jpeg", cache_control="no-store")
             if path == "/api/compare":
                 books_raw = str(query.get("books", [""])[0]).strip()
                 books = _parse_books(books_raw) or []
@@ -7451,6 +7846,39 @@ def serve_review_webapp(
                     status=HTTPStatus.TOO_MANY_REQUESTS,
                     endpoint=path,
                     headers={"Retry-After": "60"},
+                )
+
+            if path == "/api/visual-qa/generate":
+                book_number = _safe_int(
+                    body.get("book_number", body.get("book", query.get("book_number", ["0"])[0])),
+                    0,
+                )
+                try:
+                    payload = _generate_visual_qa(
+                        runtime=runtime_req,
+                        book_number=book_number if book_number > 0 else None,
+                    )
+                except Exception as exc:
+                    return self._send_error(
+                        code="VISUAL_QA_GENERATION_FAILED",
+                        message=str(exc),
+                        details={"book_number": book_number if book_number > 0 else None},
+                        status=HTTPStatus.BAD_REQUEST,
+                        endpoint=path,
+                    )
+                _invalidate_cache("/api/visual-qa", catalog_id=runtime_req.catalog_id)
+                summary = payload.get("summary", {}) if isinstance(payload, dict) else {}
+                return self._send_json(
+                    {
+                        "ok": True,
+                        "catalog": runtime_req.catalog_id,
+                        "generated_at": str(payload.get("generated_at", datetime.now(timezone.utc).isoformat())),
+                        "generated": _safe_int(summary.get("generated"), 0),
+                        "passed": _safe_int(summary.get("passed"), 0),
+                        "failed": _safe_int(summary.get("failed"), 0),
+                        "not_compared": _safe_int(summary.get("not_compared"), 0),
+                        "summary": summary,
+                    }
                 )
 
             if path == "/api/catalogs/import":
@@ -13780,6 +14208,7 @@ def _build_api_docs_html() -> str:
     endpoints = [
         ("GET", "/iterate", "Iteration UI", "-", "-", "Interactive single-cover generation page."),
         ("GET", "/review", "Winner review UI", "-", "-", "Winner review and archive page."),
+        ("GET", "/visual-qa", "Visual QA UI", "-", "-", "Visual compositor QA dashboard with PASS/FAIL comparisons."),
         ("GET", "/catalogs", "Catalog UI", "-", "-", "Generate winner catalogs/contact sheets/all-variants PDFs."),
         ("GET", "/history", "History UI", "-", "-", "Generation history viewer with filters."),
         ("GET", "/dashboard", "Dashboard UI", "-", "-", "Cost/quality dashboard."),
@@ -13841,6 +14270,8 @@ def _build_api_docs_html() -> str:
         ("GET", "/api/history?book=2", "Book history", "book", "{\"items\":[...]}", "History subset for one book."),
         ("GET", "/api/generation-history?book=2&model=flux&status=success&limit=50&offset=0", "Filtered generation history", "book,model,provider,status,date_from,date_to,quality_min,quality_max,limit,offset", "{\"items\":[...],\"total\":123,\"pagination\":{...}}", "Global sortable/filterable generation records."),
         ("GET", "/api/dashboard-data", "Dashboard metrics", "-", "{\"summary\":{...},...}", "Cost and quality analytics for charts."),
+        ("GET", "/api/visual-qa", "Visual QA index", "catalog,book_number,force", "{\"comparisons\":[...],\"summary\":{...}}", "List generated comparison grids with PASS/FAIL verdicts."),
+        ("GET", "/api/visual-qa/image/{book_number}", "Visual QA image", "book_number,catalog", "binary image", "Serve one visual comparison JPG."),
         ("GET", "/api/weak-books?threshold=0.75", "Weak books", "threshold,catalog", "{\"books\":[...]}", "Books below a quality threshold."),
         ("GET", "/api/regeneration-results?book=15", "Regeneration results", "book", "{\"results\":[...]}", "Read saved re-generation comparison results."),
         ("GET", "/api/review-queue?threshold=0.90", "Speed review queue", "threshold", "{\"queue\":[...],\"auto_approve\":34}", "Ordered speed-review queue with confidence and summary buckets."),
@@ -13879,6 +14310,7 @@ def _build_api_docs_html() -> str:
         ("POST", "/api/generate-all-mockups", "Generate mockup batch", "{\"book\":15}|{\"all_books\":true}", "{\"ok\":true}", "Generate all selected templates for one/all books."),
         ("POST", "/api/generate-amazon-set", "Generate Amazon set", "{\"book\":15}|{\"all_books\":true}", "{\"ok\":true}", "Generate 7-image Amazon listing set."),
         ("POST", "/api/generate-social-cards", "Generate social cards", "{\"book\":15,\"formats\":[\"instagram\",\"facebook\"]}", "{\"ok\":true}", "Generate marketing cards for social platforms."),
+        ("POST", "/api/visual-qa/generate", "Generate visual QA", "{\"book_number\":15}", "{\"ok\":true,\"generated\":99,\"passed\":95,\"failed\":4}", "Generate visual comparison grids for one/all books."),
         ("POST", "/api/save-prompt", "Save prompt", "{\"name\":\"...\",\"prompt_template\":\"...\"}", "{\"ok\":true,\"prompt_id\":\"...\"}", "Save prompt into prompt library."),
         ("POST", "/api/providers/reset", "Reset provider runtime", "{\"provider\":\"all|openai|...\"}", "{\"ok\":true}", "Reset provider circuit/rate-limit/runtime counters."),
         ("POST", "/api/test-connection", "Test provider keys", "{\"provider\":\"all|openai|...\"}", "{\"ok\":true,\"report\":{...}}", "Validate provider connectivity."),
@@ -13937,7 +14369,7 @@ def _build_api_docs_html() -> str:
         "th{background:#1f2f52;color:#c4a352;text-align:left;}"
         "code{color:#f5e6c8;}a{color:#c4a352;} .nav a{margin-right:12px;}"
         "</style></head><body>"
-        "<div class='nav'><a href='/iterate'>Iterate</a><a href='/review'>Review</a><a href='/batch'>Batch</a><a href='/catalogs'>Catalogs</a><a href='/jobs'>Jobs</a><a href='/compare'>Compare</a><a href='/history'>History</a><a href='/dashboard'>Dashboard</a><a href='/similarity'>Similarity</a><a href='/mockups'>Mockups</a></div>"
+        "<div class='nav'><a href='/iterate'>Iterate</a><a href='/review'>Review</a><a href='/visual-qa'>Visual QA</a><a href='/batch'>Batch</a><a href='/catalogs'>Catalogs</a><a href='/jobs'>Jobs</a><a href='/compare'>Compare</a><a href='/history'>History</a><a href='/dashboard'>Dashboard</a><a href='/similarity'>Similarity</a><a href='/mockups'>Mockups</a></div>"
         "<h1>Alexandria API Documentation</h1>"
         "<p>Auto-generated endpoint summary from <code>scripts/quality_review.py</code>.</p>"
         "<table><thead><tr><th>Method</th><th>URL</th><th>Name</th><th>Parameters</th><th>Example Response</th><th>Description</th></tr></thead>"
