@@ -23,6 +23,7 @@ try:
     from src import config
     from src import cover_analyzer
     from src import cover_compositor
+    from src import pdf_compositor
     from src import gdrive_sync
     from src import image_generator
     from src import intelligent_prompter
@@ -38,6 +39,7 @@ except ModuleNotFoundError:  # pragma: no cover
     import config  # type: ignore
     import cover_analyzer  # type: ignore
     import cover_compositor  # type: ignore
+    import pdf_compositor  # type: ignore
     import gdrive_sync  # type: ignore
     import image_generator  # type: ignore
     import intelligent_prompter  # type: ignore
@@ -648,16 +650,32 @@ def _run_single_book(
     book_scores = [row for row in all_scores if row.book_number == book_number]
     passed_scores = [row for row in book_scores if row.passed]
 
-    composited_paths = cover_compositor.composite_all_variants(
-        book_number=book_number,
+    # Prefer PDF compositor (preserves original frame/ornaments via SMask);
+    # fall back to raster cover compositor if no source PDF is available.
+    source_pdf = pdf_compositor.find_source_pdf_for_book(
         input_dir=input_dir,
-        generated_dir=generated_dir,
-        output_dir=composited_dir,
-        regions=json.loads(
-            config.cover_regions_path(catalog_id=runtime.catalog_id, config_dir=runtime.config_dir).read_text(encoding="utf-8")
-        ),
+        book_number=book_number,
         catalog_path=runtime.book_catalog_path,
     )
+    if source_pdf is not None:
+        composited_paths = pdf_compositor.composite_all_variants(
+            book_number=book_number,
+            input_dir=input_dir,
+            generated_dir=generated_dir,
+            output_dir=composited_dir,
+            catalog_path=runtime.book_catalog_path,
+        )
+    else:
+        composited_paths = cover_compositor.composite_all_variants(
+            book_number=book_number,
+            input_dir=input_dir,
+            generated_dir=generated_dir,
+            output_dir=composited_dir,
+            regions=json.loads(
+                config.cover_regions_path(catalog_id=runtime.catalog_id, config_dir=runtime.config_dir).read_text(encoding="utf-8")
+            ),
+            catalog_path=runtime.book_catalog_path,
+        )
 
     exported_paths = output_exporter.export_book_variants(
         book_number=book_number,
