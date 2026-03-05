@@ -67,6 +67,19 @@ function decodeAttrToken(token) {
   }
 }
 
+function _thumbnailVersionToken(job) {
+  if (!job || typeof job !== 'object') return String(Date.now());
+  const candidate = String(
+    job.completed_at
+      || job.updated_at
+      || job.created_at
+      || job.timestamp
+      || job.id
+      || Date.now(),
+  ).trim();
+  return candidate || String(Date.now());
+}
+
 function resolvePreviewSources(job, keyPrefix = 'display', preferRaw = false) {
   const sources = [];
   const seen = new Set();
@@ -81,7 +94,7 @@ function resolvePreviewSources(job, keyPrefix = 'display', preferRaw = false) {
       const isDirectPath = normalized.startsWith('/') && !normalized.startsWith('//');
       if (isDirectPath && !normalized.startsWith('/api/thumbnail')) {
         const rel = normalized.replace(/^\/+/, '');
-        const thumb = `/api/thumbnail?path=${encodeURIComponent(rel)}&size=large`;
+        const thumb = `/api/thumbnail?path=${encodeURIComponent(rel)}&size=large&v=${encodeURIComponent(_thumbnailVersionToken(job))}`;
         if (!seen.has(thumb)) {
           seen.add(thumb);
           sources.push(thumb);
@@ -129,7 +142,7 @@ function resolveCompositePreviewSources(job, keyPrefix = 'display-composite') {
       const isDirectPath = normalized.startsWith('/') && !normalized.startsWith('//');
       if (isDirectPath && !normalized.startsWith('/api/thumbnail')) {
         const rel = normalized.replace(/^\/+/, '');
-        const thumb = `/api/thumbnail?path=${encodeURIComponent(rel)}&size=large`;
+        const thumb = `/api/thumbnail?path=${encodeURIComponent(rel)}&size=large&v=${encodeURIComponent(_thumbnailVersionToken(job))}`;
         if (!seen.has(thumb)) {
           seen.add(thumb);
           sources.push(thumb);

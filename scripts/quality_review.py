@@ -7036,7 +7036,7 @@ def serve_review_webapp(
                 return self._send_file(
                     thumb,
                     content_type="image/jpeg",
-                    cache_control="public, max-age=86400",
+                    cache_control="no-store",
                 )
 
             if path == "/api/review-data":
