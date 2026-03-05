@@ -80,12 +80,30 @@ function _thumbnailVersionToken(job) {
   return candidate || String(Date.now());
 }
 
+function _withVersionQuery(url, versionToken) {
+  const raw = String(url || '').trim();
+  if (!raw || !versionToken) return raw;
+  if (raw.startsWith('blob:') || raw.startsWith('data:')) return raw;
+  try {
+    const absolute = new URL(raw, window.location.origin);
+    absolute.searchParams.set('v', String(versionToken));
+    if (/^https?:\/\//i.test(raw)) return absolute.toString();
+    return `${absolute.pathname}${absolute.search}${absolute.hash}`;
+  } catch {
+    const join = raw.includes('?') ? '&' : '?';
+    return `${raw}${join}v=${encodeURIComponent(String(versionToken))}`;
+  }
+}
+
 function resolvePreviewSources(job, keyPrefix = 'display', preferRaw = false) {
   const sources = [];
   const seen = new Set();
   const pushSource = (value, suffix) => {
     if (!isRenderableImageSource(value)) return;
-    const src = getBlobUrl(value, `${job.id}-${keyPrefix}-${suffix}`);
+    let src = getBlobUrl(value, `${job.id}-${keyPrefix}-${suffix}`);
+    if (typeof value === 'string') {
+      src = _withVersionQuery(src, _thumbnailVersionToken(job));
+    }
     if (!src || seen.has(src)) return;
     seen.add(src);
     sources.push(src);
@@ -133,7 +151,10 @@ function resolveCompositePreviewSources(job, keyPrefix = 'display-composite') {
   const seen = new Set();
   const pushSource = (value, suffix) => {
     if (!isRenderableImageSource(value)) return;
-    const src = getBlobUrl(value, `${job.id}-${keyPrefix}-${suffix}`);
+    let src = getBlobUrl(value, `${job.id}-${keyPrefix}-${suffix}`);
+    if (typeof value === 'string') {
+      src = _withVersionQuery(src, _thumbnailVersionToken(job));
+    }
     if (!src || seen.has(src)) return;
     seen.add(src);
     sources.push(src);
