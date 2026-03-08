@@ -1087,6 +1087,53 @@ def test_generate_one_artifact_error_retries_with_hardened_prompt(tmp_path: Path
     assert "Retry instruction" in result.prompt
 
 
+def test_generate_one_preserve_prompt_text_keeps_saved_prompt_on_artifact_retry(tmp_path: Path, monkeypatch):
+    runtime = _Runtime(tmp_path)
+    runtime.provider_keys = {"openai": "k", "openrouter": "k", "fal": "k", "google": "k", "replicate": "k"}
+    runtime.max_retries = 2
+    monkeypatch.setattr(ig.config, "get_config", lambda: runtime)
+    monkeypatch.setattr(ig.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(
+        ig.similarity_detector,
+        "check_prompt_similarity_against_winners",
+        lambda **_kwargs: {"alert": False},
+    )
+    monkeypatch.setattr(
+        ig.similarity_detector,
+        "check_generated_image_against_winners",
+        lambda **_kwargs: {"alert": False, "similarity": 1.0},
+    )
+
+    original_prompt = "Book cover illustration only - no text. Exact Alexandria wildcard prompt."
+    seen_prompts: list[str] = []
+    attempts = {"n": 0}
+
+    def _artifact_then_success(**kwargs):  # type: ignore[no-untyped-def]
+        attempts["n"] += 1
+        seen_prompts.append(str(kwargs.get("prompt", "")))
+        if attempts["n"] == 1:
+            raise ig.GenerationError("Generated image rejected by content guardrail (0.210): text_or_banner_artifact")
+        return _image_bytes((64, 64), gradient=True)
+
+    monkeypatch.setattr(ig, "generate_image", _artifact_then_success)
+    result = ig._generate_one(
+        book_number=1,
+        variant=5,
+        prompt=original_prompt,
+        negative_prompt="neg",
+        model="openai/gpt-image-1",
+        provider="openai",
+        output_path=tmp_path / "generated" / "1" / "variant_5.png",
+        resume=False,
+        preserve_prompt_text=True,
+    )
+    assert result.success is True
+    assert result.attempts == 2
+    assert len(seen_prompts) == 2
+    assert "Retry instruction" in seen_prompts[1]
+    assert result.prompt == original_prompt
+
+
 def test_retry_failures_and_plan_helpers(tmp_path: Path, monkeypatch):
     runtime = _Runtime(tmp_path)
     monkeypatch.setattr(ig.config, "get_config", lambda: runtime)

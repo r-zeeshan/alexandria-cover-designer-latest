@@ -1464,6 +1464,7 @@ def generate_all_models(
                     output_path=image_path,
                     resume=resume,
                     seed=seed,
+                    preserve_prompt_text=preserve_prompt_text,
                 ): (model, variant)
                 for model, variant, image_path, provider, variant_prompt, seed in tasks
             }
@@ -1904,14 +1905,21 @@ def _generate_one(
     output_path: Path,
     resume: bool,
     seed: int | None = None,
+    preserve_prompt_text: bool = False,
 ) -> GenerationResult:
     runtime = config.get_config()
     catalog_id = getattr(runtime, "catalog_id", None)
+    original_prompt = str(prompt)
+
+    def _result_prompt(current_prompt: str) -> str:
+        if preserve_prompt_text:
+            return original_prompt
+        return str(current_prompt)
 
     prompt_similarity_alert: str | None = None
     try:
         prompt_similarity = similarity_detector.check_prompt_similarity_against_winners(
-            prompt=prompt,
+            prompt=original_prompt,
             current_book=book_number,
             winner_selections_path=config.winner_selections_path(catalog_id=catalog_id, data_dir=runtime.data_dir),
             generation_history_path=config.generation_history_path(catalog_id=catalog_id, data_dir=runtime.data_dir),
@@ -1931,7 +1939,7 @@ def _generate_one(
         return GenerationResult(
             book_number=book_number,
             variant=variant,
-            prompt=prompt,
+            prompt=_result_prompt(original_prompt),
             model=model,
             image_path=output_path,
             success=True,
@@ -1957,7 +1965,7 @@ def _generate_one(
     attempt = 0
     max_attempts = max(1, runtime.max_retries) * max(1, len(provider_chain))
     artifact_retry_count = 0
-    working_prompt = str(prompt)
+    working_prompt = original_prompt
     while attempt < max_attempts:
         # Skip providers that are currently in cooldown.
         provider_advanced = False
@@ -2034,7 +2042,7 @@ def _generate_one(
             return GenerationResult(
                 book_number=book_number,
                 variant=variant,
-                prompt=working_prompt,
+                prompt=_result_prompt(working_prompt),
                 model=model,
                 image_path=output_path,
                 success=True,
@@ -2158,7 +2166,7 @@ def _generate_one(
     return GenerationResult(
         book_number=book_number,
         variant=variant,
-        prompt=working_prompt,
+        prompt=_result_prompt(working_prompt),
         model=model,
         image_path=None,
         success=False,
