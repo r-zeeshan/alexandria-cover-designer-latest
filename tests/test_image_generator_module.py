@@ -266,10 +266,11 @@ def test_download_postprocess_and_blank_detection(monkeypatch):
 
 
 def test_guardrailed_prompt_strips_text_and_frame_directions():
-    raw = "Typography-led circular vignette composition with ribbon banner and title text"
+    raw = "Typography-led circular vignette composition with circular medallion illustration, ribbon banner and title text"
     guarded = ig._guardrailed_prompt(raw).lower()
     assert "typography-led" not in guarded
-    assert "circular vignette composition" not in guarded
+    assert "circular vignette composition" in guarded
+    assert "circular medallion illustration" not in guarded
     assert "ribbon banner" not in guarded
     assert "mandatory output rules" in guarded
     assert "no text" in guarded

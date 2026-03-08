@@ -4934,6 +4934,87 @@ def _prompt_versions_payload(*, runtime: config.Config, prompt_id: str) -> dict[
     }
 
 
+def _prompt_slug_token(value: str, *, fallback: str = "prompt") -> str:
+    token = re.sub(r"[^a-z0-9]+", "-", str(value or "").strip().lower()).strip("-")
+    return token or fallback
+
+
+def _save_prompt_from_request(*, runtime: config.Config, body: dict[str, Any]) -> dict[str, Any]:
+    library = PromptLibrary(runtime.prompt_library_path)
+    prompt_text = " ".join(str(body.get("prompt_text", body.get("prompt_template", "")) or "").split()).strip()
+    if not prompt_text:
+        raise ValueError("prompt_text is required")
+
+    existing = library.find_prompt_by_template_text(prompt_text)
+    if existing is not None:
+        return {
+            "ok": True,
+            "already_exists": True,
+            "prompt_id": existing.id,
+            "message": "Prompt already exists in library",
+            "prompt": asdict(existing),
+        }
+
+    book_id = _safe_int(body.get("book_id"), 0)
+    book = _book_row_for_number(runtime=runtime, book_number=book_id) if book_id > 0 else None
+    title = str((book or {}).get("title", f"Book {book_id or 'Unknown'}")).strip()
+    author = str((book or {}).get("author", "Unknown")).strip()
+    source_book = f"{title} — {author}".strip(" —")
+
+    model_id = str(body.get("model_id", body.get("source_model", "")) or "").strip() or "manual"
+    library_prompt_id = str(body.get("library_prompt_id", "") or "").strip()
+    source_prompt = library.get_prompt(library_prompt_id) if library_prompt_id else None
+    source_prompt_name = str(source_prompt.name if source_prompt is not None else body.get("prompt_name", "")).strip()
+    source_prompt_slug = _prompt_slug_token(source_prompt_name or library_prompt_id or "manual")
+    negative_prompt = str(body.get("negative_prompt", "") or "").strip()
+    if not negative_prompt and source_prompt is not None:
+        negative_prompt = str(source_prompt.negative_prompt or "").strip()
+    if not negative_prompt and prompt_text.startswith("Book cover illustration only"):
+        negative_prompt = image_generator.ALEXANDRIA_NEGATIVE_PROMPT
+
+    scene_description = str(body.get("scene_description", "") or "").strip()
+    mood = str(body.get("mood", "") or "").strip()
+    era = str(body.get("era", "") or "").strip()
+    notes = str(body.get("notes", "") or "").strip()
+    note_parts = [notes] if notes else []
+    if scene_description:
+        note_parts.append(f"Scene: {scene_description}")
+    if mood:
+        note_parts.append(f"Mood: {mood}")
+    if era:
+        note_parts.append(f"Era: {era}")
+    job_id = str(body.get("job_id", "") or "").strip()
+    if job_id:
+        note_parts.append(f"Job: {job_id}")
+    notes_text = " | ".join(part for part in note_parts if part).strip()
+
+    prompt = LibraryPrompt(
+        id=str(uuid.uuid4()),
+        name=f"Winner — {title} — {source_prompt_name or model_id}",
+        prompt_template=prompt_text,
+        style_anchors=[],
+        negative_prompt=negative_prompt,
+        source_book=source_book,
+        source_model=model_id,
+        quality_score=_safe_float(body.get("quality_score"), 0.0),
+        saved_by="user",
+        created_at=datetime.now(timezone.utc).isoformat(),
+        notes=notes_text or "saved from iterate winner",
+        tags=["winner", _prompt_slug_token(title, fallback="book"), source_prompt_slug],
+        category="winner",
+        usage_count=0,
+        win_count=1,
+    )
+    library.save_prompt(prompt)
+    return {
+        "ok": True,
+        "already_exists": False,
+        "prompt_id": prompt.id,
+        "message": "Prompt saved to library",
+        "prompt": asdict(library.get_prompt(prompt.id)),
+    }
+
+
 def _create_prompt_from_request(*, runtime: config.Config, body: dict[str, Any]) -> dict[str, Any]:
     library = PromptLibrary(runtime.prompt_library_path)
     prompt = LibraryPrompt(
@@ -9912,25 +9993,19 @@ def serve_review_webapp(
                 )
 
             if path == "/api/save-prompt":
-                with lock:
-                    library = PromptLibrary(runtime_req.prompt_library_path)
-                    prompt = LibraryPrompt(
-                        id=str(uuid.uuid4()),
-                        name=str(body.get("name", "Saved Prompt")),
-                        prompt_template=str(body.get("prompt_template", "{title}")),
-                        style_anchors=list(body.get("style_anchors", [])),
-                        negative_prompt=str(body.get("negative_prompt", "")),
-                        source_book="iteration",
-                        source_model="manual",
-                        quality_score=float(body.get("quality_score", 0.75)),
-                        saved_by="tim",
-                        created_at=datetime.now(timezone.utc).isoformat(),
-                        notes=str(body.get("notes", "saved from iterate page")),
-                        tags=list(body.get("tags", [])) or ["iterative"],
+                try:
+                    with lock:
+                        payload = _save_prompt_from_request(runtime=runtime_req, body=body)
+                except ValueError as exc:
+                    return self._send_error(
+                        code="PROMPT_SAVE_INVALID",
+                        message=str(exc),
+                        status=HTTPStatus.BAD_REQUEST,
+                        endpoint=path,
                     )
-                    library.save_prompt(prompt)
                 write_iterate_data(runtime=runtime_req)
-                return self._send_json({"ok": True, "prompt_id": prompt.id})
+                _invalidate_cache("/api/prompts", "/api/iterate-data")
+                return self._send_json(payload)
 
             if path == "/api/prompts":
                 payload = _create_prompt_from_request(runtime=runtime_req, body=body)

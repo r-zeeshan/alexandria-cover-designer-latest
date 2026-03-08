@@ -93,6 +93,36 @@ def test_save_prompt_requires_supported_placeholder(tmp_path: Path, monkeypatch)
         library.save_prompt(invalid)
 
 
+def test_save_winner_prompt_allows_fully_resolved_text_and_lookup_by_text(tmp_path: Path, monkeypatch):
+    templates_path = tmp_path / "prompt_templates.json"
+    templates_path.write_text(json.dumps(_templates_payload()), encoding="utf-8")
+    monkeypatch.setattr(pl.config, "PROMPT_TEMPLATES_PATH", templates_path)
+
+    library = pl.PromptLibrary(tmp_path / "prompt_library.json")
+    winner = pl.LibraryPrompt(
+        id="winner-1",
+        name="Winner Prompt",
+        prompt_template="Book cover illustration only — Lucy Honeychurch embracing George Emerson on a Florentine hillside at sunset.",
+        style_anchors=[],
+        negative_prompt="no text",
+        source_book="A Room with a View — E. M. Forster",
+        source_model="openrouter/google/gemini-3-pro-image-preview",
+        quality_score=0.0,
+        saved_by="user",
+        created_at="2026-03-08T00:00:00+00:00",
+        notes="saved winner",
+        tags=["winner", "a-room-with-a-view", "base-4-romantic-realism"],
+        category="winner",
+        win_count=1,
+    )
+
+    library.save_prompt(winner)
+    saved = library.get_prompt("winner-1")
+    assert saved is not None
+    assert saved.category == "winner"
+    assert library.find_prompt_by_template_text(winner.prompt_template) is not None
+
+
 def test_alexandria_prompts_seeded_first_and_scene_placeholders_allowed(tmp_path: Path, monkeypatch):
     templates_path = tmp_path / "prompt_templates.json"
     templates_path.write_text(json.dumps(_templates_payload()), encoding="utf-8")

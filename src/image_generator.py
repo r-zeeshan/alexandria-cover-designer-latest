@@ -144,11 +144,14 @@ ALEXANDRIA_NEGATIVE_PROMPT = (
     "no labels, no watermarks, no signatures, no inscriptions of any kind. No modern elements, no photography, "
     "no 3D rendering, no digital art aesthetic, no gradients on background, no neon colours, no sans-serif fonts, "
     "no minimalist design, no stock photo look, no cartoonish style, no anime influence, no spelling mistakes, "
-    "no blurry medallion illustration, no off-centre composition, no white or light backgrounds."
+    "no blurry illustration, no off-centre composition, no white or light backgrounds. "
+    "No ornamental borders, no frames, no scrollwork, no filigree, no decorative edges, "
+    "no corner ornaments, no dividers."
 )
 _PROMPT_REMOVAL_PATTERNS: tuple[str, ...] = (
-    r"\bcircular vignette composition\b",
-    r"(?<!no )\bcircular(?:\s+medallion)?(?:\s+frame)?\b",
+    r"(?<!no )\bcircular\s+medallion(?:\s+illustration)?\b",
+    r"(?<!no )\bcircular\s+(?:frame|border|ring)\b",
+    r"(?<!no )\bgold\s+circular\s+border\b",
     r"\btypography(?:[- ]led)?\b",
     r"\btext[- ]safe\b",
     r"\btitle[- ]safe\b",

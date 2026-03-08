@@ -1128,6 +1128,54 @@ def test_seed_builtin_prompts_repairs_malformed_builtin_rows_without_overwrite(t
     assert "no border" in lowered_prompt or "no frame" in lowered_prompt
 
 
+def test_save_prompt_from_request_creates_winner_prompt_and_dedupes(tmp_path: Path):
+    cfg = _build_runtime_for_startup_checks(tmp_path)
+
+    created = qr._save_prompt_from_request(
+        runtime=cfg,
+        body={
+            "job_id": "job-123",
+            "book_id": "1",
+            "prompt_text": "Book cover illustration only — Lucy Honeychurch embracing George Emerson on a Florentine hillside at sunset.",
+            "scene_description": "Lucy Honeychurch embracing George Emerson on a Florentine hillside at sunset.",
+            "mood": "romantic, luminous, emotionally urgent",
+            "era": "Edwardian Italy",
+            "model_id": "openrouter/google/gemini-3-pro-image-preview",
+            "library_prompt_id": "alexandria-base-romantic-realism",
+            "quality_score": None,
+            "notes": "",
+        },
+    )
+
+    assert created["ok"] is True
+    assert created["already_exists"] is False
+
+    library = qr.PromptLibrary(cfg.prompt_library_path)
+    saved = library.get_prompt(created["prompt_id"])
+    assert saved is not None
+    assert saved.category == "winner"
+    assert saved.saved_by == "user"
+    assert saved.source_book.startswith("Book")
+    assert saved.source_model == "openrouter/google/gemini-3-pro-image-preview"
+    assert saved.win_count == 1
+    assert "winner" in saved.tags
+    assert "book" in saved.tags
+    assert "base-4-romantic-realism" in saved.tags
+
+    duplicate = qr._save_prompt_from_request(
+        runtime=cfg,
+        body={
+            "job_id": "job-456",
+            "book_id": "1",
+            "prompt_text": "Book cover illustration only — Lucy Honeychurch embracing George Emerson on a Florentine hillside at sunset.",
+            "model_id": "openrouter/google/gemini-3-pro-image-preview",
+        },
+    )
+    assert duplicate["ok"] is True
+    assert duplicate["already_exists"] is True
+    assert duplicate["prompt_id"] == created["prompt_id"]
+
+
 def test_dashboard_recent_results_includes_prompt_and_style_tags(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     cfg = _build_runtime_for_startup_checks(tmp_path)
     preview = cfg.tmp_dir / "composited" / "1" / "model" / "variant_1.jpg"

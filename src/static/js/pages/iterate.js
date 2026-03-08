@@ -365,7 +365,7 @@ function defaultSceneForBook(book) {
     || firstScene
     || book?.description
     || book?.default_prompt
-    || `a scene from "${book?.title || 'an ancient text'}"`
+    || `A pivotal dramatic moment from the literary work "${book?.title || 'an ancient text'}"${book?.author ? ` by ${book.author}` : ''}, depicting the central emotional conflict with period-accurate setting, costume, and atmosphere`
   ).trim();
 }
 
@@ -484,6 +484,34 @@ function normalizedPromptName(value) {
   return String(value || '').trim().toLowerCase();
 }
 
+function normalizedPromptText(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function promptCategoryToken(prompt) {
+  return String(prompt?.category || '').trim().toLowerCase();
+}
+
+function promptHasTag(prompt, tag) {
+  const needle = String(tag || '').trim().toLowerCase();
+  if (!needle) return false;
+  return (Array.isArray(prompt?.tags) ? prompt.tags : [])
+    .map((item) => String(item || '').trim().toLowerCase())
+    .includes(needle);
+}
+
+function filterPromptsForIterate(prompts, filterId = 'all') {
+  const token = String(filterId || 'all').trim().toLowerCase() || 'all';
+  const rows = Array.isArray(prompts) ? prompts : [];
+  if (token === 'winner') {
+    return rows.filter((prompt) => promptCategoryToken(prompt) === 'winner');
+  }
+  if (token === 'alexandria') {
+    return rows.filter((prompt) => promptHasTag(prompt, 'alexandria'));
+  }
+  return rows;
+}
+
 function findPromptByName(name) {
   const token = normalizedPromptName(name);
   if (!token) return null;
@@ -573,6 +601,39 @@ function saveRawButtonState(job) {
     title: '',
     driveUrl: '',
     status: '',
+  };
+}
+
+function savedPromptForJob(job) {
+  const explicitId = String(job?.save_prompt_id || '').trim();
+  if (explicitId) {
+    const direct = DB.dbGet('prompts', explicitId);
+    if (direct) return direct;
+  }
+  const promptText = normalizedPromptText(job?.prompt);
+  if (!promptText) return null;
+  return DB.dbGetAll('prompts').find((prompt) => normalizedPromptText(prompt?.prompt_template) === promptText) || null;
+}
+
+function savePromptButtonState(job) {
+  const status = String(job?.status || '').trim().toLowerCase();
+  const promptText = normalizedPromptText(job?.prompt);
+  const savedPrompt = savedPromptForJob(job);
+  if (savedPrompt) {
+    return {
+      label: '✅ Saved',
+      style: 'background:#2d6a4f;color:#fff;font-weight:600;',
+      title: `Saved to prompt library as ${String(savedPrompt.name || 'winner prompt')}.`,
+      disabled: true,
+      promptId: String(savedPrompt.id || '').trim(),
+    };
+  }
+  return {
+    label: '💾 Save Prompt',
+    style: '',
+    title: promptText && status === 'completed' ? 'Save this prompt to your library' : 'Complete a generation first.',
+    disabled: !(promptText && status === 'completed'),
+    promptId: '',
   };
 }
 
@@ -766,6 +827,11 @@ window.Pages.iterate = {
             <div class="form-group">
               <label class="form-label">Prompt template</label>
               <select class="form-select" id="iterPromptSel">${promptOptions}</select>
+              <div class="filters-bar mt-8" id="iterPromptFilterBar">
+                <button class="filter-chip active" type="button" data-prompt-filter="all">All</button>
+                <button class="filter-chip" type="button" data-prompt-filter="alexandria">Alexandria</button>
+                <button class="filter-chip" type="button" data-prompt-filter="winner">Winners</button>
+              </div>
               <div class="text-xs text-muted mt-8" id="iterWildcardSuggestion"></div>
             </div>
           </div>
@@ -824,6 +890,7 @@ window.Pages.iterate = {
     const modelSummaryEl = document.getElementById('iterModelSummary');
     const modelFilterButtons = Array.from(content.querySelectorAll('[data-model-filter]'));
     const modelActionButtons = Array.from(content.querySelectorAll('[data-model-action]'));
+    const promptFilterButtons = Array.from(content.querySelectorAll('[data-prompt-filter]'));
 
     const selectedBook = () => {
       const bookId = Number(selectEl?.value || 0);
@@ -879,6 +946,11 @@ window.Pages.iterate = {
       const book = selectedBook();
       const currentPromptId = String(promptSelEl?.value || '').trim();
       const currentPrompt = currentPromptId ? DB.dbGet('prompts', currentPromptId) : null;
+      if (activePromptFilter === 'winner') {
+        updateVariableFields(currentPrompt, { forceDefaults: true });
+        updateWildcardSuggestion(book);
+        return;
+      }
       const config = genrePromptConfigForBook(book);
       if (!book || !config || !promptSelEl) {
         updateVariableFields(currentPrompt, { forceDefaults: true });
@@ -901,6 +973,14 @@ window.Pages.iterate = {
     _lastVisibleModelIds = [];
     let activeModelFilter = 'recommended';
     let modelSearchText = '';
+    let activePromptFilter = 'all';
+    document.body.dataset.iterPromptFilter = activePromptFilter;
+
+    const syncPromptFilterButtons = () => {
+      promptFilterButtons.forEach((btn) => {
+        btn.classList.toggle('active', String(btn.dataset.promptFilter || 'all') === activePromptFilter);
+      });
+    };
 
     modeToggle?.addEventListener('change', () => {
       advanced.classList.toggle('hidden', !modeToggle.checked);
@@ -1041,6 +1121,17 @@ window.Pages.iterate = {
     });
 
     variantsEl?.addEventListener('change', updateCost);
+    promptFilterButtons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        activePromptFilter = String(btn.dataset.promptFilter || 'all').trim().toLowerCase() || 'all';
+        document.body.dataset.iterPromptFilter = activePromptFilter;
+        syncPromptFilterButtons();
+        const currentPromptId = String(promptSelEl?.value || '').trim();
+        this.refreshPromptDropdown(currentPromptId);
+        const nextPromptId = String(promptSelEl?.value || '').trim();
+        applyPromptSelection(nextPromptId, { forceAlexandriaDefaults: activePromptFilter !== 'winner' });
+      });
+    });
     promptSelEl?.addEventListener('change', () => {
       const promptId = String(promptSelEl.value || '').trim();
       applyPromptSelection(promptId, { forceAlexandriaDefaults: true });
@@ -1051,6 +1142,8 @@ window.Pages.iterate = {
       updateVariableFields(selected, { forceDefaults: false });
     });
     renderModels();
+    this.refreshPromptDropdown(String(promptSelEl?.value || '').trim());
+    syncPromptFilterButtons();
 
     document.getElementById('iterCancelBtn')?.addEventListener('click', () => JobQueue.cancelAll());
     document.getElementById('iterGenBtn')?.addEventListener('click', () => this.handleGenerate());
@@ -1099,6 +1192,9 @@ window.Pages.iterate = {
 
     const templateObj = promptId ? DB.dbGet('prompts', promptId) : null;
     const templateText = String(templateObj?.prompt_template || '').trim();
+    const resolvedScene = String(sceneVal || defaultSceneForBook(book)).trim();
+    const resolvedMood = String(moodVal || defaultMoodForBook(book)).trim();
+    const resolvedEra = String(eraVal || defaultEraForBook(book)).trim();
     const trimmedCustomPrompt = String(customPrompt || '').trim();
     const promptSource = trimmedCustomPrompt && trimmedCustomPrompt !== templateText
       ? 'custom'
@@ -1137,6 +1233,11 @@ window.Pages.iterate = {
           compose_prompt: promptPayload.composePrompt,
           preserve_prompt_text: promptPayload.preservePromptText,
           library_prompt_id: promptPayload.libraryPromptId,
+          prompt_name: String(templateObj?.name || '').trim(),
+          prompt_negative_prompt: String(templateObj?.negative_prompt || '').trim(),
+          scene_description: resolvedScene,
+          mood: resolvedMood,
+          era: resolvedEra,
           selected_cover_id: selectedCoverId,
           selected_cover_book_number: selectedCoverBookNumber,
           quality_score: null,
@@ -1269,6 +1370,7 @@ window.Pages.iterate = {
       const showComparison = Number(job.book_id || 0) > 0 && status === 'completed';
       const errorText = status === 'failed' ? String(job.error || '').trim() : '';
       const saveRawState = saveRawButtonState(job);
+      const savePromptState = savePromptButtonState(job);
       return `
         <div class="result-card ${hasPreview ? '' : 'result-card-empty'}" ${hasPreview ? `data-view="${job.id}"` : ''}>
           ${hasPreview
@@ -1289,7 +1391,7 @@ window.Pages.iterate = {
               <button class="btn btn-secondary btn-sm" data-dl-raw="${job.id}" ${showDownloads ? '' : 'disabled'}>⬇ Raw</button>
               <button class="btn btn-secondary btn-sm" data-view-qa-book="${Number(job.book_id || 0)}" ${showComparison ? '' : 'disabled'}>Compare</button>
               <button class="btn btn-sm" data-save-raw="${job.id}" data-drive-url="${escapeHtml(saveRawState.driveUrl)}" data-save-status="${escapeHtml(saveRawState.status)}" ${showDownloads ? '' : 'disabled'} style="${saveRawState.style}" title="${escapeHtml(saveRawState.title)}">${escapeHtml(saveRawState.label)}</button>
-              <button class="btn btn-secondary btn-sm" data-save-prompt="${job.id}">💾 Prompt</button>
+              <button class="btn btn-secondary btn-sm" data-save-prompt="${job.id}" data-prompt-id="${escapeHtml(savePromptState.promptId)}" ${savePromptState.disabled ? 'disabled' : ''} style="${savePromptState.style}" title="${escapeHtml(savePromptState.title)}">${escapeHtml(savePromptState.label)}</button>
             </div>
           </div>
         </div>
@@ -1337,7 +1439,10 @@ window.Pages.iterate = {
       e.stopPropagation();
       await this.saveRaw(btn.dataset.saveRaw, btn);
     }));
-    grid.querySelectorAll('[data-save-prompt]').forEach((btn) => btn.addEventListener('click', (e) => { e.stopPropagation(); this.savePromptFromJob(btn.dataset.savePrompt); }));
+    grid.querySelectorAll('[data-save-prompt]').forEach((btn) => btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.savePromptFromJob(btn.dataset.savePrompt, btn);
+    }));
   },
 
   viewFull(jobId, mode = 'composite') {
@@ -1536,26 +1641,34 @@ window.Pages.iterate = {
   refreshPromptDropdown(selectedId = '') {
     const promptSel = document.getElementById('iterPromptSel');
     if (!promptSel) return;
-    const prompts = sortPromptsForUI(DB.dbGetAll('prompts'));
+    const prompts = filterPromptsForIterate(sortPromptsForUI(DB.dbGetAll('prompts')), document.body?.dataset.iterPromptFilter || 'all');
     promptSel.innerHTML = ['<option value="">Default auto</option>']
       .concat(prompts.map((p) => `<option value="${p.id}">${p.name}</option>`))
       .join('');
-    if (selectedId) {
+    if (selectedId && prompts.some((prompt) => String(prompt.id || '') === String(selectedId))) {
       promptSel.value = String(selectedId);
+    } else {
+      promptSel.value = '';
     }
   },
 
-  async savePromptFromJob(jobId) {
+  async savePromptFromJob(jobId, button) {
     const job = DB.dbGet('jobs', jobId);
     if (!job?.prompt) return;
-    const book = DB.dbGet('books', job.book_id);
-    const title = String(book?.title || '').trim();
-    const author = String(book?.author || '').trim();
-    let template = String(job.prompt || '').trim();
-    if (title) template = template.replaceAll(title, '{title}');
-    if (author) template = template.replaceAll(author, '{author}');
-    if (!template.includes('{title}')) {
-      template = `For "{title}" by {author}: ${template}`.trim();
+    const existing = savedPromptForJob(job);
+    if (existing) {
+      job.save_prompt_id = String(existing.id || '').trim();
+      job.save_prompt_status = 'saved';
+      DB.dbPut('jobs', job);
+      this.loadExistingResults();
+      return;
+    }
+
+    const backendJobId = backendJobIdForJob(job) || String(job.id || '').trim();
+    const originalText = String(button?.textContent || '💾 Save Prompt');
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Saving...';
     }
 
     try {
@@ -1563,21 +1676,37 @@ window.Pages.iterate = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: `${book?.title || `Book ${job.book_id}`} - ${modelIdToLabel(job.model)} v${job.variant}`,
-          prompt_template: template,
-          category: 'Saved',
-          tags: ['iterative', 'result_card', String(job.model || '').trim().toLowerCase()],
-          style_anchors: job.style_id && job.style_id !== 'none' ? [job.style_id] : [],
-          notes: `Saved from iterate result card (${job.model} v${job.variant}).`,
+          job_id: backendJobId,
+          book_id: String(job.book_id || '').trim(),
+          prompt_text: String(job.prompt || '').trim(),
+          scene_description: String(job.scene_description || '').trim(),
+          mood: String(job.mood || '').trim(),
+          era: String(job.era || '').trim(),
+          model_id: String(job.model || '').trim(),
+          library_prompt_id: String(job.library_prompt_id || '').trim(),
+          quality_score: job.quality_score ?? null,
+          notes: '',
+          negative_prompt: String(job.prompt_negative_prompt || '').trim(),
         }),
       });
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        throw new Error(data.message || data.error || `HTTP ${response.status}`);
       }
+      job.save_prompt_id = String(data.prompt_id || '').trim();
+      job.save_prompt_status = 'saved';
+      job.save_prompt_saved_at = new Date().toISOString();
+      job.save_prompt_already_exists = Boolean(data.already_exists);
+      DB.dbPut('jobs', job);
       await DB.loadPrompts('classics');
-      this.refreshPromptDropdown();
-      Toast.success('Prompt saved');
+      this.refreshPromptDropdown(String(document.getElementById('iterPromptSel')?.value || '').trim());
+      this.loadExistingResults();
+      Toast.success(data.already_exists ? 'Prompt already saved' : 'Prompt saved');
     } catch (err) {
+      if (button) {
+        button.disabled = false;
+        button.textContent = originalText;
+      }
       Toast.error(`Prompt save failed: ${err.message || err}`);
     }
   },

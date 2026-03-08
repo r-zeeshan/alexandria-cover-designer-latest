@@ -119,3 +119,28 @@ def test_iterate_prompt_builder_keeps_legacy_style_diversifier_for_default_auto(
     assert result["styleId"] == "romantic-sublime"
     assert result["preservePromptText"] is False
     assert result["libraryPromptId"] == ""
+
+
+def test_iterate_prompt_builder_uses_evocative_scene_fallback_when_scene_missing():
+    result = _run_iterate_prompt_builder(
+        {
+            "book": {
+                "title": "A Room with a View",
+                "author": "E. M. Forster",
+            },
+            "templateObj": {
+                "id": "alexandria-base-romantic-realism",
+                "name": "BASE 4 Romantic Realism",
+                "prompt_template": "Book cover illustration only — {SCENE}. The mood is {MOOD}. Era reference: {ERA}.",
+            },
+            "promptId": "alexandria-base-romantic-realism",
+            "customPrompt": "",
+            "sceneVal": "",
+            "moodVal": "",
+            "eraVal": "",
+            "style": {"id": "romantic-sublime", "label": "Romantic Sublime"},
+        }
+    )
+
+    assert 'A pivotal dramatic moment from the literary work "A Room with a View" by E. M. Forster' in result["prompt"]
+    assert "centered and fully contained" not in result["prompt"]

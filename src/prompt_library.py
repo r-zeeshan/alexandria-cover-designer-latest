@@ -35,7 +35,9 @@ ALEXANDRIA_SYSTEM_NEGATIVE_PROMPT = (
     "no labels, no watermarks, no signatures, no inscriptions of any kind. No modern elements, no photography, "
     "no 3D rendering, no digital art aesthetic, no gradients on background, no neon colours, no sans-serif fonts, "
     "no minimalist design, no stock photo look, no cartoonish style, no anime influence, no spelling mistakes, "
-    "no blurry medallion illustration, no off-centre composition, no white or light backgrounds."
+    "no blurry illustration, no off-centre composition, no white or light backgrounds. "
+    "No ornamental borders, no frames, no scrollwork, no filigree, no decorative edges, no corner ornaments, "
+    "no dividers."
 )
 
 ALEXANDRIA_PROMPT_SPECS: tuple[dict[str, object], ...] = (
@@ -44,13 +46,17 @@ ALEXANDRIA_PROMPT_SPECS: tuple[dict[str, object], ...] = (
         "name": "BASE 1 — Classical Devotion",
         "prompt_template": (
             "Book cover illustration only — no text, no title, no author name, no lettering of any kind. "
-            "Deep navy blue background (#0A1628). Ornate gold baroque scrollwork border frame with floral filigree along all four edges. "
-            "Centered circular medallion illustration in the style of Byzantine iconography and Renaissance religious painting: {SCENE}. "
-            "The illustration is framed by a thick gold circular border with decorative notching. "
-            "Leave clear empty space above and below the medallion where text will be composited later. "
-            "Small gold ornamental dividers as decorative accents. "
-            "The overall mood is {MOOD}. Era reference: {ERA}. Classical, sacred, museum-quality. "
-            "No modern elements. Aspect ratio 6:9, high resolution, print-ready."
+            "No border, no frame, no ornamental elements, no decorative edges. "
+            "Richly detailed circular book illustration in the golden-age illustration style with saturated colours "
+            "and defined linework: {SCENE}. Sacred atmosphere with luminous divine light rendered as bold golden "
+            "beams breaking through deep blue celestial clouds. Figures in detailed period-accurate religious "
+            "vestments with visible fabric embroidery and textile patterns. Every surface richly detailed — "
+            "individual stone blocks in temple walls, carved relief on sacred objects, folds of robes with visible "
+            "drape weight. Background filled with meaningful religious symbolism specific to the text — relics, "
+            "celestial spheres, architectural fragments of ancient temples. Deep saturated palette of burnished "
+            "gold, sapphire blue, warm candlelit amber, and crimson against deep navy tones. Circular vignette "
+            "composition. The overall mood is {MOOD}. Era reference: {ERA}. Detailed, hand-painted quality with "
+            "the richness and precision of a premium illustrated Bible. Square format, high resolution, print-ready."
         ),
         "notes": "Alexandria three-part formula prompt. Best for: Religious, Apocryphal, Biblical.",
         "tags": ["alexandria", "base", "classical-devotion", "religious", "apocryphal", "biblical"],
@@ -60,12 +66,17 @@ ALEXANDRIA_PROMPT_SPECS: tuple[dict[str, object], ...] = (
         "name": "BASE 2 — Philosophical Gravitas",
         "prompt_template": (
             "Book cover illustration only — no text, no title, no author name, no lettering of any kind. "
-            "Deep navy blue background (#0A1628). Clean gold geometric border frame with Art Deco influence — straight lines, symmetrical corners, "
-            "subtle Greek key pattern along edges. Centered circular medallion illustration in the style of neoclassical painting: {SCENE}. "
-            "The illustration shows balanced composition with architectural or natural elements evoking contemplation. "
-            "Framed by a refined gold circular border. Leave clear empty space above and below the medallion where text will be composited later. "
-            "Minimal ornamental dividers — single gold rules. The mood is {MOOD}. Era reference: {ERA}. "
-            "Intellectual, timeless, restrained elegance. Aspect ratio 6:9, high resolution, print-ready."
+            "No border, no frame, no ornamental elements, no decorative edges. Richly detailed circular book "
+            "illustration in the golden-age illustration style with saturated colours and defined linework: "
+            "{SCENE}. Dense period-specific environmental detail rendered with illustrative precision — ancient "
+            "weathered stone architecture with visible cracks and moss, scattered manuscripts and bamboo scrolls, "
+            "gnarled trees with individually drawn leaves, distant landscapes fading into atmospheric haze. Figures "
+            "in historically accurate robes or period dress positioned in contemplative stillness, their expressions "
+            "conveying deep thought. Warm earth tones — rich ochre, sienna, umber, deep olive green — with "
+            "strategic golden light illuminating the central figure. The environment tells the story as much as the "
+            "figures — every object in the scene is meaningful to the text. Circular vignette composition. The mood "
+            "is {MOOD}. Era reference: {ERA}. Detailed, hand-painted book illustration quality. Square format, high "
+            "resolution, print-ready."
         ),
         "notes": "Alexandria three-part formula prompt. Best for: Philosophy, Self-Help, Strategy.",
         "tags": ["alexandria", "base", "philosophical-gravitas", "philosophy", "self-help", "strategy"],
@@ -75,13 +86,17 @@ ALEXANDRIA_PROMPT_SPECS: tuple[dict[str, object], ...] = (
         "name": "BASE 3 — Gothic Atmosphere",
         "prompt_template": (
             "Book cover illustration only — no text, no title, no author name, no lettering of any kind. "
-            "Deep navy-black background (#080F1D). Heavy ornate gold gothic frame with pointed arch motifs, thorned vine scrollwork, "
-            "and subtle skull or gargoyle corner embellishments. Centered circular medallion illustration in the style of dark Romantic-era painting "
-            "with dramatic chiaroscuro lighting: {SCENE}. The illustration emphasizes shadow, supernatural atmosphere, and Victorian-era dread. "
-            "Framed by an elaborate gold circular border with thorn or chain detailing. "
-            "Leave clear empty space above and below the medallion where text will be composited later. "
-            "Gothic ornamental dividers — small bat-wing or fleuron motifs. The mood is {MOOD}. Era reference: {ERA}. "
-            "Dark, atmospheric, hauntingly beautiful. Aspect ratio 6:9, high resolution, print-ready."
+            "No border, no frame, no ornamental elements, no decorative edges. Richly detailed circular book "
+            "illustration in a dark, atmospheric illustration style with saturated colours and dramatic contrast: "
+            "{SCENE}. Densely atmospheric — every element contributes to mounting dread. Moonlight casting long "
+            "shadows through crumbling Gothic architecture with individually rendered stones and cracks. Mist "
+            "curling in detailed tendrils around ancient gravestones. Spectral light bleeding through illustrated "
+            "stained glass. Figures caught in moments of terror or dark revelation, faces lit by a single dramatic "
+            "light source. Palette of deep blacks, midnight blues, sickly verdigris greens, with vivid accents of "
+            "blood-red, ghostly white, or sickly yellow. Dead vines, thorns, and poisonous flowers rendered in "
+            "obsessive illustrative detail. Circular vignette composition. The mood is {MOOD}. Era reference: "
+            "{ERA}. Dark, richly detailed book illustration with the atmospheric intensity of a Victorian penny "
+            "dreadful frontispiece. Square format, high resolution, print-ready."
         ),
         "notes": "Alexandria three-part formula prompt. Best for: Horror, Gothic, Supernatural.",
         "tags": ["alexandria", "base", "gothic-atmosphere", "horror", "gothic", "supernatural"],
@@ -91,13 +106,18 @@ ALEXANDRIA_PROMPT_SPECS: tuple[dict[str, object], ...] = (
         "name": "BASE 4 — Romantic Realism",
         "prompt_template": (
             "Book cover illustration only — no text, no title, no author name, no lettering of any kind. "
-            "Deep navy blue background (#0F1B33). Elegant gold classical frame with balanced symmetry — laurel wreath corners, "
-            "subtle column or pilaster motifs along vertical edges, simple rule along top and bottom. "
-            "Centered circular medallion illustration in the style of 19th-century Romantic realism and academic painting: {SCENE}. "
-            "Rich colour palette within the medallion — warm earth tones, dramatic skies, detailed period clothing. "
-            "Framed by a refined gold circular border. Leave clear empty space above and below the medallion where text will be composited later. "
-            "Elegant gold fleuron dividers. The mood is {MOOD}. Era reference: {ERA}. "
-            "Literary, emotionally resonant, painterly. Aspect ratio 6:9, high resolution, print-ready."
+            "No border, no frame, no ornamental elements, no decorative edges. Richly detailed circular book "
+            "illustration in the golden-age illustration style with saturated colours, warm romantic lighting, and "
+            "defined linework: {SCENE}. Every element densely rendered with illustrative precision — individual "
+            "flower petals and stamens, visible fabric embroidery patterns, architectural details, leaves and "
+            "blossoms on trees, ripples and reflections in water. Figures in period-accurate clothing with visible "
+            "textile textures, positioned in the SPECIFIC recognisable location from the book. Sweeping landscape "
+            "or intimate interior filled with environmental storytelling — objects, flora, and setting that could "
+            "only belong to THIS story. Rich, warm, saturated colour palette with dramatic sky — golden sunsets in "
+            "amber and rose, twilight in deep blue and violet, or storm-charged atmospheres in dark teal. The scene "
+            "captures the central emotional moment of the book. Circular vignette composition. The mood is {MOOD}. "
+            "Era reference: {ERA}. Lush, detailed book illustration with the romantic intensity of a premium "
+            "illustrated classics edition. Square format, high resolution, print-ready."
         ),
         "notes": "Alexandria three-part formula prompt. Best for: Classical Literature, Novels, Drama.",
         "tags": ["alexandria", "base", "romantic-realism", "literature", "novels", "drama"],
@@ -107,14 +127,17 @@ ALEXANDRIA_PROMPT_SPECS: tuple[dict[str, object], ...] = (
         "name": "BASE 5 — Esoteric Mysticism",
         "prompt_template": (
             "Book cover illustration only — no text, no title, no author name, no lettering of any kind. "
-            "Deep navy blue background (#0A1628) with very subtle dark celestial texture (barely visible star field). "
-            "Intricate gold border frame combining alchemical symbols, sacred geometry patterns, and esoteric motifs — pentagrams, ouroboros elements, celestial circles. "
-            "Centered circular medallion illustration in the style of medieval illuminated manuscripts crossed with Romantic-era mystical painting: {SCENE}. "
-            "The illustration features mystical light sources, symbolic objects, and arcane atmosphere. "
-            "Framed by a gold circular border with astrological or alchemical notations. "
-            "Leave clear empty space above and below the medallion where text will be composited later. "
-            "Esoteric ornamental dividers — small pentacle or celestial motifs. The mood is {MOOD}. Era reference: {ERA}. "
-            "Mysterious, ancient, forbidden knowledge. Aspect ratio 6:9, high resolution, print-ready."
+            "No border, no frame, no ornamental elements, no decorative edges. Richly detailed circular book "
+            "illustration in a mystical, visionary style with saturated jewel-tone colours and bold linework: "
+            "{SCENE}. Dense with arcane visual detail — alchemical apparatus with individual glass vessels, "
+            "celestial phenomena with visible star patterns and swirling cosmic clouds, mechanical gears and "
+            "astronomical instruments rendered in precise metallic detail. Central figure emanating or receiving "
+            "divine cosmic light — bold golden rays, concentric celestial spheres, deep blue swirling energy. Rich "
+            "saturated jewel-tone palette — deep sapphire blue, molten gold, emerald, amethyst — against profound "
+            "darkness. Every surface has illustrated texture: oxidised bronze, cracked leather, hammered gold, "
+            "weathered parchment. Circular vignette composition. The mood is {MOOD}. Era reference: {ERA}. Richly "
+            "detailed mystical book illustration, as though revealing forbidden knowledge the viewer was never meant "
+            "to see. Square format, high resolution, print-ready."
         ),
         "notes": "Alexandria three-part formula prompt. Best for: Occult, Mystical, Forbidden Texts.",
         "tags": ["alexandria", "base", "esoteric-mysticism", "occult", "mystical", "esoteric"],
@@ -124,12 +147,15 @@ ALEXANDRIA_PROMPT_SPECS: tuple[dict[str, object], ...] = (
         "name": "WILDCARD 1 — Edo Meets Alexandria",
         "prompt_template": (
             "Book cover illustration only — no text, no title, no author name, no lettering of any kind. "
-            "Deep navy blue background (#0A1628). Gold ornamental border frame with Japanese-influenced geometric patterns — interlocking hexagons, wave motifs (seigaiha), "
-            "and cloud scrolls rendered in gold leaf style. Centered circular medallion illustration painted in the style of Katsushika Hokusai meets classical European oil painting: {SCENE}, "
-            "rendered with ukiyo-e compositional principles but Western chiaroscuro lighting. "
-            "Framed by a gold circular border with wave-pattern detailing. Leave clear empty space above and below the medallion where text will be composited later. "
-            "Gold ornamental dividers using stylised cloud motifs. The mood is {MOOD}. Era reference: {ERA}. "
-            "Aspect ratio 6:9, high resolution, print-ready."
+            "No border, no frame, no ornamental elements, no decorative edges. Richly detailed circular book "
+            "illustration fusing Japanese ukiyo-e woodblock style with golden-age European book illustration: "
+            "{SCENE}. Ukiyo-e compositional principles — dramatic asymmetry, bold wave-like forms, flat colour "
+            "planes with sharp defined outlines — combined with Western atmospheric depth and warm lighting. Dense "
+            "environmental detail in both traditions: individual wave crests, cherry blossom petals, cloud "
+            "formations, intricate fabric patterns. Rich saturated indigo, vermillion, ivory, and gold palette "
+            "with deep contrast. Circular vignette composition. The mood is {MOOD}. Era reference: {ERA}. The "
+            "graphic precision of a Hokusai woodblock print merged with the rich colour of a European illustrated "
+            "classic. Square format, high resolution, print-ready."
         ),
         "notes": "Alexandria wildcard prompt. Japanese woodblock elegance fused with classical oil storytelling.",
         "tags": ["alexandria", "wildcard", "edo-meets-alexandria", "japanese", "ukiyoe"],
@@ -139,12 +165,17 @@ ALEXANDRIA_PROMPT_SPECS: tuple[dict[str, object], ...] = (
         "name": "WILDCARD 2 — Pre-Raphaelite Garden",
         "prompt_template": (
             "Book cover illustration only — no text, no title, no author name, no lettering of any kind. "
-            "Deep navy blue background (#0A1628). Gold Art Nouveau border frame — sinuous organic lines, flowing botanical forms (iris, lily, vine tendrils) "
-            "in the style of Alphonse Mucha, rendered entirely in gold on navy. "
-            "Centered circular medallion illustration in the Pre-Raphaelite painting style: {SCENE}, with luminous skin tones, flowing drapery, rich botanical details, "
-            "and stained-glass-window quality light. Framed by a gold circular border with intertwined botanical motifs. "
-            "Leave clear empty space above and below the medallion where text will be composited later. "
-            "Art Nouveau floral dividers. The mood is {MOOD}. Era reference: {ERA}. Aspect ratio 6:9, high resolution, print-ready."
+            "No border, no frame, no ornamental elements, no decorative edges. Richly detailed circular book "
+            "illustration in a lush Pre-Raphaelite and Art Nouveau illustration style: {SCENE}. Luminous skin "
+            "tones with delicate warmth. Flowing drapery in rich jewel colours — emerald, ruby, sapphire — with "
+            "every fold individually rendered. Abundant botanical details filling every area — roses with "
+            "individual thorns, lilies with visible stamens, trailing ivy with dew drops, wildflowers identifiable "
+            "by species. Warm stained-glass quality light in gold and violet. Hair rendered strand by strand, "
+            "catching light differently on every wave. Every surface lush with natural detail — moss on stones, "
+            "bark texture on trees, petals floating on water. Circular vignette composition. The mood is {MOOD}. "
+            "Era reference: {ERA}. Lush, jewel-toned book illustration with the romantic detail density of a "
+            "Waterhouse painting rendered as a premium illustrated edition. Square format, high resolution, "
+            "print-ready."
         ),
         "notes": "Alexandria wildcard prompt. Mucha framing plus Pre-Raphaelite colour for lush literary covers.",
         "tags": ["alexandria", "wildcard", "pre-raphaelite-garden", "pre-raphaelite", "art-nouveau"],
@@ -154,12 +185,16 @@ ALEXANDRIA_PROMPT_SPECS: tuple[dict[str, object], ...] = (
         "name": "WILDCARD 3 — Illuminated Manuscript",
         "prompt_template": (
             "Book cover illustration only — no text, no title, no author name, no lettering of any kind. "
-            "Deep navy blue background (#0A1628). Gold border frame in the style of medieval illuminated manuscript marginalia — intricate interlace knotwork (Book of Kells style), "
-            "inhabited vine scrolls with tiny gold animals and figures woven into the borders. "
-            "Centered circular medallion illustration in the style of a hand-painted medieval miniature with gold leaf highlights: {SCENE}, "
-            "rendered with flat perspective, vivid colours on gold ground, and meticulous decorative detail. "
-            "Framed by a Celtic knotwork gold circular border. Leave clear empty space above and below the medallion where text will be composited later. "
-            "Celtic knot dividers. The mood is {MOOD}. Era reference: {ERA}. Aspect ratio 6:9, high resolution, print-ready."
+            "No border, no frame, no ornamental elements, no decorative edges. Richly detailed circular book "
+            "illustration in the style of a hand-painted medieval miniature with gold leaf highlights: {SCENE}. "
+            "Vivid opaque colours on burnished gold ground with the obsessive decorative density of the Book of "
+            "Kells or Très Riches Heures du Duc de Berry. Figures in three-quarter view with stylised gestures, "
+            "wearing intricately patterned robes with individually drawn embroidery. Every surface filled with "
+            "meaningful pattern — tessellated floors, brocade fabrics, tooled leather, carved stone. Rich "
+            "saturated lapis lazuli blues, vermillion reds, malachite greens, and hammered gold dominate. Circular "
+            "vignette composition. The mood is {MOOD}. Era reference: {ERA}. Ancient, sacred, illustrated as "
+            "though by a master illuminator in a 9th-century monastery scriptorium. Square format, high "
+            "resolution, print-ready."
         ),
         "notes": "Alexandria wildcard prompt. Medieval manuscript energy for ancient or sacred material.",
         "tags": ["alexandria", "wildcard", "illuminated-manuscript", "medieval", "celtic"],
@@ -169,13 +204,15 @@ ALEXANDRIA_PROMPT_SPECS: tuple[dict[str, object], ...] = (
         "name": "WILDCARD 4 — Celestial Cartography",
         "prompt_template": (
             "Book cover illustration only — no text, no title, no author name, no lettering of any kind. "
-            "Deep navy blue background (#0A1628). Gold border frame with celestial cartography motifs — constellation lines, zodiac symbols, orbital paths, "
-            "and compass roses rendered in fine gold engraving style. "
-            "Centered circular medallion illustration in the style of astronomical engravings from Harmonia Macrocosmica crossed with Romantic landscape painting: {SCENE}, "
-            "with dramatic celestial elements — star fields, eclipses, planetary alignments, or aurora-like light integrated into the composition. "
-            "Framed by a gold circular border designed as an astrolabe or armillary sphere. "
-            "Leave clear empty space above and below the medallion where text will be composited later. "
-            "Gold star-and-compass dividers. The mood is {MOOD}. Era reference: {ERA}. Aspect ratio 6:9, high resolution, print-ready."
+            "No border, no frame, no ornamental elements, no decorative edges. Richly detailed circular book "
+            "illustration in the style of 17th-century astronomical engravings crossed with richly coloured book "
+            "illustration: {SCENE}. Dense celestial detail — individually rendered stars, planetary bodies with "
+            "visible surface features, eclipses with corona flare, aurora-like curtains of light woven through the "
+            "composition. Fine copper-engraving linework combined with rich saturated colour. Deep indigo sky "
+            "gradations with golden celestial bodies rendered with metallic luminosity. Figures positioned among or "
+            "contemplating celestial phenomena. Circular vignette composition. The mood is {MOOD}. Era reference: "
+            "{ERA}. The scientific precision of a Harmonia Macrocosmica star chart rendered with the rich colour of "
+            "a premium illustrated edition. Square format, high resolution, print-ready."
         ),
         "notes": "Alexandria wildcard prompt. Cosmic engraving language for knowledge-rich or metaphysical titles.",
         "tags": ["alexandria", "wildcard", "celestial-cartography", "celestial", "astronomy"],
@@ -185,12 +222,16 @@ ALEXANDRIA_PROMPT_SPECS: tuple[dict[str, object], ...] = (
         "name": "WILDCARD 5 — Temple of Knowledge",
         "prompt_template": (
             "Book cover illustration only — no text, no title, no author name, no lettering of any kind. "
-            "Deep navy blue background (#0A1628). Gold border frame in the style of ancient Egyptian temple relief carving — papyrus columns, lotus capitals, "
-            "winged sun disc at top center, ankh and djed pillar motifs along sides, all rendered as raised gold relief on navy. "
-            "Centered circular medallion illustration combining Egyptian tomb painting flatness with Orientalist oil painting richness: {SCENE}, "
-            "rendered with the bold outlines and profile views of Egyptian art but the colour depth and atmospheric lighting of 19th-century Orientalist masters. "
-            "Framed by a gold cartouche-style circular border. Leave clear empty space above and below the medallion where text will be composited later. "
-            "Gold scarab or lotus dividers. The mood is {MOOD}. Era reference: {ERA}. Aspect ratio 6:9, high resolution, print-ready."
+            "No border, no frame, no ornamental elements, no decorative edges. Richly detailed circular book "
+            "illustration combining Egyptian artistic traditions with richly coloured Orientalist illustration "
+            "style: {SCENE}. Bold outlines and ceremonial profile views characteristic of pharaonic art, with rich "
+            "saturated colour, atmospheric lighting, and illustrative depth. Dense architectural detail — carved "
+            "relief patterns (non-readable), papyrus columns with visible paint traces, lotus capitals, sandstone "
+            "textures. Warm saturated palette of desert gold, lapis lazuli blue, terracotta, and malachite green, "
+            "with dramatic shaft-of-light illumination from temple openings. Circular vignette composition. The mood "
+            "is {MOOD}. Era reference: {ERA}. Richly detailed book illustration depicting ancient wisdom, as though "
+            "illustrating the Great Library of Alexandria at the height of its glory. Square format, high "
+            "resolution, print-ready."
         ),
         "notes": "Alexandria wildcard prompt. Direct homage to Alexandria's Egyptian origin and temple symbolism.",
         "tags": ["alexandria", "wildcard", "temple-of-knowledge", "egyptian", "mystical"],
@@ -249,7 +290,8 @@ class PromptLibrary:
 
     def save_prompt(self, prompt: LibraryPrompt) -> None:
         """Save a successful prompt to the library."""
-        _validate_prompt_template(prompt.prompt_template)
+        category = str(getattr(prompt, "category", "general") or "general")
+        _validate_prompt_template(prompt.prompt_template, category=category)
         existing = self._prompts.get(prompt.id)
         normalized = LibraryPrompt(
             id=str(prompt.id),
@@ -264,7 +306,7 @@ class PromptLibrary:
             created_at=str(prompt.created_at or _utc_now()),
             notes=str(prompt.notes or ""),
             tags=[str(tag).strip() for tag in list(prompt.tags)],
-            category=str(getattr(prompt, "category", "general") or "general"),
+            category=category,
             version=max(1, int(getattr(prompt, "version", 1) or 1)),
             usage_count=max(0, int(getattr(prompt, "usage_count", 0) or 0)),
             win_count=max(0, int(getattr(prompt, "win_count", 0) or 0)),
@@ -301,6 +343,16 @@ class PromptLibrary:
         """Return one prompt by id."""
         return self._prompts.get(str(prompt_id))
 
+    def find_prompt_by_template_text(self, prompt_text: str) -> LibraryPrompt | None:
+        """Return one prompt whose stored text matches after whitespace normalization."""
+        target = _normalize_prompt_text(prompt_text)
+        if not target:
+            return None
+        for prompt in self._prompts.values():
+            if _normalize_prompt_text(prompt.prompt_template) == target:
+                return prompt
+        return None
+
     def get_versions(self, prompt_id: str) -> list[dict[str, object]]:
         """Return historical versions for one prompt id."""
         rows = self._versions.get(str(prompt_id), [])
@@ -320,7 +372,8 @@ class PromptLibrary:
 
         name = str(updates.get("name", current.name) or current.name).strip() or current.name
         prompt_template = str(updates.get("prompt_template", current.prompt_template) or current.prompt_template).strip() or current.prompt_template
-        _validate_prompt_template(prompt_template)
+        target_category = str(updates.get("category", current.category) or current.category or "general")
+        _validate_prompt_template(prompt_template, category=target_category)
 
         style_anchors = updates.get("style_anchors", current.style_anchors)
         tags = updates.get("tags", current.tags)
@@ -337,7 +390,7 @@ class PromptLibrary:
             created_at=current.created_at,
             notes=str(updates.get("notes", current.notes) or current.notes),
             tags=[str(tag).strip() for tag in tags] if isinstance(tags, list) else list(current.tags),
-            category=str(updates.get("category", current.category) or current.category or "general"),
+            category=target_category,
             version=max(1, int(current.version or 1) + 1),
             usage_count=max(0, int(updates.get("usage_count", current.usage_count) or current.usage_count)),
             win_count=max(0, int(updates.get("win_count", current.win_count) or current.win_count)),
@@ -753,8 +806,21 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _validate_prompt_template(template: str) -> None:
-    if not _has_supported_placeholder(template):
+def _normalize_prompt_text(value: str) -> str:
+    return " ".join(str(value or "").split()).strip()
+
+
+def _category_allows_plain_prompt(category: str) -> bool:
+    return str(category or "").strip().lower() == "winner"
+
+
+def _validate_prompt_template(template: str, *, category: str = "general") -> None:
+    normalized = _normalize_prompt_text(template)
+    if not normalized:
+        raise ValueError("Prompt template must not be empty.")
+    if _category_allows_plain_prompt(category):
+        return
+    if not _has_supported_placeholder(normalized):
         joined = ", ".join(SUPPORTED_REUSABLE_PLACEHOLDERS)
         raise ValueError(f"Prompt template must include at least one reusable placeholder ({joined}).")
 
