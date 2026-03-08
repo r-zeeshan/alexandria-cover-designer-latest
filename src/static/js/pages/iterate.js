@@ -59,6 +59,20 @@ const GENRE_PROMPT_ALIASES = {
   spirituality: 'mystical',
   mysticism: 'mystical',
 };
+const ALEXANDRIA_AUTO_ROTATE_PROMPT_IDS = [
+  'alexandria-base-classical-devotion',
+  'alexandria-base-philosophical-gravitas',
+  'alexandria-base-gothic-atmosphere',
+  'alexandria-base-romantic-realism',
+  'alexandria-base-esoteric-mysticism',
+  'alexandria-wildcard-edo-meets-alexandria',
+  'alexandria-wildcard-pre-raphaelite-garden',
+  'alexandria-wildcard-illuminated-manuscript',
+  'alexandria-wildcard-celestial-cartography',
+  'alexandria-wildcard-temple-of-knowledge',
+];
+const AUTO_ROTATE_PROMPT_OPTION_LABEL = 'All 10 prompts (auto-rotate)';
+const AUTO_ROTATE_PROMPT_INFO = 'Each variant will use a different prompt: 5 base styles + 5 wildcard styles';
 
 function modelIdToLabel(modelId) {
   const model = OpenRouter.MODELS.find((m) => m.id === modelId);
@@ -458,6 +472,17 @@ function buildGenerationJobPrompt({ book, templateObj, promptId, customPrompt, s
 window.__ITERATE_TEST_HOOKS__ = window.__ITERATE_TEST_HOOKS__ || {};
 window.__ITERATE_TEST_HOOKS__.buildGenerationJobPrompt = buildGenerationJobPrompt;
 
+function isAutoRotateSelection(promptId, customPrompt = '') {
+  return !String(promptId || '').trim() && !String(customPrompt || '').trim();
+}
+
+function autoRotatePromptAssignments(variantCount) {
+  const total = Math.max(1, Number(variantCount || 1));
+  return Array.from({ length: total }, (_, index) => ALEXANDRIA_AUTO_ROTATE_PROMPT_IDS[index % ALEXANDRIA_AUTO_ROTATE_PROMPT_IDS.length]);
+}
+
+window.__ITERATE_TEST_HOOKS__.autoRotatePromptAssignments = autoRotatePromptAssignments;
+
 function sortPromptsForUI(prompts) {
   return [...(Array.isArray(prompts) ? prompts : [])].sort((left, right) => {
     const leftTags = new Set((Array.isArray(left?.tags) ? left.tags : []).map((tag) => String(tag || '').trim().toLowerCase()).filter(Boolean));
@@ -622,18 +647,18 @@ function savePromptButtonState(job) {
   if (savedPrompt) {
     return {
       label: '✅ Saved',
-      style: 'background:#2d6a4f;color:#fff;font-weight:600;',
       title: `Saved to prompt library as ${String(savedPrompt.name || 'winner prompt')}.`,
       disabled: true,
       promptId: String(savedPrompt.id || '').trim(),
+      className: 'save-prompt-btn saved',
     };
   }
   return {
     label: '💾 Save Prompt',
-    style: '',
     title: promptText && status === 'completed' ? 'Save this prompt to your library' : 'Complete a generation first.',
     disabled: !(promptText && status === 'completed'),
     promptId: '',
+    className: 'save-prompt-btn',
   };
 }
 
@@ -777,7 +802,7 @@ window.Pages.iterate = {
       .sort((a, b) => Number(a.number || 0) - Number(b.number || 0))
       .map((book) => `<option value="${book.id}">${book.number}. ${book.title}</option>`)
       .join('');
-    const promptOptions = ['<option value="">Default auto</option>']
+    const promptOptions = [`<option value="">${AUTO_ROTATE_PROMPT_OPTION_LABEL}</option>`]
       .concat(prompts.map((p) => `<option value="${p.id}">${p.name}</option>`))
       .join('');
 
@@ -832,6 +857,7 @@ window.Pages.iterate = {
                 <button class="filter-chip" type="button" data-prompt-filter="alexandria">Alexandria</button>
                 <button class="filter-chip" type="button" data-prompt-filter="winner">Winners</button>
               </div>
+              <div class="text-xs text-muted mt-8 hidden" id="iterPromptRotationInfo">${escapeHtml(AUTO_ROTATE_PROMPT_INFO)}</div>
               <div class="text-xs text-muted mt-8" id="iterWildcardSuggestion"></div>
             </div>
           </div>
@@ -879,6 +905,7 @@ window.Pages.iterate = {
     const advanced = document.getElementById('iterAdvanced');
     const variantsEl = document.getElementById('iterVariants');
     const promptSelEl = document.getElementById('iterPromptSel');
+    const promptRotationInfoEl = document.getElementById('iterPromptRotationInfo');
     const wildcardSuggestionEl = document.getElementById('iterWildcardSuggestion');
     const customPromptEl = document.getElementById('iterPrompt');
     const varFieldsEl = document.getElementById('iterVarFields');
@@ -918,11 +945,11 @@ window.Pages.iterate = {
       });
     };
 
-    const updateVariableFields = (templateObj, { forceDefaults = false } = {}) => {
+    const updateVariableFields = (templateObj, { forceDefaults = false, promptId = '', customPrompt = '' } = {}) => {
       if (!varFieldsEl || !sceneEl || !moodEl || !eraEl) return;
       const book = selectedBook();
-      const activePromptText = String(templateObj?.prompt_template || customPromptEl?.value || '').trim();
-      const usesAlexandriaFields = activePromptText.includes('{SCENE}');
+      const activePromptText = String(templateObj?.prompt_template || customPrompt || customPromptEl?.value || '').trim();
+      const usesAlexandriaFields = Boolean(book) && (isAutoRotateSelection(promptId, customPrompt) || activePromptText.includes('{SCENE}'));
       varFieldsEl.classList.toggle('hidden', !usesAlexandriaFields);
       if (!usesAlexandriaFields) return;
       if (forceDefaults || !String(sceneEl.value || '').trim()) sceneEl.value = defaultSceneForBook(book);
@@ -930,41 +957,42 @@ window.Pages.iterate = {
       if (forceDefaults || !String(eraEl.value || '').trim()) eraEl.value = defaultEraForBook(book);
     };
 
+    const syncPromptRotationInfo = (promptId = String(promptSelEl?.value || '').trim(), customPrompt = String(customPromptEl?.value || '').trim()) => {
+      if (!promptRotationInfoEl) return;
+      const shouldShow = Boolean(selectedBook()) && isAutoRotateSelection(promptId, customPrompt);
+      promptRotationInfoEl.classList.toggle('hidden', !shouldShow);
+    };
+
     const applyPromptSelection = (promptId, { forceAlexandriaDefaults = false } = {}) => {
-      const selected = promptId ? DB.dbGet('prompts', String(promptId)) : null;
+      const promptIdToken = String(promptId || '').trim();
+      const selected = promptIdToken ? DB.dbGet('prompts', promptIdToken) : null;
       if (selected?.prompt_template && customPromptEl) {
         customPromptEl.value = String(selected.prompt_template);
-      } else if (!promptId && customPromptEl) {
+      } else if (!promptIdToken && customPromptEl) {
         customPromptEl.value = '';
       }
-      updateVariableFields(selected, { forceDefaults: forceAlexandriaDefaults });
+      updateVariableFields(selected, {
+        forceDefaults: forceAlexandriaDefaults,
+        promptId: promptIdToken,
+        customPrompt: String(customPromptEl?.value || '').trim(),
+      });
+      syncPromptRotationInfo(promptIdToken, String(customPromptEl?.value || '').trim());
       updateWildcardSuggestion(selectedBook());
       return selected;
     };
 
     const autoSelectGenrePrompt = () => {
       const book = selectedBook();
-      const currentPromptId = String(promptSelEl?.value || '').trim();
-      const currentPrompt = currentPromptId ? DB.dbGet('prompts', currentPromptId) : null;
-      if (activePromptFilter === 'winner') {
-        updateVariableFields(currentPrompt, { forceDefaults: true });
+      if (!promptSelEl) {
+        updateVariableFields(null, { forceDefaults: true, promptId: '', customPrompt: '' });
         updateWildcardSuggestion(book);
+        syncPromptRotationInfo('', '');
         return;
       }
-      const config = genrePromptConfigForBook(book);
-      if (!book || !config || !promptSelEl) {
-        updateVariableFields(currentPrompt, { forceDefaults: true });
-        updateWildcardSuggestion(book);
-        return;
-      }
-      const basePrompt = findPromptByName(config.base);
-      if (!basePrompt) {
-        updateVariableFields(currentPrompt, { forceDefaults: true });
-        updateWildcardSuggestion(book);
-        return;
-      }
-      promptSelEl.value = String(basePrompt.id || '');
-      applyPromptSelection(basePrompt.id, { forceAlexandriaDefaults: true });
+      promptSelEl.value = '';
+      if (variantsEl) variantsEl.value = '10';
+      applyPromptSelection('', { forceAlexandriaDefaults: true });
+      updateCost();
     };
 
     _defaultSelectedModelIds = defaultSelectedModelIds(OpenRouter.MODELS);
@@ -1134,16 +1162,24 @@ window.Pages.iterate = {
     });
     promptSelEl?.addEventListener('change', () => {
       const promptId = String(promptSelEl.value || '').trim();
+      if (variantsEl) {
+        if (!promptId) variantsEl.value = '10';
+        else if (String(variantsEl.value || '').trim() === '10') variantsEl.value = '1';
+        updateCost();
+      }
       applyPromptSelection(promptId, { forceAlexandriaDefaults: true });
     });
     customPromptEl?.addEventListener('input', () => {
       const promptId = String(promptSelEl?.value || '').trim();
       const selected = promptId ? DB.dbGet('prompts', promptId) : null;
-      updateVariableFields(selected, { forceDefaults: false });
+      const customPrompt = String(customPromptEl?.value || '').trim();
+      updateVariableFields(selected, { forceDefaults: false, promptId, customPrompt });
+      syncPromptRotationInfo(promptId, customPrompt);
     });
     renderModels();
     this.refreshPromptDropdown(String(promptSelEl?.value || '').trim());
     syncPromptFilterButtons();
+    syncPromptRotationInfo();
 
     document.getElementById('iterCancelBtn')?.addEventListener('click', () => JobQueue.cancelAll());
     document.getElementById('iterGenBtn')?.addEventListener('click', () => this.handleGenerate());
@@ -1191,15 +1227,22 @@ window.Pages.iterate = {
     if (!book) return;
 
     const templateObj = promptId ? DB.dbGet('prompts', promptId) : null;
-    const templateText = String(templateObj?.prompt_template || '').trim();
     const resolvedScene = String(sceneVal || defaultSceneForBook(book)).trim();
     const resolvedMood = String(moodVal || defaultMoodForBook(book)).trim();
     const resolvedEra = String(eraVal || defaultEraForBook(book)).trim();
     const trimmedCustomPrompt = String(customPrompt || '').trim();
-    const promptSource = trimmedCustomPrompt && trimmedCustomPrompt !== templateText
-      ? 'custom'
-      : (promptId ? 'template' : (trimmedCustomPrompt ? 'custom' : 'template'));
     const styleSelections = StyleDiversifier.selectDiverseStyles(selectedModels.length * variantCount);
+    const rotatePromptIds = isAutoRotateSelection(promptId, trimmedCustomPrompt)
+      ? autoRotatePromptAssignments(variantCount)
+      : [];
+    const rotateTemplates = rotatePromptIds.map((assignedId) => ({
+      promptId: assignedId,
+      templateObj: DB.dbGet('prompts', assignedId),
+    }));
+    if (rotateTemplates.some((row) => !row.templateObj)) {
+      Toast.error('Prompt rotation is unavailable because one or more Alexandria prompts are missing from the library.');
+      return;
+    }
     const selectedCoverId = String(book.cover_jpg_id || book.drive_cover_id || '').trim();
     const selectedCoverBookNumber = Number(book.number || book.id || bookId || 0);
 
@@ -1209,11 +1252,14 @@ window.Pages.iterate = {
       for (let variant = 1; variant <= variantCount; variant += 1) {
         const style = styleSelections[styleIndex % styleSelections.length];
         styleIndex += 1;
+        const assignment = rotateTemplates[variant - 1] || null;
+        const assignedPromptId = String(assignment?.promptId || promptId).trim();
+        const assignedTemplate = assignment?.templateObj || templateObj || null;
         const promptPayload = buildGenerationJobPrompt({
           book,
-          templateObj,
-          promptId,
-          customPrompt,
+          templateObj: assignedTemplate,
+          promptId: assignedPromptId,
+          customPrompt: assignment ? '' : customPrompt,
           sceneVal,
           moodVal,
           eraVal,
@@ -1228,13 +1274,13 @@ window.Pages.iterate = {
           prompt: promptPayload.prompt,
           style_id: promptPayload.styleId,
           style_label: promptPayload.styleLabel,
-          prompt_source: promptSource,
+          prompt_source: promptPayload.promptSource,
           backend_prompt_source: promptPayload.backendPromptSource,
           compose_prompt: promptPayload.composePrompt,
           preserve_prompt_text: promptPayload.preservePromptText,
           library_prompt_id: promptPayload.libraryPromptId,
-          prompt_name: String(templateObj?.name || '').trim(),
-          prompt_negative_prompt: String(templateObj?.negative_prompt || '').trim(),
+          prompt_name: String(assignedTemplate?.name || '').trim(),
+          prompt_negative_prompt: String(assignedTemplate?.negative_prompt || '').trim(),
           scene_description: resolvedScene,
           mood: resolvedMood,
           era: resolvedEra,
@@ -1386,12 +1432,12 @@ window.Pages.iterate = {
             </div>
             <div class="card-meta">$${Number(job.cost_usd || 0).toFixed(3)} · ${job.style_label || 'Default'}</div>
             ${errorText ? `<div class="card-meta text-danger">${errorText}</div>` : ''}
-            <div class="flex gap-4 mt-8">
+            <div class="result-card-actions mt-8">
               <button class="btn btn-secondary btn-sm" data-dl-comp="${job.id}" ${showDownloads ? '' : 'disabled'}>⬇ Download</button>
               <button class="btn btn-secondary btn-sm" data-dl-raw="${job.id}" ${showDownloads ? '' : 'disabled'}>⬇ Raw</button>
               <button class="btn btn-secondary btn-sm" data-view-qa-book="${Number(job.book_id || 0)}" ${showComparison ? '' : 'disabled'}>Compare</button>
               <button class="btn btn-sm" data-save-raw="${job.id}" data-drive-url="${escapeHtml(saveRawState.driveUrl)}" data-save-status="${escapeHtml(saveRawState.status)}" ${showDownloads ? '' : 'disabled'} style="${saveRawState.style}" title="${escapeHtml(saveRawState.title)}">${escapeHtml(saveRawState.label)}</button>
-              <button class="btn btn-secondary btn-sm" data-save-prompt="${job.id}" data-prompt-id="${escapeHtml(savePromptState.promptId)}" ${savePromptState.disabled ? 'disabled' : ''} style="${savePromptState.style}" title="${escapeHtml(savePromptState.title)}">${escapeHtml(savePromptState.label)}</button>
+              <button class="btn btn-sm ${escapeHtml(savePromptState.className)}" data-save-prompt="${job.id}" data-prompt-id="${escapeHtml(savePromptState.promptId)}" ${savePromptState.disabled ? 'disabled' : ''} title="${escapeHtml(savePromptState.title)}">${escapeHtml(savePromptState.label)}</button>
             </div>
           </div>
         </div>
@@ -1642,7 +1688,7 @@ window.Pages.iterate = {
     const promptSel = document.getElementById('iterPromptSel');
     if (!promptSel) return;
     const prompts = filterPromptsForIterate(sortPromptsForUI(DB.dbGetAll('prompts')), document.body?.dataset.iterPromptFilter || 'all');
-    promptSel.innerHTML = ['<option value="">Default auto</option>']
+    promptSel.innerHTML = [`<option value="">${AUTO_ROTATE_PROMPT_OPTION_LABEL}</option>`]
       .concat(prompts.map((p) => `<option value="${p.id}">${p.name}</option>`))
       .join('');
     if (selectedId && prompts.some((prompt) => String(prompt.id || '') === String(selectedId))) {

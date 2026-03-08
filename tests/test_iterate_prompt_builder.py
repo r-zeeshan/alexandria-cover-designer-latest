@@ -12,7 +12,7 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
-def _run_iterate_prompt_builder(payload: dict) -> dict:
+def _run_iterate_hook(hook_name: str, payload) -> dict | list | str:
     if shutil.which("node") is None:
         pytest.skip("node not installed")
 
@@ -39,7 +39,7 @@ def _run_iterate_prompt_builder(payload: dict) -> dict:
 
         const source = fs.readFileSync('src/static/js/pages/iterate.js', 'utf8');
         vm.runInThisContext(source, {{ filename: 'iterate.js' }});
-        const fn = window.__ITERATE_TEST_HOOKS__.buildGenerationJobPrompt;
+        const fn = window.__ITERATE_TEST_HOOKS__[{json.dumps(hook_name)}];
         const result = fn({json.dumps(payload)});
         process.stdout.write(JSON.stringify(result));
         """
@@ -53,6 +53,10 @@ def _run_iterate_prompt_builder(payload: dict) -> dict:
     )
     assert proc.returncode == 0, proc.stderr or proc.stdout
     return json.loads(proc.stdout)
+
+
+def _run_iterate_prompt_builder(payload: dict) -> dict:
+    return _run_iterate_hook("buildGenerationJobPrompt", payload)
 
 
 def test_iterate_prompt_builder_keeps_library_prompt_precomposed():
@@ -144,3 +148,22 @@ def test_iterate_prompt_builder_uses_evocative_scene_fallback_when_scene_missing
 
     assert 'A pivotal dramatic moment from the literary work "A Room with a View" by E. M. Forster' in result["prompt"]
     assert "centered and fully contained" not in result["prompt"]
+
+
+def test_auto_rotate_prompt_assignments_cycle_all_alexandria_prompts():
+    result = _run_iterate_hook("autoRotatePromptAssignments", 12)
+
+    assert result == [
+        "alexandria-base-classical-devotion",
+        "alexandria-base-philosophical-gravitas",
+        "alexandria-base-gothic-atmosphere",
+        "alexandria-base-romantic-realism",
+        "alexandria-base-esoteric-mysticism",
+        "alexandria-wildcard-edo-meets-alexandria",
+        "alexandria-wildcard-pre-raphaelite-garden",
+        "alexandria-wildcard-illuminated-manuscript",
+        "alexandria-wildcard-celestial-cartography",
+        "alexandria-wildcard-temple-of-knowledge",
+        "alexandria-base-classical-devotion",
+        "alexandria-base-philosophical-gravitas",
+    ]

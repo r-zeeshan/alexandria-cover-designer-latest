@@ -150,6 +150,7 @@ CGI_CATALOG_CACHE_PATH = PROJECT_ROOT / "catalog_cache.json"
 CGI_CATALOG_MAX_AGE_SECONDS = 3600
 SAVE_RAW_DRIVE_FOLDER_ID = "1SHzAaDU1pN0ECC61KCRtYijv4dp4IR59"
 SAVE_RAW_LOCAL_DIRNAME = "Chosen Winner Generated Covers"
+SAVE_PROMPT_DRIVE_SUBDIR = "saved_prompts"
 FALLBACK_FAVICON_SVG = (
     b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">'
     b'<rect width="64" height="64" rx="12" fill="#0A1628"/>'
@@ -5006,12 +5007,27 @@ def _save_prompt_from_request(*, runtime: config.Config, body: dict[str, Any]) -
         win_count=1,
     )
     library.save_prompt(prompt)
+    saved_prompt = library.get_prompt(prompt.id)
+    saved_prompt_payload = asdict(saved_prompt or prompt)
+    drive_url = ""
+    drive_warning = ""
+    try:
+        drive_url = _upload_saved_prompt_metadata_to_drive(
+            runtime=runtime,
+            prompt_payload=saved_prompt_payload,
+            prompt_id=prompt.id,
+        )
+    except Exception as exc:
+        drive_warning = f"Drive upload failed: {exc}"
+        logger.warning(drive_warning)
     return {
         "ok": True,
         "already_exists": False,
         "prompt_id": prompt.id,
         "message": "Prompt saved to library",
-        "prompt": asdict(library.get_prompt(prompt.id)),
+        "prompt": saved_prompt_payload,
+        "drive_url": drive_url or None,
+        "drive_warning": drive_warning or None,
     }
 
 
@@ -13241,6 +13257,84 @@ def _upload_folder_to_drive(*, runtime: config.Config, local_folder: Path, folde
         service.files().create(body=file_metadata, media_body=media, fields="id").execute()
 
     return f"https://drive.google.com/drive/folders/{created_folder_id}"
+
+
+def _ensure_drive_child_folder(*, service: Any, parent_folder_id: str, folder_name: str) -> str:
+    folder_name_query = str(folder_name).replace("'", "\\'")
+    query = (
+        f"name='{folder_name_query}' and "
+        f"'{str(parent_folder_id)}' in parents and "
+        "mimeType='application/vnd.google-apps.folder' and trashed=false"
+    )
+    existing = service.files().list(q=query, fields="files(id, name)", pageSize=1).execute().get("files", [])
+    if existing:
+        folder_id = str(existing[0].get("id", "")).strip()
+        if folder_id:
+            return folder_id
+
+    created = service.files().create(
+        body={
+            "name": str(folder_name),
+            "mimeType": "application/vnd.google-apps.folder",
+            "parents": [str(parent_folder_id)],
+        },
+        fields="id",
+    ).execute()
+    folder_id = str(created.get("id", "")).strip()
+    if not folder_id:
+        raise RuntimeError("Google Drive folder creation did not return an id")
+    return folder_id
+
+
+def _upload_saved_prompt_metadata_to_drive(
+    *,
+    runtime: config.Config,
+    prompt_payload: dict[str, Any],
+    prompt_id: str,
+    parent_folder_id: str = SAVE_RAW_DRIVE_FOLDER_ID,
+) -> str:
+    drive_mode, drive_error = _drive_credentials_mode(runtime)
+    if not drive_mode:
+        raise RuntimeError(drive_error or "Google Drive credentials are not configured.")
+
+    credentials_path = _resolve_credentials_path(runtime)
+    if not credentials_path.is_absolute():
+        credentials_path = PROJECT_ROOT / credentials_path
+    service = gdrive_sync.authenticate(credentials_path if credentials_path.exists() else None)
+    child_folder_id = _ensure_drive_child_folder(
+        service=service,
+        parent_folder_id=parent_folder_id,
+        folder_name=SAVE_PROMPT_DRIVE_SUBDIR,
+    )
+
+    file_name = f"winner_prompt_{_prompt_slug_token(prompt_id, fallback='winner-prompt')}.json"
+    temp_path = Path(tempfile.mkstemp(prefix="winner-prompt-", suffix=".json")[1])
+    try:
+        temp_path.write_text(json.dumps(prompt_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        file_name_query = file_name.replace("'", "\\'")
+        query = (
+            f"name='{file_name_query}' and "
+            f"'{str(child_folder_id)}' in parents and trashed=false"
+        )
+        existing = service.files().list(q=query, fields="files(id, name)", pageSize=1).execute().get("files", [])
+        media = gdrive_sync.MediaFileUpload(str(temp_path), mimetype="application/json")
+        if existing:
+            file_id = str(existing[0].get("id", "")).strip()
+            if not file_id:
+                raise RuntimeError("Google Drive file update target is missing an id")
+            service.files().update(fileId=file_id, media_body=media).execute()
+        else:
+            created = service.files().create(
+                body={"name": file_name, "parents": [child_folder_id]},
+                media_body=media,
+                fields="id",
+            ).execute()
+            file_id = str(created.get("id", "")).strip()
+            if not file_id:
+                raise RuntimeError("Google Drive file creation did not return an id")
+        return f"https://drive.google.com/file/d/{file_id}/view"
+    finally:
+        temp_path.unlink(missing_ok=True)
 
 
 def _build_book_download_zip(*, runtime: config.Config, book_number: int) -> tuple[Path, str]:

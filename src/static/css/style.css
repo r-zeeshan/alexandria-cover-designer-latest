@@ -751,6 +751,46 @@ tr:hover td {
   padding: 10px;
 }
 
+.result-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.result-card-actions .btn {
+  font-size: 0.75rem;
+  line-height: 1.2;
+  padding: 6px 10px;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.save-prompt-btn {
+  background: #c8a951;
+  color: #0a1628;
+  border: 1px solid rgba(10, 22, 40, 0.14);
+  font-weight: 600;
+}
+
+.save-prompt-btn:hover:not(:disabled) {
+  background: #d4b962;
+  border-color: #d4b962;
+}
+
+.save-prompt-btn.saved,
+.save-prompt-btn.saved:disabled {
+  background: #2d7d46;
+  color: #fff;
+  border-color: #2d7d46;
+  opacity: 1;
+}
+
+.save-prompt-btn:disabled:not(.saved) {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .card-meta {
   font-size: 11px;
   color: var(--muted);

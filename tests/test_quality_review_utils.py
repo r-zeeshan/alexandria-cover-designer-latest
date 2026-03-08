@@ -1176,6 +1176,59 @@ def test_save_prompt_from_request_creates_winner_prompt_and_dedupes(tmp_path: Pa
     assert duplicate["prompt_id"] == created["prompt_id"]
 
 
+def test_save_prompt_from_request_returns_drive_url_when_upload_succeeds(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    cfg = _build_runtime_for_startup_checks(tmp_path)
+    monkeypatch.setattr(
+        qr,
+        "_upload_saved_prompt_metadata_to_drive",
+        lambda **_kwargs: "https://drive.google.com/file/d/prompt-file/view",
+    )
+
+    created = qr._save_prompt_from_request(
+        runtime=cfg,
+        body={
+            "job_id": "job-789",
+            "book_id": "1",
+            "prompt_text": "Book cover illustration only — Lucy Honeychurch and George Emerson on a Florentine hillside at sunset.",
+            "model_id": "openrouter/google/gemini-3-pro-image-preview",
+        },
+    )
+
+    assert created["ok"] is True
+    assert created["drive_url"] == "https://drive.google.com/file/d/prompt-file/view"
+    assert created["drive_warning"] is None
+
+
+def test_save_prompt_from_request_keeps_local_save_when_drive_upload_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    cfg = _build_runtime_for_startup_checks(tmp_path)
+
+    def _raise_drive_failure(**_kwargs):
+        raise RuntimeError("storageQuotaExceeded")
+
+    monkeypatch.setattr(qr, "_upload_saved_prompt_metadata_to_drive", _raise_drive_failure)
+
+    created = qr._save_prompt_from_request(
+        runtime=cfg,
+        body={
+            "job_id": "job-790",
+            "book_id": "1",
+            "prompt_text": "Book cover illustration only — Lucy Honeychurch alone on a Florentine terrace at blue hour.",
+            "model_id": "openrouter/google/gemini-3-pro-image-preview",
+        },
+    )
+
+    assert created["ok"] is True
+    assert created["already_exists"] is False
+    assert created["drive_url"] is None
+    assert "storageQuotaExceeded" in str(created["drive_warning"])
+
+
 def test_dashboard_recent_results_includes_prompt_and_style_tags(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     cfg = _build_runtime_for_startup_checks(tmp_path)
     preview = cfg.tmp_dir / "composited" / "1" / "model" / "variant_1.jpg"
