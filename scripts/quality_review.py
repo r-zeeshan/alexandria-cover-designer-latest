@@ -1749,9 +1749,7 @@ def _serialize_generation_results(
     if fit_overlay.exists():
         fit_overlay_rel = _to_project_relative(fit_overlay)
 
-    raw_job_token = re.sub(r"[^A-Za-z0-9_-]+", "", str(job_id or "").strip())[:24]
-    if not raw_job_token:
-        raw_job_token = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%f")
+    raw_job_token = _generation_artifact_job_token(job_id=job_id)
 
     for row in results:
         image_rel = _to_project_relative(row.image_path) if row.image_path else None
@@ -1774,15 +1772,14 @@ def _serialize_generation_results(
             candidate = _resolve_composited_candidate(row.image_path, runtime=runtime)
             if candidate and candidate.exists():
                 composed = _to_project_relative(candidate)
-                composite_dir = runtime.output_dir / "saved_composites" / str(row.book_number)
-                composite_dir.mkdir(parents=True, exist_ok=True)
-                composite_dest = composite_dir / f"{raw_job_token}_variant_{row.variant}_{model_token}.jpg"
-                try:
-                    shutil.copy2(str(candidate), str(composite_dest))
-                    persisted_composite_path = _to_project_relative(composite_dest)
-                    logger.info("Persisted composite image to %s", composite_dest)
-                except Exception as exc:
-                    logger.warning("Failed to persist composite image: %s", exc)
+                persisted_composite_path = _persist_composite_image(
+                    runtime=runtime,
+                    book_number=row.book_number,
+                    variant=row.variant,
+                    model_token=model_token,
+                    composite_source=candidate,
+                    job_token=raw_job_token,
+                )
         serialized.append(
             {
                 "book_number": row.book_number,
@@ -1810,18 +1807,68 @@ def _serialize_generation_results(
     return serialized
 
 
+def _generation_artifact_job_token(*, job_id: str = "", row: dict[str, Any] | None = None) -> str:
+    explicit = re.sub(r"[^A-Za-z0-9_-]+", "", str(job_id or "").strip())[:24]
+    if explicit:
+        return explicit
+    if isinstance(row, dict):
+        raw_art_path = str(row.get("raw_art_path", "") or "").strip()
+        if raw_art_path:
+            stem = Path(raw_art_path).stem
+            match = re.match(r"(?P<token>.+?)_variant_\d+_", stem)
+            if match:
+                token = re.sub(r"[^A-Za-z0-9_-]+", "", str(match.group("token") or "").strip())[:24]
+                if token:
+                    return token
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%f")
+
+
+def _persist_composite_image(
+    *,
+    runtime: config.Config,
+    book_number: int,
+    variant: int,
+    model_token: str,
+    composite_source: Path,
+    job_token: str,
+) -> str | None:
+    if not composite_source.exists():
+        return None
+    composite_dir = runtime.output_dir / "saved_composites" / str(book_number)
+    composite_dir.mkdir(parents=True, exist_ok=True)
+    composite_dest = composite_dir / f"{job_token}_variant_{int(variant)}_{model_token}.jpg"
+    try:
+        shutil.copy2(str(composite_source), str(composite_dest))
+        logger.info("Persisted composite image to %s", composite_dest)
+        return _to_project_relative(composite_dest)
+    except Exception as exc:
+        logger.warning("Failed to persist composite image: %s", exc)
+        return None
+
+
 def _hydrate_serialized_result_paths(*, runtime: config.Config, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     hydrated: list[dict[str, Any]] = []
     for row in rows:
         if not isinstance(row, dict):
             continue
         payload = dict(row)
+        model_token = str(payload.get("model", "unknown") or "unknown").replace("/", "_").replace(" ", "_")
+        saved_composite = _project_path_if_exists(payload.get("saved_composited_path"))
         image_path_raw = str(payload.get("image_path", "")).strip()
         if image_path_raw:
             image_path = PROJECT_ROOT / image_path_raw
             candidate = _resolve_composited_candidate(image_path, runtime=runtime)
             if candidate and candidate.exists():
                 payload["composited_path"] = _to_project_relative(candidate)
+                if saved_composite is None or not saved_composite.exists():
+                    payload["saved_composited_path"] = _persist_composite_image(
+                        runtime=runtime,
+                        book_number=_safe_int(payload.get("book_number"), 0),
+                        variant=_safe_int(payload.get("variant"), 0),
+                        model_token=model_token,
+                        composite_source=candidate,
+                        job_token=_generation_artifact_job_token(row=payload),
+                    )
                 pdf_candidate = _resolve_composited_companion(candidate, ".pdf")
                 if pdf_candidate and pdf_candidate.exists():
                     payload["composited_pdf_path"] = _to_project_relative(pdf_candidate)
@@ -1831,6 +1878,15 @@ def _hydrate_serialized_result_paths(*, runtime: config.Config, rows: list[dict[
             else:
                 existing_composite = _project_path_if_exists(payload.get("composited_path"))
                 if existing_composite is not None:
+                    if saved_composite is None or not saved_composite.exists():
+                        payload["saved_composited_path"] = _persist_composite_image(
+                            runtime=runtime,
+                            book_number=_safe_int(payload.get("book_number"), 0),
+                            variant=_safe_int(payload.get("variant"), 0),
+                            model_token=model_token,
+                            composite_source=existing_composite,
+                            job_token=_generation_artifact_job_token(row=payload),
+                        )
                     pdf_candidate = _resolve_composited_companion(existing_composite, ".pdf")
                     if pdf_candidate and pdf_candidate.exists():
                         payload["composited_pdf_path"] = _to_project_relative(pdf_candidate)

@@ -1017,6 +1017,43 @@ def test_serialize_generation_results_persists_job_unique_raw_and_composite_arti
     assert (qr.PROJECT_ROOT / str(second[0]["saved_composited_path"])).exists()
 
 
+def test_hydrate_serialized_result_paths_persists_saved_composite_after_compositing(tmp_path: Path):
+    cfg = _build_runtime_for_startup_checks(tmp_path)
+    model = "openrouter/google/gemini-3-pro-image-preview"
+    model_dir = cfg.tmp_dir / "generated" / "1" / qr.image_generator._model_to_directory(model)  # type: ignore[attr-defined]
+    model_dir.mkdir(parents=True, exist_ok=True)
+    image_path = model_dir / "variant_1.png"
+    Image.new("RGB", (64, 64), (21, 31, 41)).save(image_path, format="PNG")
+
+    composite_dir = cfg.tmp_dir / "composited" / "1" / qr.image_generator._model_to_directory(model)  # type: ignore[attr-defined]
+    composite_dir.mkdir(parents=True, exist_ok=True)
+    composite_path = composite_dir / "variant_1.jpg"
+    Image.new("RGB", (64, 64), (51, 61, 71)).save(composite_path, format="JPEG")
+
+    raw_dir = cfg.output_dir / "raw_art" / "1"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    raw_path = raw_dir / "job-hydrate_variant_1_openrouter_google_gemini-3-pro-image-preview.png"
+    Image.new("RGB", (64, 64), (81, 91, 101)).save(raw_path, format="PNG")
+
+    hydrated = qr._hydrate_serialized_result_paths(
+        runtime=cfg,
+        rows=[
+            {
+                "book_number": 1,
+                "variant": 1,
+                "model": model,
+                "image_path": qr._to_project_relative(image_path),
+                "raw_art_path": qr._to_project_relative(raw_path),
+                "composited_path": None,
+                "saved_composited_path": None,
+            }
+        ],
+    )
+
+    assert hydrated[0]["saved_composited_path"]
+    assert (qr.PROJECT_ROOT / str(hydrated[0]["saved_composited_path"])).exists()
+
+
 def test_seed_builtin_prompts_creates_templates_and_is_idempotent(tmp_path: Path):
     cfg = _build_runtime_for_startup_checks(tmp_path)
     seeded = qr._seed_builtin_prompts(runtime=cfg, actor="test", overwrite=False)
