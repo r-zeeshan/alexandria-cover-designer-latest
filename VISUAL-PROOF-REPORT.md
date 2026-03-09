@@ -985,3 +985,55 @@ Prompt-28 proof artifacts:
 - `/tmp/alexandria-proof-live-prompt28/live-wildcards-band-prompt28.png`
 - `/tmp/alexandria-proof-live-prompt28/live-iterate-config-prompt28.png`
 - `/tmp/alexandria-proof-live-prompt28/live-iterate-results-prompt28.png`
+
+### 3.0.14 PROMPT-30 Full Fix Proof (2026-03-09)
+- Functional commits: `ba4d78a`, `271d211`
+- Deployment packaging commits: `19854c7`, `cb1d7ed`
+- Deployments:
+  - `c05865fa-85c3-44b7-affc-ea8daaafacb0` (`SUCCESS`) proved the code path but exposed a real packaging/runtime gap: live enrichment coverage was still `0/2397` and Gemini pricing still showed the bad tiny fallback values.
+  - `68fc72a2-4cc4-4d34-ad62-1ad6d0d5635f`, `f7a4ea5f-702a-41c9-87e0-a27f9c949faa`, `441a699d-aff3-4c44-a910-865501344b3f`, and `150a8169-440b-4387-8684-2eba5ab0cf6d` (`FAILED`) were honest failed packaging attempts while Railway repeatedly omitted the enriched catalog payload from the build context.
+  - `fd2b0b9a-4167-48f2-b8e3-777f65559f47` (`SUCCESS`) is the corrected live runtime after switching the Docker build to fetch the committed `config/book_catalog_enriched.json.gz` from GitHub raw and decompress it during image build.
+- Live URL: `https://web-production-900a7.up.railway.app`
+
+Verification summary:
+- Full enrichment run completed for all `2397` books with `provider=openai`, `model=gpt-4o-mini`, `usable_books=2397`, `generic_rows=0`, `validation.passed=true`, and total enrichment cost `$9.110742`.
+- Common-sense checks were performed before commit:
+  - `Gulliver’s Travels into Several Remote Regions of the World` contains `Lemuel Gulliver`, `Lilliputians`, and `The island of Lilliput`.
+  - `Dracula` contains `Jonathan Harker`, `Count Dracula's castle in Transylvania`, and scene content specific to Dracula rather than generic template language.
+- Local validation passed on the final code:
+  - `python3 scripts/validate_prompt_resolution.py`
+  - `python3 -m src.book_enricher --validate --output config/book_catalog_enriched.json`
+  - `python3 -m py_compile src/book_enricher.py scripts/quality_review.py scripts/validate_prompt_resolution.py src/config.py`
+  - `python3 -m pytest tests/test_book_enricher_module.py tests/test_iterate_prompt_builder.py tests/test_validate_prompt_resolution.py -q`
+  - `.venv/bin/python -m pytest tests/test_quality_review_server_smoke.py -q -k 'iterate_books_view_filters_by_number'`
+  - `python3 -m pytest tests/test_config_module.py -q -k 'sync_openrouter_pricing'`
+  - `.venv/bin/python -m pytest tests/test_quality_review_utils.py -q -k 'api_models_payload_prefers_runtime_cost_when_history_is_zero'`
+  - `node --check src/static/js/pages/iterate.js`
+  - `node --check src/static/js/db.js`
+- Live API verification on `fd2b0b9a-4167-48f2-b8e3-777f65559f47`:
+  - `GET /api/health` returned `books_cataloged=2397`, `books_generated=1`, `total_images=1`, `total_cost=0.02`, and startup check `Only 2397/2397 books have usable enrichment data`, with the only remaining startup warning being Drive write access.
+  - `GET /api/models` returned corrected live pricing values:
+    - `openrouter/google/gemini-3-pro-image-preview` -> `$0.020`
+    - `openrouter/google/gemini-2.5-flash-image` -> `$0.003`
+    - `google/gemini-3-pro-image-preview` -> `$0.020`
+    - `google/gemini-2.5-flash-image` -> `$0.003`
+  - `GET /api/iterate-data?catalog=classics&view=books&search=dracula&limit=1&offset=0` returned compact search results immediately with `Dracula` and `prompt_components.title_keywords=["dracula"]`.
+- Live UI verification on the deployed app:
+  - Iterate now loads `2397 books` into the searchable combobox instead of the old unusable `<select>`.
+  - Typing `dracula` in the book field filters down to Dracula-specific matches.
+  - The model cards show nonzero Gemini prices in the UI, including `Nano Banana Pro $0.020` and `Gemini 2.5 Flash $0.003`.
+  - A live `Dracula` generation completed through the deployed Iterate page at `$0.020`, and the completed result card rendered in `Recent Results`.
+
+Residual issues observed during live proof:
+- Browser console still reports `404` for `/api/books/52/cover-preview?source=catalog&catalog=classics`. This predates PROMPT-30 and did not block generation.
+- The result card `Compare` action currently opens `/api/visual-qa/image/52?catalog=classics`, which reproducibly returns `HTTP 502` on the deployed app. This was verified both in Playwright and with direct `curl`.
+- Drive write access warning remains unchanged and is still the only startup warning in `/api/health`.
+
+Prompt-30 proof artifacts:
+- `/tmp/alexandria-proof-live-prompt30/live-iterate-search-prompt30.png`
+- `/tmp/alexandria-proof-live-prompt30/live-iterate-result-prompt30.png`
+- `/tmp/alexandria-proof-live-prompt30/live-iterate-result-card-prompt30.png`
+- `/tmp/alexandria-proof-live-prompt30/live-compare-502-prompt30.png`
+- `/tmp/alexandria-proof-live-prompt30/health-live.json`
+- `/tmp/alexandria-proof-live-prompt30/dracula-books-view.json`
+- `/tmp/alexandria-proof-live-prompt30/dracula-books-view-summary.json`
