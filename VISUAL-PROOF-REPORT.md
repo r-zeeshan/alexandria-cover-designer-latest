@@ -2,7 +2,7 @@
 
 Last updated: `2026-03-09`
 Deployment URL: `https://web-production-900a7.up.railway.app`
-Deployment ID: `ede2c904-a7d2-41c7-b7ae-8b38c4fa43b0`
+Deployment ID: `980848f9-ff15-4527-b19b-bc8d45335020`
 
 ## 1.13 PROMPT-29 Enrichment Rewrite + Drive Write Truth + Pricing Sync (2026-03-09)
 - Git commit (master):
