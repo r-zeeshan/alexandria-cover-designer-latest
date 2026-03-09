@@ -36,7 +36,7 @@ RUN mkdir -p config scripts
 COPY scripts/quality_review.py scripts/quality_review.py
 COPY config/catalogs.json config/catalogs.json
 COPY config/book_catalog.json config/book_catalog.json
-COPY config/book_catalog_enriched.json config/book_catalog_enriched.json
+COPY config/book_catalog_enriched.json.gz config/book_catalog_enriched.json.gz
 COPY config/book_prompts.json config/book_prompts.json
 COPY config/book_catalog_test-catalog.json config/book_catalog_test-catalog.json
 COPY config/book_prompts_test-catalog.json config/book_prompts_test-catalog.json
@@ -54,6 +54,21 @@ COPY config/mockup_templates.json config/mockup_templates.json
 COPY config/mockup_background_prompts.json config/mockup_background_prompts.json
 COPY favicon.ico favicon.ico
 COPY .env.example .env.example
+
+RUN python - <<'PY'
+from pathlib import Path
+import gzip
+
+src = Path("config/book_catalog_enriched.json.gz")
+dst = Path("config/book_catalog_enriched.json")
+with gzip.open(src, "rb") as fsrc, dst.open("wb") as fdst:
+    while True:
+        chunk = fsrc.read(1024 * 1024)
+        if not chunk:
+            break
+        fdst.write(chunk)
+src.unlink()
+PY
 
 # Seed lightweight placeholder inputs for the default test catalog in stateless deploys.
 RUN mkdir -p tmp/test_catalog_input/"1. Sample Book - Test Author" \
