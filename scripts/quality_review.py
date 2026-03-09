@@ -2508,6 +2508,11 @@ def _iterate_data_path_for_runtime(runtime: config.Config) -> Path:
     return config.iterate_data_path(catalog_id=runtime.catalog_id, data_dir=runtime.data_dir)
 
 
+def _iterate_books_data_path_for_runtime(runtime: config.Config) -> Path:
+    iterate_path = _iterate_data_path_for_runtime(runtime)
+    return iterate_path.with_name(f"{iterate_path.stem}.books{iterate_path.suffix}")
+
+
 def _compare_data_path_for_runtime(runtime: config.Config) -> Path:
     return config.compare_data_path(catalog_id=runtime.catalog_id, data_dir=runtime.data_dir)
 
@@ -3851,8 +3856,16 @@ def _local_cover_available(*, runtime: config.Config, book_number: int) -> bool:
     folder_name = _catalog_folder_name_for_book(runtime.book_catalog_path, int(book_number))
     if not folder_name:
         return False
-    folder = runtime.input_dir / folder_name
-    return folder.exists() and bool(sorted(folder.glob("*.jpg")))
+    return _folder_has_local_cover(runtime.input_dir / folder_name)
+
+
+def _folder_has_local_cover(folder: Path) -> bool:
+    if not folder.exists() or not folder.is_dir():
+        return False
+    for suffix in ("*.jpg", "*.jpeg", "*.png", "*.webp"):
+        if any(folder.glob(suffix)):
+            return True
+    return False
 
 
 def _first_local_cover_path(*, runtime: config.Config, book_number: int) -> Path | None:
@@ -3914,9 +3927,157 @@ def _write_cover_preview(*, source_image: Path, preview_path: Path, max_size: in
     return preview_path
 
 
-def write_iterate_data(*, runtime: config.Config | None = None, prompts_path: Path | None = None) -> Path:
+def _iterate_data_dependency_paths(*, runtime: config.Config, prompts_path: Path) -> list[Path]:
+    return [
+        runtime.book_catalog_path,
+        prompts_path,
+        runtime.prompt_library_path,
+        config.intelligent_prompts_path(catalog_id=runtime.catalog_id, config_dir=runtime.config_dir),
+        config.enriched_catalog_path(catalog_id=runtime.catalog_id, config_dir=runtime.config_dir),
+        _prompt_performance_path_for_runtime(runtime),
+        _winner_path_for_runtime(runtime),
+    ]
+
+
+def _is_generated_payload_fresh(*, output_path: Path, sources: list[Path]) -> bool:
+    if not output_path.exists():
+        return False
+    try:
+        output_mtime = output_path.stat().st_mtime
+    except OSError:
+        return False
+    for source in sources:
+        try:
+            if source.exists() and source.stat().st_mtime > output_mtime:
+                return False
+        except OSError:
+            return False
+    return True
+
+
+def _compact_iterate_enrichment(enrichment: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(enrichment, dict):
+        return {}
+    keys = (
+        "genre",
+        "tags",
+        "scene",
+        "iconic_scenes",
+        "mood",
+        "tones",
+        "era",
+        "protagonist",
+        "setting_primary",
+        "setting_details",
+        "visual_motifs",
+        "symbolic_elements",
+        "key_characters",
+    )
+    return {key: enrichment[key] for key in keys if key in enrichment}
+
+
+def write_iterate_books_data(*, runtime: config.Config | None = None, prompts_path: Path | None = None, force: bool = False) -> Path:
     runtime = runtime or config.get_config()
     prompts_path = prompts_path or runtime.prompts_path
+    output_path = _iterate_books_data_path_for_runtime(runtime)
+    source_paths = _iterate_data_dependency_paths(runtime=runtime, prompts_path=prompts_path)
+    if not force and _is_generated_payload_fresh(output_path=output_path, sources=source_paths):
+        return output_path
+
+    prompts = _load_json(prompts_path, {"books": []})
+    enriched_catalog_path = config.enriched_catalog_path(catalog_id=runtime.catalog_id, config_dir=runtime.config_dir)
+    enriched_catalog = _load_json(enriched_catalog_path, [])
+    winners_payload = _load_winner_payload(_winner_path_for_runtime(runtime))
+    winner_map = winners_payload.get("selections", {}) if isinstance(winners_payload, dict) else {}
+    genre_prompts = _genre_prompt_payload(runtime=runtime)
+
+    enriched_by_book: dict[int, dict[str, Any]] = {}
+    if isinstance(enriched_catalog, list):
+        for row in enriched_catalog:
+            if not isinstance(row, dict):
+                continue
+            number = _safe_int(row.get("number"), 0)
+            enrichment = row.get("enrichment", {})
+            if number > 0 and isinstance(enrichment, dict):
+                enriched_by_book[number] = _compact_iterate_enrichment(enrichment)
+
+    prompt_rows = prompts.get("books", []) if isinstance(prompts, dict) else []
+    if not isinstance(prompt_rows, list):
+        prompt_rows = []
+    prompt_by_book: dict[int, dict[str, Any]] = {}
+    for row in prompt_rows:
+        if not isinstance(row, dict):
+            continue
+        number = _safe_int(row.get("number"), 0)
+        if number > 0:
+            prompt_by_book[number] = row
+
+    books: list[dict[str, Any]] = []
+    for book in _catalog_books_payload(runtime.book_catalog_path):
+        number = _safe_int(book.get("number"), 0)
+        if number <= 0:
+            continue
+        prompt_row = prompt_by_book.get(number, {})
+        prompt_variants = prompt_row.get("variants", []) if isinstance(prompt_row, dict) else []
+        default_prompt = (
+            prompt_variants[0].get("prompt", "")
+            if isinstance(prompt_variants, list) and prompt_variants and isinstance(prompt_variants[0], dict)
+            else ""
+        )
+        title = str(book.get("title", prompt_row.get("title", ""))).strip()
+        author = str(book.get("author", prompt_row.get("author", ""))).strip()
+        folder_name = str(book.get("folder_name", prompt_row.get("folder_name", ""))).strip()
+        enrichment = enriched_by_book.get(number, {})
+        inferred = genre_intelligence.infer_genre(
+            title=title,
+            author=author,
+            metadata_genre=str(enrichment.get("genre", "") or book.get("genre", "")),
+            prompts=genre_prompts,
+        )
+        winner_row = winner_map.get(str(number), {})
+        winner_variant = _safe_int(winner_row.get("winner") if isinstance(winner_row, dict) else winner_row, 0)
+        books.append(
+            {
+                "number": number,
+                "title": title,
+                "author": author,
+                "folder_name": folder_name,
+                "file_base": str(book.get("file_base", prompt_row.get("file_base", f"{title} - {author}".strip(" - ")))),
+                "cover_jpg_id": str(book.get("cover_jpg_id", book.get("drive_cover_id", ""))).strip(),
+                "cover_name": str(book.get("cover_name", book.get("drive_name", title))).strip(),
+                "drive_kind": str(book.get("drive_kind", "")).strip(),
+                "default_prompt": default_prompt,
+                "genre": str(inferred.get("genre", "literary_fiction") or "literary_fiction"),
+                "prompt_components": {
+                    "title_keywords": genre_intelligence.extract_title_keywords(title=title, limit=6),
+                },
+                "enrichment": enrichment,
+                "local_cover_available": _folder_has_local_cover(runtime.input_dir / folder_name) or bool(book.get("cover_jpg_id")),
+                "winner_variant": winner_variant,
+                "winner_selected": bool(winner_variant > 0),
+            }
+        )
+
+    payload = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "catalog": runtime.catalog_id,
+        "catalogs": [item.to_dict() for item in config.list_catalogs()],
+        "books": books,
+        "total_books": len(books),
+        "enrichment_available": bool(enriched_by_book),
+    }
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    safe_json.atomic_write_json(output_path, payload)
+    return output_path
+
+
+def write_iterate_data(*, runtime: config.Config | None = None, prompts_path: Path | None = None, force: bool = False) -> Path:
+    runtime = runtime or config.get_config()
+    prompts_path = prompts_path or runtime.prompts_path
+    iterate_path = _iterate_data_path_for_runtime(runtime)
+    source_paths = _iterate_data_dependency_paths(runtime=runtime, prompts_path=prompts_path)
+    if not force and _is_generated_payload_fresh(output_path=iterate_path, sources=source_paths):
+        return iterate_path
     prompts = _load_json(prompts_path, {"books": []})
     library = PromptLibrary(runtime.prompt_library_path)
 
@@ -4039,7 +4200,7 @@ def write_iterate_data(*, runtime: config.Config | None = None, prompts_path: Pa
                 },
                 "enrichment": enriched_by_book.get(number, {}),
                 "smart_prompts": smart_variants if isinstance(smart_variants, list) else [],
-                "local_cover_available": _local_cover_available(runtime=runtime, book_number=number) or bool(cover_jpg_id),
+                "local_cover_available": _folder_has_local_cover(runtime.input_dir / folder_name) or bool(cover_jpg_id),
                 "winner_variant": winner_variant,
                 "winner_selected": bool(winner_variant > 0),
             }
@@ -4072,7 +4233,6 @@ def write_iterate_data(*, runtime: config.Config | None = None, prompts_path: Pa
         "budget_presets": budget_presets,
     }
 
-    iterate_path = _iterate_data_path_for_runtime(runtime)
     iterate_path.parent.mkdir(parents=True, exist_ok=True)
     safe_json.atomic_write_json(iterate_path, payload)
     return iterate_path
@@ -6108,9 +6268,6 @@ def serve_review_webapp(
     global STARTUP_HEALTH
     STARTUP_HEALTH = _run_startup_checks(default_runtime)
     _ensure_builtin_prompts_seeded(runtime=default_runtime, actor="startup")
-    write_review_data(output_dir, runtime=default_runtime)
-    write_iterate_data(runtime=default_runtime)
-    generate_review_gallery(output_dir)
     stale_after_seconds, retry_delay_seconds = _job_stale_recovery_config(default_runtime)
     recovered = job_db_store.recover_stale_running_jobs(
         stale_after_seconds=stale_after_seconds,
@@ -7453,8 +7610,13 @@ def serve_review_webapp(
                 limit, offset = _parse_pagination(query, default_limit=25, max_limit=50000)
                 sort, order = _normalize_sort_order(query)
                 filters = _books_filters_from_query(query)
-                write_iterate_data(runtime=runtime_req)
-                payload = _load_json(_iterate_data_path_for_runtime(runtime_req), {"books": [], "models": []})
+                view = str(query.get("view", [""])[0] or "").strip().lower()
+                if view == "books":
+                    write_iterate_books_data(runtime=runtime_req)
+                    payload = _load_json(_iterate_books_data_path_for_runtime(runtime_req), {"books": []})
+                else:
+                    write_iterate_data(runtime=runtime_req)
+                    payload = _load_json(_iterate_data_path_for_runtime(runtime_req), {"books": [], "models": []})
                 books = payload.get("books", []) if isinstance(payload, dict) else []
                 if not isinstance(books, list):
                     books = []
@@ -7466,6 +7628,7 @@ def serve_review_webapp(
                         for row in rows
                         if search in str(row.get("title", "")).lower()
                         or search in str(row.get("author", "")).lower()
+                        or search in str(row.get("number", "")).lower()
                     ]
                 status = str(filters.get("status", "") or "").strip().lower()
                 if status:
@@ -7476,6 +7639,17 @@ def serve_review_webapp(
                 else:
                     rows.sort(key=lambda item: _safe_int(item.get("number"), 0), reverse=reverse)
                 page, pagination = _paginate_rows(rows, limit=limit, offset=offset)
+                if view == "books":
+                    return _cache_and_send(
+                        {
+                            "generated_at": payload.get("generated_at"),
+                            "catalog": runtime_req.catalog_id,
+                            "catalogs": [item.to_dict() for item in config.list_catalogs()],
+                            "books": page,
+                            "total_books": len(rows),
+                            "pagination": pagination,
+                        }
+                    )
                 payload["books"] = page
                 payload["total_books"] = len(rows)
                 payload["pagination"] = pagination

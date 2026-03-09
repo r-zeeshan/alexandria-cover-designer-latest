@@ -976,10 +976,76 @@ function renderModelCards({ models, selectedIds, activeFilter, searchText }) {
   return { html, visibleIds, visibleCount: orderedVisible.length, filteredCount: filteredByChip.length };
 }
 
+function debounce(fn, wait = 50) {
+  let timer = null;
+  return (...args) => {
+    window.clearTimeout(timer);
+    timer = window.setTimeout(() => fn(...args), Math.max(0, Number(wait || 0)));
+  };
+}
+
+function normalizeBookSearchText(value) {
+  return String(value || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[’']/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function bookOptionLabel(book) {
+  const number = String(book?.number || book?.id || '').trim();
+  const title = String(book?.title || '').trim() || `Book ${number || '?'}`;
+  const author = String(book?.author || '').trim();
+  return `${number}. ${title}${author ? ` — ${author}` : ''}`.trim();
+}
+
+function filterBooksForCombobox(books, query, limit = 80) {
+  const rows = [...(Array.isArray(books) ? books : [])]
+    .filter(Boolean)
+    .sort((left, right) => Number(left?.number || 0) - Number(right?.number || 0));
+  const trimmed = String(query || '').trim();
+  if (!trimmed) return rows.slice(0, Math.max(1, Number(limit || 80)));
+
+  const normalizedQuery = normalizeBookSearchText(trimmed);
+  const numericQuery = /^\d+$/.test(trimmed) ? trimmed : '';
+  const matches = rows.map((book) => {
+    const numberText = String(book?.number || book?.id || '').trim();
+    const titleText = normalizeBookSearchText(book?.title || '');
+    const authorText = normalizeBookSearchText(book?.author || '');
+    const labelText = normalizeBookSearchText(bookOptionLabel(book));
+    let score = Number.POSITIVE_INFINITY;
+
+    if (numericQuery) {
+      if (numberText === numericQuery) score = 0;
+      else if (numberText.startsWith(numericQuery)) score = 1;
+      else if (labelText.includes(normalizedQuery)) score = 6;
+    }
+
+    if (!Number.isFinite(score)) {
+      if (titleText.startsWith(normalizedQuery)) score = 2;
+      else if (authorText.startsWith(normalizedQuery)) score = 3;
+      else if (titleText.includes(normalizedQuery)) score = 4;
+      else if (authorText.includes(normalizedQuery)) score = 5;
+      else if (labelText.includes(normalizedQuery)) score = 6;
+    }
+
+    return { book, score };
+  }).filter((item) => Number.isFinite(item.score));
+
+  return matches
+    .sort((left, right) => left.score - right.score || Number(left.book?.number || 0) - Number(right.book?.number || 0))
+    .slice(0, Math.max(1, Number(limit || 80)))
+    .map((item) => item.book);
+}
+
+window.__ITERATE_TEST_HOOKS__.filterBooksForCombobox = ({ books, query, limit }) => filterBooksForCombobox(books, query, limit);
+
 window.Pages.iterate = {
   async render() {
     const content = document.getElementById('content');
     const catalogId = 'classics';
+    await OpenRouter.init().catch(() => OpenRouter.MODELS);
     let books = DB.dbGetAll('books');
     if (!books.length) books = await DB.loadBooks(catalogId);
     if (!books.length) {
@@ -994,7 +1060,7 @@ window.Pages.iterate = {
     const prompts = sortPromptsForUI(DB.dbGetAll('prompts'));
     const options = books
       .sort((a, b) => Number(a.number || 0) - Number(b.number || 0))
-      .map((book) => `<option value="${book.id}">${book.number}. ${book.title}</option>`)
+      .map((book) => `<option value="${book.id}">${escapeHtml(bookOptionLabel(book))}</option>`)
       .join('');
     const promptOptions = [`<option value="">${AUTO_ROTATE_PROMPT_OPTION_LABEL}</option>`]
       .concat(prompts.map((p) => `<option value="${p.id}">${p.name}</option>`))
@@ -1014,7 +1080,21 @@ window.Pages.iterate = {
             <label class="form-label">Book</label>
             <button class="btn btn-secondary btn-sm" id="iterSyncBooksBtn">Sync</button>
           </div>
-          <select class="form-select" id="iterBookSelect">
+          <div class="book-combobox" id="iterBookCombobox">
+            <input
+              class="form-input"
+              id="iterBookSearch"
+              type="text"
+              placeholder="Type book number or title to search..."
+              autocomplete="off"
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded="false"
+              aria-controls="iterBookResults"
+            />
+            <div class="book-combobox-dropdown hidden" id="iterBookResults" role="listbox"></div>
+          </div>
+          <select class="form-select hidden" id="iterBookSelect" aria-hidden="true" tabindex="-1">
             <option value="">— Select a book —</option>
             ${options}
           </select>
@@ -1093,6 +1173,9 @@ window.Pages.iterate = {
     `;
 
     const selectEl = document.getElementById('iterBookSelect');
+    const bookComboboxEl = document.getElementById('iterBookCombobox');
+    const bookSearchEl = document.getElementById('iterBookSearch');
+    const bookResultsEl = document.getElementById('iterBookResults');
     const syncBtn = document.getElementById('iterSyncBooksBtn');
     const syncStatus = document.getElementById('iterBookSyncStatus');
     const modeToggle = document.getElementById('iterModeToggle');
@@ -1117,6 +1200,100 @@ window.Pages.iterate = {
       const bookId = Number(selectEl?.value || 0);
       return books.find((row) => Number(row.id) === bookId) || null;
     };
+
+    let visibleBookOptions = [];
+    let activeBookOptionIndex = -1;
+
+    const closeBookResults = () => {
+      activeBookOptionIndex = -1;
+      visibleBookOptions = [];
+      if (bookResultsEl) {
+        bookResultsEl.innerHTML = '';
+        bookResultsEl.classList.add('hidden');
+      }
+      bookSearchEl?.setAttribute('aria-expanded', 'false');
+      bookSearchEl?.removeAttribute('aria-activedescendant');
+    };
+
+    const syncBookSearchFromSelection = () => {
+      if (!bookSearchEl) return;
+      const book = selectedBook();
+      bookSearchEl.value = book ? bookOptionLabel(book) : '';
+      bookSearchEl.dataset.selectedValue = bookSearchEl.value;
+    };
+
+    const setActiveBookOption = (nextIndex) => {
+      if (!bookResultsEl || !visibleBookOptions.length) return;
+      activeBookOptionIndex = Math.max(0, Math.min(nextIndex, visibleBookOptions.length - 1));
+      Array.from(bookResultsEl.querySelectorAll('.book-combobox-option')).forEach((node, index) => {
+        const isActive = index === activeBookOptionIndex;
+        node.classList.toggle('active', isActive);
+        node.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        if (isActive) {
+          bookSearchEl?.setAttribute('aria-activedescendant', node.id);
+          node.scrollIntoView({ block: 'nearest' });
+        }
+      });
+    };
+
+    const renderBookResults = (rows) => {
+      if (!bookResultsEl || !bookSearchEl) return;
+      visibleBookOptions = Array.isArray(rows) ? rows : [];
+      activeBookOptionIndex = visibleBookOptions.length ? 0 : -1;
+      if (!visibleBookOptions.length) {
+        bookResultsEl.innerHTML = '<div class="book-combobox-empty">No matching books</div>';
+        bookResultsEl.classList.remove('hidden');
+        bookSearchEl.setAttribute('aria-expanded', 'true');
+        bookSearchEl.removeAttribute('aria-activedescendant');
+        return;
+      }
+      bookResultsEl.innerHTML = visibleBookOptions.map((book, index) => {
+        const active = index === activeBookOptionIndex;
+        return `
+          <button
+            class="book-combobox-option ${active ? 'active' : ''}"
+            id="iterBookOption-${escapeHtml(String(book.id || book.number || index))}"
+            type="button"
+            role="option"
+            aria-selected="${active ? 'true' : 'false'}"
+            data-book-id="${escapeHtml(String(book.id || ''))}"
+          >
+            <span class="book-combobox-number">${escapeHtml(String(book.number || book.id || ''))}.</span>
+            <span class="book-combobox-text">
+              <span class="book-combobox-title">${escapeHtml(String(book.title || `Book ${book.number || '?'}`))}</span>
+              <span class="book-combobox-meta">${escapeHtml(String(book.author || 'Unknown author'))}</span>
+            </span>
+          </button>
+        `;
+      }).join('');
+      bookResultsEl.classList.remove('hidden');
+      bookSearchEl.setAttribute('aria-expanded', 'true');
+      const activeNode = bookResultsEl.querySelector('.book-combobox-option.active');
+      if (activeNode) {
+        bookSearchEl.setAttribute('aria-activedescendant', activeNode.id);
+      } else {
+        bookSearchEl.removeAttribute('aria-activedescendant');
+      }
+    };
+
+    const openBookResults = (query = String(bookSearchEl?.value || '')) => {
+      renderBookResults(filterBooksForCombobox(books, query, 80));
+    };
+
+    const applyBookSelection = (book, { focusInput = false } = {}) => {
+      if (!book || !selectEl) return;
+      const bookId = String(book.id || book.number || '').trim();
+      if (!bookId) return;
+      selectEl.value = bookId;
+      syncBookSearchFromSelection();
+      closeBookResults();
+      if (focusInput) bookSearchEl?.focus();
+      selectEl.dispatchEvent(new Event('change'));
+    };
+
+    const scheduleBookSearch = debounce(() => {
+      openBookResults(String(bookSearchEl?.value || ''));
+    }, 50);
 
     const updateWildcardSuggestion = (book) => {
       if (!wildcardSuggestionEl) return;
@@ -1210,9 +1387,74 @@ window.Pages.iterate = {
 
     selectEl?.addEventListener('change', () => {
       _selectedBookId = Number(selectEl.value || 0) || null;
+      syncBookSearchFromSelection();
       autoSelectGenrePrompt();
       this.loadExistingResults();
     });
+
+    bookSearchEl?.addEventListener('focus', () => {
+      openBookResults(String(bookSearchEl.value || ''));
+    });
+    bookSearchEl?.addEventListener('click', () => {
+      openBookResults(String(bookSearchEl.value || ''));
+    });
+    bookSearchEl?.addEventListener('input', () => {
+      scheduleBookSearch();
+    });
+    bookSearchEl?.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        if (bookResultsEl?.classList.contains('hidden')) openBookResults(String(bookSearchEl.value || ''));
+        else setActiveBookOption(activeBookOptionIndex + 1);
+        return;
+      }
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        if (bookResultsEl?.classList.contains('hidden')) openBookResults(String(bookSearchEl.value || ''));
+        else setActiveBookOption(activeBookOptionIndex - 1);
+        return;
+      }
+      if (event.key === 'Enter') {
+        if (bookResultsEl?.classList.contains('hidden')) return;
+        event.preventDefault();
+        const book = visibleBookOptions[activeBookOptionIndex] || visibleBookOptions[0] || null;
+        if (book) applyBookSelection(book, { focusInput: true });
+        return;
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        syncBookSearchFromSelection();
+        closeBookResults();
+      }
+    });
+    bookResultsEl?.addEventListener('mousemove', (event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      const option = target?.closest('.book-combobox-option');
+      if (!option) return;
+      const nextIndex = Array.from(bookResultsEl.querySelectorAll('.book-combobox-option')).indexOf(option);
+      if (nextIndex >= 0 && nextIndex !== activeBookOptionIndex) {
+        setActiveBookOption(nextIndex);
+      }
+    });
+    bookResultsEl?.addEventListener('click', (event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      const option = target?.closest('.book-combobox-option');
+      if (!option) return;
+      const bookId = Number(option.dataset.bookId || 0);
+      const book = books.find((row) => Number(row.id) === bookId) || null;
+      if (book) applyBookSelection(book, { focusInput: true });
+    });
+    if (this._bookClickAwayHandler) {
+      document.removeEventListener('click', this._bookClickAwayHandler);
+    }
+    this._bookClickAwayHandler = (event) => {
+      const target = event.target instanceof Node ? event.target : null;
+      if (!target || !bookComboboxEl?.contains(target)) {
+        syncBookSearchFromSelection();
+        closeBookResults();
+      }
+    };
+    document.addEventListener('click', this._bookClickAwayHandler);
 
     syncBtn?.addEventListener('click', async () => {
       const previous = syncBtn.textContent;
@@ -1229,7 +1471,7 @@ window.Pages.iterate = {
         const current = Number(selectEl?.value || 0);
         if (selectEl) {
           selectEl.innerHTML = ['<option value="">— Select a book —</option>']
-            .concat(sorted.map((book) => `<option value="${book.id}">${book.number}. ${book.title}</option>`))
+            .concat(sorted.map((book) => `<option value="${book.id}">${escapeHtml(bookOptionLabel(book))}</option>`))
             .join('');
           if (current > 0 && sorted.some((book) => Number(book.id) === current)) {
             selectEl.value = String(current);
@@ -1244,6 +1486,10 @@ window.Pages.iterate = {
           syncStatus.textContent = driveTotal > 0
             ? `${sorted.length} books loaded (catalog). Drive found: ${driveTotal}.`
             : `${sorted.length} books loaded (catalog).`;
+        }
+        syncBookSearchFromSelection();
+        if (document.activeElement === bookSearchEl) {
+          openBookResults(String(bookSearchEl?.value || ''));
         }
         updateHeader();
         if (driveTotal > 0) {
@@ -1390,8 +1636,10 @@ window.Pages.iterate = {
       _selectedBookId = initialBook;
     }
     if (_selectedBookId) {
+      syncBookSearchFromSelection();
       autoSelectGenrePrompt();
     } else {
+      syncBookSearchFromSelection();
       updateWildcardSuggestion(null);
       updateVariableFields(null, { forceDefaults: false });
     }

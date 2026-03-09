@@ -286,3 +286,45 @@ def test_build_genre_aware_rotation_defaults_to_romantic_realism_when_genre_unkn
             "sceneOverride": "A mysterious scene",
         }
     ]
+
+
+def test_filter_books_for_combobox_matches_number_title_and_author():
+    result = _run_iterate_hook(
+        "filterBooksForCombobox",
+        {
+            "books": [
+                {"id": 3, "number": 3, "title": "Gulliver's Travels", "author": "Jonathan Swift"},
+                {"id": 13, "number": 13, "title": "The Trial", "author": "Franz Kafka"},
+                {"id": 52, "number": 52, "title": "Dracula", "author": "Bram Stoker"},
+            ],
+            "query": "3",
+            "limit": 5,
+        },
+    )
+    assert [row["number"] for row in result][:2] == [3, 13]
+
+    title_result = _run_iterate_hook(
+        "filterBooksForCombobox",
+        {
+            "books": [
+                {"id": 3, "number": 3, "title": "Gulliver's Travels", "author": "Jonathan Swift"},
+                {"id": 52, "number": 52, "title": "Dracula", "author": "Bram Stoker"},
+            ],
+            "query": "gulliver",
+            "limit": 5,
+        },
+    )
+    assert [row["number"] for row in title_result] == [3]
+
+    author_result = _run_iterate_hook(
+        "filterBooksForCombobox",
+        {
+            "books": [
+                {"id": 3, "number": 3, "title": "Gulliver's Travels", "author": "Jonathan Swift"},
+                {"id": 52, "number": 52, "title": "Dracula", "author": "Bram Stoker"},
+            ],
+            "query": "stoker",
+            "limit": 5,
+        },
+    )
+    assert [row["number"] for row in author_result] == [52]

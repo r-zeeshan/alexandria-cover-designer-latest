@@ -685,6 +685,23 @@ def test_quality_review_server_batch_generation_endpoints_work():
         _stop_server(process)
 
 
+def test_quality_review_server_iterate_books_view_filters_by_number():
+    process, base_url = _start_server()
+    try:
+        status, payload = _request_json(base_url, "/api/iterate-data?catalog=classics&view=books&search=3&limit=10&offset=0")
+        assert status == 200
+        assert isinstance(payload.get("books"), list)
+        assert payload.get("books")
+        assert "models" not in payload
+        first = payload["books"][0]
+        assert "composed_prompt" not in first
+        assert "smart_prompts" not in first
+        assert isinstance(first.get("prompt_components", {}).get("title_keywords", []), list)
+        assert int(payload["books"][0].get("number", 0)) == 3
+    finally:
+        _stop_server(process)
+
+
 def test_quality_review_server_thumbnail_endpoint_rejects_non_image_and_disallowed_paths():
     token = uuid.uuid4().hex
     disallowed = PROJECT_ROOT / "config" / f"thumb-{token}.txt"

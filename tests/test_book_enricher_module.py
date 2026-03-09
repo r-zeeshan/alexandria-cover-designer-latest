@@ -58,6 +58,27 @@ def test_parse_and_normalize_helpers():
     assert len(normalized["key_characters"]) >= 3
 
 
+def test_fallback_enrichment_known_books_is_specific():
+    gulliver = be._fallback_enrichment(
+        row={"number": 3, "title": "Gulliver's Travels", "author": "Jonathan Swift"},
+        description="",
+    )
+    dracula = be._fallback_enrichment(
+        row={"number": 52, "title": "Dracula", "author": "Bram Stoker"},
+        description="",
+    )
+
+    gulliver_text = json.dumps(gulliver, ensure_ascii=False)
+    dracula_text = json.dumps(dracula, ensure_ascii=False)
+
+    assert "Lilliput" in gulliver_text
+    assert "Gulliver" in gulliver_text
+    assert "castle" in dracula_text.lower()
+    assert "Dracula" in dracula_text
+    assert not be._has_generic_content(gulliver)
+    assert not be._has_generic_content(dracula)
+
+
 def test_generate_enrichment_fallback_modes(monkeypatch):
     runtime = SimpleNamespace(anthropic_api_key="", openai_api_key="")
     row = {"number": 1, "title": "Moby Dick", "author": "Herman Melville"}
@@ -204,6 +225,7 @@ def test_enrich_catalog_and_main(tmp_path: Path, monkeypatch):
         delay=0.0,
         batch_size=50,
         batch_pause=0.0,
+        workers=1,
         validate=False,
     )
     monkeypatch.setattr(be.argparse.ArgumentParser, "parse_args", lambda self: args)
@@ -255,6 +277,52 @@ def test_enrich_catalog_writes_output_and_usage_in_single_staged_write(tmp_path:
     assert writes[0] == [output_path, usage_path]
     assert output_path.exists()
     assert usage_path.exists()
+
+
+def test_enrich_catalog_parallel_workers(tmp_path: Path, monkeypatch):
+    catalog_path = tmp_path / "catalog.json"
+    output_path = tmp_path / "enriched.json"
+    usage_path = tmp_path / "usage.json"
+    desc_path = tmp_path / "descriptions.json"
+    catalog_path.write_text(json.dumps(_catalog_rows()), encoding="utf-8")
+    desc_path.write_text("{}", encoding="utf-8")
+
+    runtime = SimpleNamespace(
+        llm_provider="openai",
+        llm_model="gpt-4o-mini",
+        llm_max_tokens=200,
+        llm_cost_per_1k_tokens=0.01,
+    )
+    monkeypatch.setattr(be.config, "get_config", lambda: runtime)
+
+    def _fake_generate_enrichment(**kwargs):  # type: ignore[no-untyped-def]
+        row = kwargs["row"]
+        return (
+            {
+                "genre": f"Genre {row['number']}",
+                "protagonist": f"Hero {row['number']}",
+                "iconic_scenes": [f"scene-{row['number']}-1", f"scene-{row['number']}-2", f"scene-{row['number']}-3"],
+            },
+            10,
+            5,
+            "llm",
+        )
+
+    monkeypatch.setattr(be, "_generate_enrichment", _fake_generate_enrichment)
+
+    summary = be.enrich_catalog(
+        catalog_path=catalog_path,
+        output_path=output_path,
+        force_refresh=True,
+        usage_path=usage_path,
+        descriptions_path=desc_path,
+        workers=2,
+    )
+
+    assert summary["books_total"] == 2
+    assert summary["books_enriched_in_run"] == 2
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert [row["enrichment"]["genre"] for row in payload] == ["Genre 1", "Genre 2"]
 
 
 def test_enrich_catalog_skips_invalid_rows_and_force_refresh(tmp_path: Path, monkeypatch):
@@ -359,7 +427,7 @@ def test_prompt_build_guess_and_normalize_edge_branches():
     assert "Description: Deep sea voyage" in prompt
 
     fallback = be._fallback_enrichment(row={"title": "Alice in Wonderland", "author": "Lewis Carroll"}, description="curious rabbit hole")
-    assert fallback["protagonist"] == "The main character of Alice in Wonderland"
+    assert "Alice-linked figure" in fallback["protagonist"]
     assert "curious" in fallback["iconic_scenes"][0].lower()
 
     assert be._guess_genre(title_lower="pride and prejudice", author="") == "Literary Fiction / Social Novel"
@@ -477,7 +545,7 @@ def test_generate_enrichment_falls_back_after_two_generic_responses_and_keeps_to
     assert source == "fallback"
     assert in_tok == 10
     assert out_tok == 3
-    assert out["protagonist"] == "The main character of Book"
+    assert "Book-linked figure" in out["protagonist"]
 
 
 def test_validate_enrichment_rows_flags_generic_and_missing_entries():

@@ -145,7 +145,7 @@ window.DB = {
   },
 
   async loadBooks(catalog = 'classics') {
-    const resp = await fetch(`/api/iterate-data?catalog=${encodeURIComponent(catalog)}&limit=9999&offset=0`, { cache: 'no-store' });
+    const resp = await fetch(`/api/iterate-data?catalog=${encodeURIComponent(catalog)}&view=books&limit=9999&offset=0`, { cache: 'no-store' });
     const data = await resp.json();
     const books = Array.isArray(data.books) ? data.books : [];
     this.dbClear('books');
