@@ -2,7 +2,58 @@
 
 Last updated: `2026-03-09`
 Deployment URL: `https://web-production-900a7.up.railway.app`
-Deployment ID: `bc475aee-b28f-475c-bc3e-c784243b4745`
+Deployment ID: `ede2c904-a7d2-41c7-b7ae-8b38c4fa43b0`
+
+## 1.12 PROMPT-27 Save Raw Drive Upload Guardrails + Retry Diagnostics (2026-03-09)
+- Git commit (master):
+  - `2605175` — Fix Save Raw Google Drive upload retries
+- Railway deploy:
+  - `ede2c904-a7d2-41c7-b7ae-8b38c4fa43b0` (`SUCCESS`; active PROMPT-27 proof runtime)
+- Local verification before deploy:
+  - `python3 -m py_compile scripts/quality_review.py src/gdrive_sync.py` -> `PASS`
+  - `/Users/timzengerink/Documents/Coding Folder/Alexandria Cover designer/.venv/bin/python -m pytest tests/test_quality_review_utils.py -q -k 'save_raw or drive_status or upload_single_file_to_drive or upload_folder_to_drive'` -> `PASS`
+  - `/Users/timzengerink/Documents/Coding Folder/Alexandria Cover designer/.venv/bin/python -m pytest tests/test_quality_review_server_smoke.py -q -k 'drive_and_provider_connectivity_payloads'` -> `PASS`
+  - `/Users/timzengerink/Documents/Coding Folder/Alexandria Cover designer/.venv/bin/python -m pytest tests/test_api_contracts.py -q -k 'test_api_contract_get_endpoints_status_and_content_type'` -> `PASS`
+  - `node --check src/static/js/pages/iterate.js` -> `PASS`
+- Live drive diagnostics proof:
+  - `GET /api/drive-status` returns:
+    - `connected: true`
+    - `parent_folder_access: true`
+    - `retry_supported: true`
+    - `service_account_email: cover-formatter-drive-638@gen-lang-client-0563023635.iam.gserviceaccount.com`
+    - `parent_folder_name: Chosen Winner Generated Covers`
+- Live generation proof:
+  - Iterate batch for book `1` was started on the deployed app
+  - live completed job used for Save Raw proof: `edcb850b-8553-42a8-834a-b1c1b406fa43`
+  - model: `openrouter/google/gemini-3-pro-image-preview`
+  - `library_prompt_id: alexandria-base-romantic-realism`
+  - compositor mode: `pdf`
+- Live Save Raw proof:
+  - first completed result card no longer hard-fails into a red transient error state
+  - after clicking `Save Raw`, the live Iterate card rerendered to `↻ Retry Drive`
+  - live `/api/save-raw` response now includes structured fields:
+    - `status: partial`
+    - `drive_ok: false`
+    - `drive_url: https://drive.google.com/drive/folders/1QVtl_ySAnYB1L_pN8GrYMGj4QKP-IR1-`
+    - `retry_available: true`
+    - `drive_failed` with 2 per-file failure rows, each carrying `attempts`, `error`, `error_code`, and `http_status`
+- Live retry proof:
+  - `POST /api/retry-drive-upload` returned:
+    - `retried: true`
+    - `status: partial`
+    - `failed_count: 2`
+  - this confirms the retry endpoint is live and using the same structured response contract
+- Remaining production limitation surfaced by PROMPT-27 diagnostics:
+  - Google Drive file upload is still blocked by the deployed credential, which returns:
+    - `Service Accounts do not have storage quota. Leverage shared drives ..., or use OAuth delegation ... instead.`
+  - this is an environment / Google Drive ownership constraint, not a silent application failure now
+  - PROMPT-27 fixes the product behavior around that limitation:
+    - local save still succeeds
+    - the UI shows a persistent retry action instead of a hard failure
+    - the backend exposes exact live diagnostics through `/api/drive-status`, `/api/save-raw`, and `/api/retry-drive-upload`
+- Visual proof artifacts:
+  - live Iterate retry-state screenshot: `/tmp/alexandria-proof-live-prompt27/live-iterate-prompt27.png`
+  - rendered live diagnostics sheet: `/tmp/alexandria-proof-live-prompt27/live-drive-proof-prompt27.png`
 
 ## 1.11 PROMPT-26 Legacy Prompt Cleanup (2026-03-09)
 - Git commits (master):
