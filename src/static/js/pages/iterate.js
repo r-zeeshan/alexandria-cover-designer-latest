@@ -311,6 +311,28 @@ function decodeAttrToken(token) {
   }
 }
 
+function projectRelativeAssetPath(value) {
+  if (window.projectRelativeAssetPath) return window.projectRelativeAssetPath(value);
+  const token = String(value || '').trim();
+  if (!token) return '';
+  if (token.startsWith('blob:') || token.startsWith('data:') || /^https?:\/\//i.test(token)) return '';
+  let raw = token;
+  try {
+    const parsed = new URL(raw, window.location.origin);
+    if (parsed.pathname === '/api/thumbnail' || parsed.pathname === '/api/asset') {
+      const apiPath = String(parsed.searchParams.get('path') || '').trim();
+      if (apiPath) raw = apiPath;
+    } else if (raw.startsWith('/')) {
+      raw = decodeAttrToken(parsed.pathname || raw);
+    }
+  } catch {
+    raw = token;
+  }
+  raw = decodeAttrToken(raw).split('#', 1)[0].split('?', 1)[0].replace(/^\/+/, '').trim();
+  if (!raw || raw.startsWith('api/')) return '';
+  return raw;
+}
+
 function _thumbnailVersionToken(job) {
   if (!job || typeof job !== 'object') return String(Date.now());
   const candidate = String(
@@ -339,31 +361,52 @@ function _withVersionQuery(url, versionToken) {
   }
 }
 
+function _pushUniqueSource(sources, seen, src) {
+  const token = String(src || '').trim();
+  if (!token || seen.has(token)) return;
+  seen.add(token);
+  sources.push(token);
+}
+
+function _pushResolvedSource(sources, seen, value, { job, keyPrefix, suffix, preferThumbnail = true }) {
+  if (!isRenderableImageSource(value)) return;
+  if (typeof value !== 'string') {
+    const blobUrl = getBlobUrl(value, `${job.id}-${keyPrefix}-${suffix}`);
+    _pushUniqueSource(sources, seen, blobUrl);
+    return;
+  }
+  const versionToken = _thumbnailVersionToken(job);
+  const relativePath = projectRelativeAssetPath(value);
+  if (relativePath) {
+    const thumbnailUrl = window.buildProjectThumbnailUrl
+      ? window.buildProjectThumbnailUrl(relativePath, 'large', versionToken)
+      : _withVersionQuery(`/api/thumbnail?path=${encodeURIComponent(relativePath)}&size=large`, versionToken);
+    const assetUrl = window.buildProjectAssetUrl
+      ? window.buildProjectAssetUrl(relativePath, versionToken)
+      : _withVersionQuery(`/api/asset?path=${encodeURIComponent(relativePath)}`, versionToken);
+    if (preferThumbnail) {
+      _pushUniqueSource(sources, seen, thumbnailUrl);
+      _pushUniqueSource(sources, seen, assetUrl);
+    } else {
+      _pushUniqueSource(sources, seen, assetUrl);
+      _pushUniqueSource(sources, seen, thumbnailUrl);
+    }
+    return;
+  }
+  let src = getBlobUrl(value, `${job.id}-${keyPrefix}-${suffix}`);
+  src = _withVersionQuery(src, versionToken);
+  _pushUniqueSource(sources, seen, src);
+}
+
 function resolvePreviewSources(job, keyPrefix = 'display', preferRaw = false) {
   const sources = [];
   const seen = new Set();
-  const pushSource = (value, suffix) => {
-    if (!isRenderableImageSource(value)) return;
-    let src = getBlobUrl(value, `${job.id}-${keyPrefix}-${suffix}`);
-    if (typeof value === 'string') {
-      src = _withVersionQuery(src, _thumbnailVersionToken(job));
-    }
-    if (!src || seen.has(src)) return;
-    seen.add(src);
-    sources.push(src);
-    if (typeof value === 'string') {
-      const normalized = src || '';
-      const isDirectPath = normalized.startsWith('/') && !normalized.startsWith('//');
-      if (isDirectPath && !normalized.startsWith('/api/thumbnail')) {
-        const rel = normalized.replace(/^\/+/, '');
-        const thumb = `/api/thumbnail?path=${encodeURIComponent(rel)}&size=large&v=${encodeURIComponent(_thumbnailVersionToken(job))}`;
-        if (!seen.has(thumb)) {
-          seen.add(thumb);
-          sources.push(thumb);
-        }
-      }
-    }
-  };
+  const pushSource = (value, suffix) => _pushResolvedSource(sources, seen, value, {
+    job,
+    keyPrefix,
+    suffix,
+    preferThumbnail: true,
+  });
 
   if (preferRaw) {
     pushSource(job.generated_image_blob, 'raw');
@@ -393,28 +436,12 @@ function resolvePreviewSources(job, keyPrefix = 'display', preferRaw = false) {
 function resolveCompositePreviewSources(job, keyPrefix = 'display-composite') {
   const sources = [];
   const seen = new Set();
-  const pushSource = (value, suffix) => {
-    if (!isRenderableImageSource(value)) return;
-    let src = getBlobUrl(value, `${job.id}-${keyPrefix}-${suffix}`);
-    if (typeof value === 'string') {
-      src = _withVersionQuery(src, _thumbnailVersionToken(job));
-    }
-    if (!src || seen.has(src)) return;
-    seen.add(src);
-    sources.push(src);
-    if (typeof value === 'string') {
-      const normalized = src || '';
-      const isDirectPath = normalized.startsWith('/') && !normalized.startsWith('//');
-      if (isDirectPath && !normalized.startsWith('/api/thumbnail')) {
-        const rel = normalized.replace(/^\/+/, '');
-        const thumb = `/api/thumbnail?path=${encodeURIComponent(rel)}&size=large&v=${encodeURIComponent(_thumbnailVersionToken(job))}`;
-        if (!seen.has(thumb)) {
-          seen.add(thumb);
-          sources.push(thumb);
-        }
-      }
-    }
-  };
+  const pushSource = (value, suffix) => _pushResolvedSource(sources, seen, value, {
+    job,
+    keyPrefix,
+    suffix,
+    preferThumbnail: true,
+  });
   pushSource(job.composited_image_blob, 'composite');
   try {
     const parsed = JSON.parse(String(job.results_json || '{}'));
@@ -540,10 +567,20 @@ async function _extractVariantArchiveAssets({ bookId, variant, model }) {
 
 function resolveJobArtifactHref(job, keys = []) {
   const candidates = [];
+  const versionToken = _thumbnailVersionToken(job);
   const append = (value) => {
     if (!value) return;
+    const relativePath = projectRelativeAssetPath(value);
+    if (relativePath) {
+      const assetUrl = window.buildProjectAssetUrl
+        ? window.buildProjectAssetUrl(relativePath, versionToken)
+        : _withVersionQuery(`/api/asset?path=${encodeURIComponent(relativePath)}`, versionToken);
+      if (assetUrl) candidates.push(assetUrl);
+      return;
+    }
     const normalized = window.normalizeAssetUrl ? window.normalizeAssetUrl(value) : String(value || '').trim();
-    if (normalized) candidates.push(normalized);
+    const versioned = _withVersionQuery(normalized, versionToken);
+    if (versioned) candidates.push(versioned);
   };
 
   keys.forEach((key) => append(job?.[key]));
@@ -966,6 +1003,13 @@ window.__ITERATE_TEST_HOOKS__.buildScenePool = ({ book, count, ...rawBook }) => 
   const targetBook = book && typeof book === 'object' ? book : rawBook;
   return buildScenePool(targetBook, count);
 };
+window.__ITERATE_TEST_HOOKS__.resolveCompositePreviewSources = ({ job }) => resolveCompositePreviewSources(job, 'test-preview');
+window.__ITERATE_TEST_HOOKS__.pickFullResolutionSource = ({ job, preferRaw = false }) => (
+  pickFullResolutionSource(job, 'test-full', Boolean(preferRaw))
+);
+window.__ITERATE_TEST_HOOKS__.resolveJobArtifactHref = ({ job, keys = [] }) => (
+  resolveJobArtifactHref(job, Array.isArray(keys) ? keys : [])
+);
 window.__ITERATE_TEST_HOOKS__.suggestedWildcardPromptForBook = ({ book, dayOfYearOverride = null }) => (
   suggestedWildcardPromptForBook(book, { dayOfYearOverride })
 );
@@ -2442,8 +2486,8 @@ window.Pages.iterate = {
   viewFull(jobId, mode = 'composite') {
     const job = DB.dbGet('jobs', jobId);
     if (!job) return;
-    const composite = resolvePreviewSources(job, 'view-composite', false)[0] || '';
-    const raw = resolvePreviewSources(job, 'view-raw', true)[0] || composite;
+    const composite = pickFullResolutionSource(job, 'view-composite', false) || '';
+    const raw = pickFullResolutionSource(job, 'view-raw', true) || composite;
     const state = { mode };
 
     const overlay = document.createElement('div');

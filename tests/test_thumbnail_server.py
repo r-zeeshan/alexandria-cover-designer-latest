@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from urllib.parse import quote
 
 from PIL import Image
 
@@ -140,3 +141,17 @@ def test_thumbnail_rejects_symlink_escape(tmp_path: Path):
 
     server = ThumbnailServer(project_root=project_root, cache_dir=project_root / "tmp" / "thumbs")
     assert server.thumbnail_for(relative_path="linked/cover.jpg", size="small") is None
+
+
+def test_thumbnail_accepts_encoded_relative_path_with_cachebuster_query(tmp_path: Path):
+    project_root = tmp_path / "project"
+    source = project_root / "Output Covers" / "book 1" / "variant 1.jpg"
+    _make_image(source)
+
+    server = ThumbnailServer(project_root=project_root, cache_dir=project_root / "tmp" / "thumbs")
+    rel = str(source.relative_to(project_root))
+    encoded = f"{quote(rel)}?v=2026-03-10T18%3A40%3A00Z"
+
+    thumb = server.thumbnail_for(relative_path=encoded, size="small")
+    assert thumb is not None
+    assert thumb.exists()

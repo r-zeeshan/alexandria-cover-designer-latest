@@ -5,6 +5,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import textwrap
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 
@@ -37,7 +38,7 @@ def _run_iterate_hook(hook_name: str, payload, prompts=None) -> dict | list | st
         const vm = require('vm');
         const prompts = {json.dumps(prompt_rows)};
 
-        global.window = {{ Pages: {{}}, __ITERATE_TEST_HOOKS__: {{}} }};
+        global.window = {{ Pages: {{}}, __ITERATE_TEST_HOOKS__: {{}}, location: {{ origin: 'https://example.test' }} }};
         global.document = {{}};
         global.DB = {{
           dbGetAll: (table) => table === 'prompts' ? prompts : [],
@@ -84,6 +85,18 @@ def _run_iterate_default_mood(book: dict) -> str:
 
 def _run_iterate_default_scene(book: dict) -> str:
     return _run_iterate_hook("defaultSceneForBook", book)
+
+
+def _run_iterate_resolve_composite_preview_sources(job: dict) -> list[str]:
+    return _run_iterate_hook("resolveCompositePreviewSources", {"job": job})
+
+
+def _run_iterate_pick_full_resolution_source(job: dict, *, prefer_raw: bool = False) -> str:
+    return _run_iterate_hook("pickFullResolutionSource", {"job": job, "preferRaw": prefer_raw})
+
+
+def _run_iterate_resolve_job_artifact_href(job: dict, keys: list[str]) -> str:
+    return _run_iterate_hook("resolveJobArtifactHref", {"job": job, "keys": keys})
 
 
 def _run_iterate_apply_prompt_placeholders(
@@ -524,6 +537,85 @@ def test_build_genre_aware_rotation_defaults_to_romantic_realism_when_genre_unkn
             "sceneOverride": "A mysterious ritual unfolds beneath torchlight in the ruined citadel courtyard",
         }
     ]
+
+
+def test_resolve_composite_preview_sources_uses_thumbnail_then_asset_without_double_encoding():
+    job = {
+        "id": "job-asset-1",
+        "completed_at": "2026-03-10T18:40:00Z",
+        "results_json": json.dumps(
+            {
+                "result": {
+                    "composited_path": "Output Covers/saved_composites/4/cover image.jpg",
+                }
+            }
+        ),
+    }
+
+    sources = _run_iterate_resolve_composite_preview_sources(job)
+
+    thumb = urlparse(sources[0])
+    thumb_query = parse_qs(thumb.query)
+    asset = urlparse(sources[1])
+    asset_query = parse_qs(asset.query)
+
+    assert thumb.path == "/api/thumbnail"
+    assert thumb_query["path"] == ["Output Covers/saved_composites/4/cover image.jpg"]
+    assert thumb_query["size"] == ["large"]
+    assert thumb_query["v"] == ["2026-03-10T18:40:00Z"]
+    assert asset.path == "/api/asset"
+    assert asset_query["path"] == ["Output Covers/saved_composites/4/cover image.jpg"]
+    assert asset_query["v"] == ["2026-03-10T18:40:00Z"]
+    assert "%2520" not in sources[0]
+    assert "%3Fv%3D" not in sources[0]
+
+
+def test_pick_full_resolution_source_prefers_asset_endpoint_for_local_paths():
+    job = {
+        "id": "job-asset-2",
+        "completed_at": "2026-03-10T18:40:00Z",
+        "results_json": json.dumps(
+            {
+                "result": {
+                    "composited_path": "Output Covers/saved_composites/4/cover image.jpg",
+                    "image_path": "tmp/generated/4/openrouter/model/variant_1.png",
+                }
+            }
+        ),
+    }
+
+    composite = _run_iterate_pick_full_resolution_source(job, prefer_raw=False)
+    raw = _run_iterate_pick_full_resolution_source(job, prefer_raw=True)
+
+    composite_query = parse_qs(urlparse(composite).query)
+    raw_query = parse_qs(urlparse(raw).query)
+
+    assert urlparse(composite).path == "/api/asset"
+    assert composite_query["path"] == ["Output Covers/saved_composites/4/cover image.jpg"]
+    assert urlparse(raw).path == "/api/asset"
+    assert raw_query["path"] == ["tmp/generated/4/openrouter/model/variant_1.png"]
+
+
+def test_resolve_job_artifact_href_uses_asset_endpoint_for_pdf_path():
+    job = {
+        "id": "job-asset-3",
+        "completed_at": "2026-03-10T18:40:00Z",
+        "results_json": json.dumps(
+            {
+                "result": {
+                    "composited_pdf_path": "Output Covers/saved_composites/4/cover image.pdf",
+                }
+            }
+        ),
+    }
+
+    href = _run_iterate_resolve_job_artifact_href(job, ["composited_pdf_path"])
+
+    parsed = urlparse(href)
+    query = parse_qs(parsed.query)
+    assert parsed.path == "/api/asset"
+    assert query["path"] == ["Output Covers/saved_composites/4/cover image.pdf"]
+    assert query["v"] == ["2026-03-10T18:40:00Z"]
 
 
 def test_filter_books_for_combobox_matches_number_title_and_author():

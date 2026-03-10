@@ -543,12 +543,69 @@ window.timeAgo = (iso) => {
   return `${Math.floor(h / 24)}d ago`;
 };
 
+function appendVersionQuery(url, versionToken) {
+  const raw = String(url || '').trim();
+  if (!raw || !versionToken) return raw;
+  if (raw.startsWith('blob:') || raw.startsWith('data:')) return raw;
+  try {
+    const absolute = new URL(raw, window.location.origin);
+    absolute.searchParams.set('v', String(versionToken));
+    if (/^https?:\/\//i.test(raw)) return absolute.toString();
+    return `${absolute.pathname}${absolute.search}${absolute.hash}`;
+  } catch {
+    const join = raw.includes('?') ? '&' : '?';
+    return `${raw}${join}v=${encodeURIComponent(String(versionToken))}`;
+  }
+}
+
 window.normalizeAssetUrl = (value) => {
   const token = String(value || '').trim();
   if (!token) return '';
   if (token.startsWith('blob:') || token.startsWith('data:') || /^https?:\/\//i.test(token)) return token;
   if (token.startsWith('/')) return token;
   return `/${token.replace(/^\.?\//, '')}`;
+};
+
+function _decodeAssetToken(token) {
+  try {
+    return decodeURIComponent(String(token || ''));
+  } catch {
+    return String(token || '');
+  }
+}
+
+function projectRelativeAssetPath(value) {
+  const token = String(value || '').trim();
+  if (!token) return '';
+  if (token.startsWith('blob:') || token.startsWith('data:') || /^https?:\/\//i.test(token)) return '';
+  let raw = token;
+  try {
+    const parsed = new URL(raw, window.location.origin);
+    if (parsed.pathname === '/api/thumbnail' || parsed.pathname === '/api/asset') {
+      const apiPath = String(parsed.searchParams.get('path') || '').trim();
+      if (apiPath) raw = apiPath;
+    } else if (raw.startsWith('/')) {
+      raw = _decodeAssetToken(parsed.pathname || raw);
+    }
+  } catch {
+    raw = token;
+  }
+  raw = _decodeAssetToken(raw).split('#', 1)[0].split('?', 1)[0].replace(/^\/+/, '').trim();
+  if (!raw || raw.startsWith('api/')) return '';
+  return raw;
+}
+
+window.projectRelativeAssetPath = projectRelativeAssetPath;
+window.appendVersionQuery = appendVersionQuery;
+window.buildProjectAssetUrl = (value, versionToken = '') => {
+  const rel = projectRelativeAssetPath(value);
+  if (!rel) return appendVersionQuery(window.normalizeAssetUrl(value), versionToken);
+  return appendVersionQuery(`/api/asset?path=${encodeURIComponent(rel)}`, versionToken);
+};
+window.buildProjectThumbnailUrl = (value, size = 'large', versionToken = '') => {
+  const rel = projectRelativeAssetPath(value);
+  if (!rel) return '';
+  return appendVersionQuery(`/api/thumbnail?path=${encodeURIComponent(rel)}&size=${encodeURIComponent(String(size || 'medium'))}`, versionToken);
 };
 
 window.blobUrls = new Map();
@@ -578,18 +635,18 @@ window.getBlobUrl = (data, key) => {
 };
 
 function resolveFullResolutionCompositeSource(source) {
-  const normalized = window.normalizeAssetUrl(source);
-  if (!normalized) return '';
-  if (!normalized.toLowerCase().startsWith('/api/thumbnail')) return normalized;
-  try {
-    const url = new URL(normalized, window.location.origin);
-    const rawPath = String(url.searchParams.get('path') || '').trim();
-    if (!rawPath) return normalized;
-    return `/${rawPath.replace(/^\/+/, '')}`;
-  } catch {
-    return normalized;
-  }
+  const assetUrl = window.buildProjectAssetUrl ? window.buildProjectAssetUrl(source) : '';
+  if (assetUrl) return assetUrl;
+  return window.normalizeAssetUrl(source);
 }
+
+window.__APP_TEST_HOOKS__ = window.__APP_TEST_HOOKS__ || {};
+window.__APP_TEST_HOOKS__.projectRelativeAssetPath = (value) => projectRelativeAssetPath(value);
+window.__APP_TEST_HOOKS__.buildProjectAssetUrl = (value, versionToken = '') => window.buildProjectAssetUrl(value, versionToken);
+window.__APP_TEST_HOOKS__.buildProjectThumbnailUrl = (value, size = 'large', versionToken = '') => (
+  window.buildProjectThumbnailUrl(value, size, versionToken)
+);
+window.__APP_TEST_HOOKS__.resolveFullResolutionCompositeSource = (value) => resolveFullResolutionCompositeSource(value);
 
 function warnIfSuspiciousCompositeBlob(blob, source) {
   if (!(blob instanceof Blob)) return;

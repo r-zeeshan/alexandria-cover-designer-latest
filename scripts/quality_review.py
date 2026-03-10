@@ -3449,6 +3449,14 @@ def _job_result_preview(job: job_store.JobRecord | None) -> tuple[str, str]:
     return "", ""
 
 
+def _normalize_runtime_relative_asset_token(raw: Any) -> str:
+    token = str(raw or "").strip()
+    if not token:
+        return ""
+    normalized = thumbnail_server.normalize_relative_path_token(token)
+    return str(normalized or "").strip()
+
+
 def _job_elapsed_seconds(job: job_store.JobRecord | None) -> float:
     if job is None:
         return 0.0
@@ -8567,7 +8575,7 @@ def serve_review_webapp(
                 attempts = job_db_store.list_attempts(job_id)
                 return self._send_json({"ok": True, "job": row.to_dict(), "attempts": attempts})
             if path == "/api/thumbnail":
-                rel = str(query.get("path", [""])[0]).strip()
+                rel = _normalize_runtime_relative_asset_token(query.get("path", [""])[0])
                 size_name = str(query.get("size", ["medium"])[0]).strip().lower()
                 rel_val = api_validation.validate_non_empty_text(rel, field="path")
                 if not rel_val.valid:
@@ -8614,6 +8622,22 @@ def serve_review_webapp(
                 return self._send_file(
                     thumb,
                     content_type="image/jpeg",
+                    cache_control="no-store",
+                )
+            if path == "/api/asset":
+                rel = _normalize_runtime_relative_asset_token(query.get("path", [""])[0])
+                rel_val = api_validation.validate_non_empty_text(rel, field="path")
+                if not rel_val.valid:
+                    return self._send_error(
+                        code=rel_val.error.code,
+                        message=rel_val.error.message,
+                        details=rel_val.error.details,
+                        status=HTTPStatus.BAD_REQUEST,
+                        endpoint=path,
+                    )
+                return self._serve_project_relative(
+                    f"/{rel}",
+                    allowed_roots=[runtime_req.output_dir, runtime_req.input_dir, runtime_req.tmp_dir],
                     cache_control="no-store",
                 )
 

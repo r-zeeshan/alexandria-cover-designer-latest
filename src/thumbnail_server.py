@@ -6,6 +6,7 @@ import hashlib
 import mimetypes
 from pathlib import Path
 from typing import Iterable
+from urllib.parse import parse_qs, unquote, urlparse
 
 from PIL import Image
 
@@ -22,6 +23,27 @@ logger = get_logger(__name__)
 
 
 _ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
+
+
+def normalize_relative_path_token(relative_path: str) -> str:
+    token = str(relative_path or "").strip()
+    if not token:
+        return ""
+    raw = token
+    try:
+        parsed = urlparse(raw)
+        if parsed.path in {"/api/thumbnail", "/api/asset"}:
+            api_path = str(parse_qs(parsed.query).get("path", [""])[0] or "").strip()
+            if api_path:
+                raw = api_path
+    except Exception:
+        raw = token
+    try:
+        raw = unquote(str(raw or ""))
+    except Exception:
+        raw = str(raw or "")
+    raw = raw.split("#", 1)[0].split("?", 1)[0]
+    return raw.lstrip("/").strip()
 
 
 def _matches_magic_bytes(source: Path) -> bool:
@@ -64,7 +86,7 @@ class ThumbnailServer:
         return False
 
     def _resolve_source(self, relative_path: str) -> Path | None:
-        token = str(relative_path or "").strip().lstrip("/")
+        token = normalize_relative_path_token(relative_path)
         if not token:
             return None
         if "\x00" in token:

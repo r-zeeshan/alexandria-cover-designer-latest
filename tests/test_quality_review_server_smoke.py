@@ -11,6 +11,7 @@ import time
 import json
 import uuid
 from urllib.error import HTTPError, URLError
+from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 from PIL import Image
@@ -1090,3 +1091,25 @@ def test_quality_review_server_thumbnail_endpoint_rejects_non_image_and_disallow
                     target.unlink()
             except OSError:
                 pass
+
+
+def test_quality_review_server_asset_and_thumbnail_endpoints_accept_encoded_cachebuster_paths():
+    token = uuid.uuid4().hex
+    tmp_allowed = PROJECT_ROOT / "tmp" / f"thumb asset {token}.jpg"
+    tmp_allowed.parent.mkdir(parents=True, exist_ok=True)
+    image = Image.new("RGB", (64, 64), color=(90, 70, 50))
+    image.save(tmp_allowed, format="JPEG")
+    rel = str(tmp_allowed.relative_to(PROJECT_ROOT))
+    encoded = f"{quote(rel)}%3Fv%3D2026-03-10T18%253A40%253A00Z"
+
+    process, base_url = _start_server()
+    try:
+        assert _fetch_status(base_url, f"/api/asset?path={encoded}") == 200
+        assert _fetch_status(base_url, f"/api/thumbnail?path={encoded}&size=small") == 200
+    finally:
+        _stop_server(process)
+        try:
+            if tmp_allowed.exists():
+                tmp_allowed.unlink()
+        except OSError:
+            pass
