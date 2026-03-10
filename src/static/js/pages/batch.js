@@ -3,9 +3,54 @@ window.Pages = window.Pages || {};
 let _selectedBooks = new Set();
 let _batchUnsub = null;
 
-function defaultBatchPrompt(title, author) {
-  return `Create a beautiful, highly detailed circular medallion illustration for "${title}" by ${author}. The illustration should depict a key scene or symbol from this story as a circular vignette, with the subject centred and fully contained within the circle, edges fading softly into empty space. Highly detailed, painterly, suitable for a luxury book cover.`;
+function _batchEnrichment(book) {
+  return (book && typeof book.enrichment === 'object' && book.enrichment) ? book.enrichment : {};
 }
+
+function defaultBatchPrompt(book) {
+  const row = (book && typeof book === 'object') ? book : {};
+  const enrichment = _batchEnrichment(row);
+  const title = String(row.title || 'the story').trim();
+  const author = String(row.author || 'Unknown author').trim();
+  const iconicScenes = Array.isArray(enrichment.iconic_scenes) ? enrichment.iconic_scenes : [];
+  const firstScene = iconicScenes.find((item) => String(item || '').trim());
+  const protagonist = String(enrichment.protagonist || '').trim();
+  const setting = String(enrichment.setting_primary || '').trim();
+  const mood = String(enrichment.emotional_tone || 'dramatic, atmospheric').trim();
+  const era = String(enrichment.era || '').trim();
+
+  let sceneDescription = String(firstScene || `a pivotal scene from "${title}"`).trim();
+  if (!firstScene && protagonist && setting) {
+    sceneDescription = `${protagonist} in ${setting}, depicting: ${sceneDescription}`;
+  } else if (protagonist && setting) {
+    sceneDescription = `${protagonist} in ${setting}, depicting: ${sceneDescription}`;
+  }
+
+  return `Create a beautiful, highly detailed circular medallion illustration for "${title}" by ${author}. The illustration must depict: ${sceneDescription}. Mood: ${mood}.${era ? ` Era: ${era}.` : ''} The subject must be centred and fully contained within the circle, edges fading softly into empty space. Highly detailed, painterly, suitable for a luxury book cover. No text, no letters, no words.`;
+}
+
+function buildBatchJob(book, model, variant) {
+  return {
+    id: uuid(),
+    book_id: Number(book?.id || 0),
+    model,
+    variant,
+    status: 'queued',
+    prompt: defaultBatchPrompt(book),
+    prompt_source: 'custom',
+    backend_prompt_source: 'custom',
+    compose_prompt: false,
+    style_id: 'batch-default',
+    style_label: 'Batch',
+    quality_score: null,
+    cost_usd: 0,
+    created_at: new Date().toISOString(),
+  };
+}
+
+window.__BATCH_TEST_HOOKS__ = window.__BATCH_TEST_HOOKS__ || {};
+window.__BATCH_TEST_HOOKS__.defaultBatchPrompt = (book) => defaultBatchPrompt(book);
+window.__BATCH_TEST_HOOKS__.buildBatchJob = ({ book, model, variant }) => buildBatchJob(book, model, variant);
 
 window.Pages.batch = {
   async render() {
@@ -164,19 +209,7 @@ window.Pages.batch = {
       const book = books.find((b) => Number(b.id) === Number(bookId));
       if (!book) return;
       for (let variant = 1; variant <= variantCount; variant += 1) {
-        jobs.push({
-          id: uuid(),
-          book_id: bookId,
-          model,
-          variant,
-          status: 'queued',
-          prompt: defaultBatchPrompt(book.title, book.author),
-          style_id: 'batch-default',
-          style_label: 'Batch',
-          quality_score: null,
-          cost_usd: 0,
-          created_at: new Date().toISOString(),
-        });
+        jobs.push(buildBatchJob(book, model, variant));
       }
     });
 

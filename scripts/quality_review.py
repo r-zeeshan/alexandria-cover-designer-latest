@@ -2291,6 +2291,8 @@ def _execute_generation_payload(
             require_motif=(prompt_source != "custom" or not raw_request_prompt),
         )
     if book_row is not None:
+        prompt = _sanitize_prompt_placeholders(prompt, book_row)
+    if book_row is not None:
         logger.info("Generation prompt for book %s (%s): %s", book, prompt_source, prompt)
 
     dry_run = forced_dry_run or (not runtime.has_any_api_key())
@@ -4927,6 +4929,96 @@ def _ensure_prompt_book_context(*, prompt: str, book: dict[str, Any], require_mo
     return prompt_generator.enforce_prompt_constraints(text)
 
 
+_PLACEHOLDER_PATTERN = re.compile(r"\{(SCENE|MOOD|ERA|TITLE|AUTHOR|SUBTITLE)\}", re.IGNORECASE)
+
+
+def _alexandria_placeholder_replacements(book: dict[str, Any]) -> dict[str, str]:
+    enrichment = book.get("enrichment", {}) if isinstance(book.get("enrichment"), dict) else {}
+    title = str(book.get("title", "") or "").strip()
+    author = str(book.get("author", "") or "").strip()
+    subtitle = str(book.get("subtitle", "") or "").strip()
+    protagonist = str(enrichment.get("protagonist", "") or book.get("protagonist", "") or "").strip()
+    setting_primary = str(enrichment.get("setting_primary", "") or book.get("setting_primary", "") or "").strip()
+    setting_details = str(enrichment.get("setting_details", "") or "").strip()
+    emotional_tone = str(
+        enrichment.get("emotional_tone", "")
+        or enrichment.get("mood", "")
+        or book.get("mood", "")
+        or ""
+    ).strip()
+    era = str(enrichment.get("era", "") or book.get("era", "") or "").strip()
+
+    iconic_scenes = enrichment.get("iconic_scenes", []) if isinstance(enrichment.get("iconic_scenes"), list) else []
+    first_scene = next((str(item or "").strip() for item in iconic_scenes if str(item or "").strip()), "")
+    motifs = enrichment.get("visual_motifs", []) if isinstance(enrichment.get("visual_motifs"), list) else []
+    motif_text = ", ".join(str(item or "").strip() for item in motifs if str(item or "").strip())
+
+    if not first_scene:
+        if protagonist and setting_primary:
+            first_scene = f"{protagonist} in {setting_primary}"
+            if setting_details:
+                first_scene = f"{first_scene}, {setting_details}"
+        elif protagonist and motif_text:
+            first_scene = f"{protagonist} surrounded by {motif_text}"
+        elif setting_primary and motif_text:
+            first_scene = f"a defining moment in {setting_primary} with {motif_text}"
+        elif setting_primary:
+            first_scene = f"a defining moment in {setting_primary}"
+        elif protagonist:
+            label = title or "the story"
+            first_scene = f"{protagonist} in a pivotal moment from \"{label}\""
+        elif motif_text:
+            label = title or "the story"
+            first_scene = f"a defining image from \"{label}\" featuring {motif_text}"
+        else:
+            label = title or "the story"
+            first_scene = f"a pivotal scene from \"{label}\""
+
+    return {
+        "SCENE": first_scene,
+        "MOOD": emotional_tone or "dramatic, atmospheric",
+        "ERA": era or "historically appropriate to the source text",
+        "TITLE": title,
+        "AUTHOR": author,
+        "SUBTITLE": subtitle,
+    }
+
+
+def _resolve_alexandria_placeholders(prompt_text: str, book: dict[str, Any]) -> str:
+    text = str(prompt_text or "").strip()
+    if not text:
+        return ""
+    if not _PLACEHOLDER_PATTERN.search(text):
+        return text
+    replacements = _alexandria_placeholder_replacements(book)
+
+    def _replace(match: re.Match[str]) -> str:
+        key = match.group(1).upper()
+        return replacements.get(key, "")
+
+    return _PLACEHOLDER_PATTERN.sub(_replace, text).strip()
+
+
+def _sanitize_prompt_placeholders(prompt: str, book: dict[str, Any]) -> str:
+    text = str(prompt or "").strip()
+    if not text:
+        return ""
+    if not _PLACEHOLDER_PATTERN.search(text):
+        return text
+    replacements = _alexandria_placeholder_replacements(book)
+
+    def _replace(match: re.Match[str]) -> str:
+        key = match.group(1).upper()
+        logger.warning(
+            "Sanitized unresolved placeholder {%s} in prompt for book '%s'",
+            key,
+            str(book.get("title", "?") or "?"),
+        )
+        return replacements.get(key, "")
+
+    return _PLACEHOLDER_PATTERN.sub(_replace, text).strip()
+
+
 def _compose_prompt_for_book(
     *,
     runtime: config.Config,
@@ -4971,7 +5063,9 @@ def _compose_prompt_for_book(
         ),
         genre_negative_modifier=negative,
     )
-    composed["prompt"] = prompt_generator.enforce_prompt_constraints(str(composed.get("prompt", "")).strip())
+    composed["prompt"] = prompt_generator.enforce_prompt_constraints(
+        _resolve_alexandria_placeholders(str(composed.get("prompt", "")).strip(), book)
+    )
     composed["genre_modifier"] = composed.get("genre", "")
     composed["genre"] = inferred_genre
     composed["genre_source"] = str(inferred.get("source", "default"))
@@ -9083,8 +9177,8 @@ def serve_review_webapp(
                     )
                 selected_cover_id = str(resolved_selected_cover_id or "").strip()
                 composed_prompt_payload: dict[str, Any] = {}
+                book_row = _book_row_for_number(runtime=runtime_req, book_number=book)
                 if compose_prompt:
-                    book_row = _book_row_for_number(runtime=runtime_req, book_number=book)
                     if book_row is not None:
                         default_prompt = ""
                         variants_payload = book_row.get("variants", [])
@@ -9107,6 +9201,8 @@ def serve_review_webapp(
                         )
                         if prompt_source == "template" or not str(prompt).strip():
                             prompt = str(composed_prompt_payload.get("prompt", prompt)).strip()
+                if book_row is not None:
+                    prompt = _sanitize_prompt_placeholders(prompt, book_row)
                 idempotency_key = str(body.get("idempotency_key", "")).strip() or _generation_idempotency_key(
                     catalog_id=runtime_req.catalog_id,
                     book=book,
@@ -10795,8 +10891,8 @@ def serve_review_webapp(
                     )
                 selected_cover_id = str(resolved_selected_cover_id or "").strip()
                 composed_prompt_payload: dict[str, Any] = {}
+                book_row = _book_row_for_number(runtime=runtime_req, book_number=book)
                 if compose_prompt:
-                    book_row = _book_row_for_number(runtime=runtime_req, book_number=book)
                     if book_row is not None:
                         default_prompt = ""
                         variants_payload = book_row.get("variants", [])
@@ -10820,6 +10916,8 @@ def serve_review_webapp(
                         )
                         if prompt_source == "template" or not str(prompt).strip():
                             prompt = str(composed_prompt_payload.get("prompt", prompt)).strip()
+                if book_row is not None:
+                    prompt = _sanitize_prompt_placeholders(prompt, book_row)
                 active_models = [str(item).strip() for item in models if str(item).strip()]
                 if not active_models:
                     return self._send_error(

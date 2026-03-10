@@ -78,6 +78,10 @@ def _run_iterate_prompt_builder(payload: dict) -> dict:
     return _run_iterate_hook("buildGenerationJobPrompt", payload)
 
 
+def _run_iterate_default_mood(book: dict) -> str:
+    return _run_iterate_hook("defaultMoodForBook", book)
+
+
 def test_iterate_prompt_builder_keeps_library_prompt_precomposed():
     result = _run_iterate_prompt_builder(
         {
@@ -199,6 +203,21 @@ def test_build_scene_pool_uses_enrichment_sources_and_variation_prefixes():
     assert result[5] == "Lucy Honeychurch, George Emerson, Charlotte Bartlett — a dramatic ensemble scene from the story"
     assert result[6].startswith("intimate close-up view of ")
     assert result[7].startswith("intimate close-up view of ")
+
+
+def test_default_mood_for_book_prefers_emotional_tone():
+    result = _run_iterate_default_mood(
+        {
+            "mood": "",
+            "enrichment": {
+                "emotional_tone": "restless wonder and romantic longing",
+                "mood": "generic fallback",
+                "tones": ["should not be used"],
+            },
+        }
+    )
+
+    assert result == "restless wonder and romantic longing"
 
 
 def test_build_scene_pool_uses_title_keywords_when_enrichment_missing():

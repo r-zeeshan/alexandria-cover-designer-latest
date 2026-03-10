@@ -2375,6 +2375,52 @@ def test_execute_generation_payload_rejects_unknown_template_id(tmp_path: Path, 
         )
 
 
+def test_resolve_alexandria_placeholders_uses_enrichment_fields():
+    resolved = qr._resolve_alexandria_placeholders(
+        "Book cover illustration only — {SCENE}. The mood is {MOOD}. Era reference: {ERA}.",
+        {
+            "title": "Gulliver's Travels",
+            "author": "Jonathan Swift",
+            "enrichment": {
+                "iconic_scenes": ["Gulliver bound by tiny ropes in Lilliput"],
+                "emotional_tone": "satirical wonder with unease",
+                "era": "18th-century voyage literature",
+            },
+        },
+    )
+
+    assert "{SCENE}" not in resolved
+    assert "Gulliver bound by tiny ropes in Lilliput" in resolved
+    assert "satirical wonder with unease" in resolved
+    assert "18th-century voyage literature" in resolved
+
+
+def test_sanitize_prompt_placeholders_logs_and_replaces(caplog: pytest.LogCaptureFixture):
+    book = {
+        "title": "Gulliver's Travels",
+        "author": "Jonathan Swift",
+        "enrichment": {
+            "iconic_scenes": ["Gulliver bound by tiny ropes in Lilliput"],
+            "emotional_tone": "satirical wonder with unease",
+            "era": "18th-century voyage literature",
+        },
+    }
+
+    with caplog.at_level("WARNING"):
+        resolved = qr._sanitize_prompt_placeholders(
+            "Book cover illustration only — {SCENE}. The mood is {MOOD}. Era reference: {ERA}.",
+            book,
+        )
+
+    assert "{SCENE}" not in resolved
+    assert "Gulliver bound by tiny ropes in Lilliput" in resolved
+    assert "satirical wonder with unease" in resolved
+    assert "18th-century voyage literature" in resolved
+    assert "Sanitized unresolved placeholder {SCENE}" in caplog.text
+    assert "Sanitized unresolved placeholder {MOOD}" in caplog.text
+    assert "Sanitized unresolved placeholder {ERA}" in caplog.text
+
+
 def test_execute_generation_payload_preserves_precomposed_prompt_when_compose_prompt_disabled(tmp_path: Path, monkeypatch):
     cfg = _build_runtime_for_startup_checks(tmp_path)
     cfg = replace(cfg, openrouter_api_key="test-key")
@@ -2415,6 +2461,62 @@ def test_execute_generation_payload_preserves_precomposed_prompt_when_compose_pr
     assert captured["prompt_text"] == prompt
     assert captured["library_prompt_id"] is None
     assert captured["preserve_prompt_text"] is False
+
+
+def test_execute_generation_payload_sanitizes_unresolved_placeholders_before_generation(tmp_path: Path, monkeypatch):
+    cfg = _build_runtime_for_startup_checks(tmp_path)
+    cfg = replace(cfg, openrouter_api_key="test-key")
+    monkeypatch.setattr(qr.config, "get_config", lambda *_args, **_kwargs: cfg)
+
+    captured: dict[str, Any] = {}
+
+    def _fake_generate_single_book(**kwargs):  # type: ignore[no-untyped-def]
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr(qr.image_generator, "generate_single_book", _fake_generate_single_book)
+    monkeypatch.setattr(qr, "_serialize_generation_results", lambda **_kwargs: [])
+    monkeypatch.setattr(qr.cover_compositor, "composite_all_variants", lambda **_kwargs: None)
+    monkeypatch.setattr(qr, "_record_generation_costs", lambda **_kwargs: None)
+    monkeypatch.setattr(qr.state_db_store, "append_generation_records", lambda **_kwargs: 0)
+    monkeypatch.setattr(qr.state_db_store, "export_history_payload", lambda **_kwargs: {"items": []})
+    monkeypatch.setattr(qr, "_build_review_data_payload", lambda *_args, **_kwargs: {"books": []})
+    monkeypatch.setattr(qr, "_invalidate_cache", lambda *_args, **_kwargs: 1)
+    monkeypatch.setattr(
+        qr,
+        "_book_row_for_number",
+        lambda **_kwargs: {
+            "number": 52,
+            "title": "Gulliver's Travels",
+            "author": "Jonathan Swift",
+            "enrichment": {
+                "iconic_scenes": ["Gulliver bound by tiny ropes in Lilliput"],
+                "emotional_tone": "satirical wonder with unease",
+                "era": "18th-century voyage literature",
+            },
+        },
+    )
+
+    qr._execute_generation_payload(
+        {
+            "catalog": "classics",
+            "book": 52,
+            "models": ["openrouter/google/gemini-3-pro-image-preview"],
+            "variants": 1,
+            "prompt": "Book cover illustration only — {SCENE}. The mood is {MOOD}. Era reference: {ERA}.",
+            "prompt_source": "custom",
+            "compose_prompt": False,
+            "provider": "all",
+            "cover_source": "drive",
+            "dry_run": True,
+        }
+    )
+
+    assert "{SCENE}" not in captured["prompt_text"]
+    assert "{MOOD}" not in captured["prompt_text"]
+    assert "{ERA}" not in captured["prompt_text"]
+    assert "Gulliver bound by tiny ropes in Lilliput" in captured["prompt_text"]
+    assert "satirical wonder with unease" in captured["prompt_text"]
 
 
 def test_execute_generation_payload_forwards_preserve_prompt_text_flag(tmp_path: Path, monkeypatch):

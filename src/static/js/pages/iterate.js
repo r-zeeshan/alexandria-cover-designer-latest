@@ -405,8 +405,12 @@ function defaultSceneForBook(book) {
 
 function defaultMoodForBook(book) {
   const enrichment = _bookEnrichment(book);
-  const toneList = Array.isArray(enrichment.tones) ? enrichment.tones.filter((item) => String(item || '').trim()) : [];
-  return String(book?.mood || enrichment.mood || toneList[0] || 'classical, timeless, evocative').trim();
+  return String(
+    book?.mood
+    || enrichment.emotional_tone
+    || enrichment.mood
+    || 'classical, timeless, evocative'
+  ).trim();
 }
 
 function defaultEraForBook(book) {
@@ -580,6 +584,7 @@ function buildGenerationJobPrompt({ book, templateObj, promptId, customPrompt, s
 
 window.__ITERATE_TEST_HOOKS__ = window.__ITERATE_TEST_HOOKS__ || {};
 window.__ITERATE_TEST_HOOKS__.buildGenerationJobPrompt = buildGenerationJobPrompt;
+window.__ITERATE_TEST_HOOKS__.defaultMoodForBook = (book) => defaultMoodForBook(book);
 window.__ITERATE_TEST_HOOKS__.buildScenePool = ({ book, count, ...rawBook }) => {
   const targetBook = book && typeof book === 'object' ? book : rawBook;
   return buildScenePool(targetBook, count);
