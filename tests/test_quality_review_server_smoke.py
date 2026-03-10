@@ -155,6 +155,7 @@ def test_quality_review_server_primary_routes_smoke():
             "/api/workers",
             "/api/jobs",
             "/api/jobs/active",
+            "/api/generation-failures",
             "/api/batch-generate",
             "/api/analytics/costs",
             "/api/analytics/costs/by-book",
@@ -790,11 +791,24 @@ def test_quality_review_server_iterate_books_view_filters_by_number():
         assert payload.get("books")
         assert "models" not in payload
         first = payload["books"][0]
-        assert "composed_prompt" not in first
         assert "smart_prompts" not in first
         assert isinstance(first.get("prompt_components", {}).get("title_keywords", []), list)
         assert int(payload["books"][0].get("number", 0)) == 3
         assert str(first.get("enrichment", {}).get("emotional_tone", "")).strip()
+        assert "Gulliver" in str(first.get("composed_prompt", ""))
+        assert "A pivotal dramatic moment from the literary work" not in str(first.get("composed_prompt", ""))
+    finally:
+        _stop_server(process)
+
+
+def test_quality_review_server_generation_failures_endpoint_returns_shape():
+    process, base_url = _start_server()
+    try:
+        status, payload = _request_json(base_url, "/api/generation-failures?catalog=classics&limit=5")
+        assert status == 200
+        assert payload.get("ok") is True
+        assert isinstance(payload.get("failures"), list)
+        assert isinstance(payload.get("count"), int)
     finally:
         _stop_server(process)
 

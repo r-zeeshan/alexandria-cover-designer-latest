@@ -82,6 +82,10 @@ def _run_iterate_default_mood(book: dict) -> str:
     return _run_iterate_hook("defaultMoodForBook", book)
 
 
+def _run_iterate_ensure_enriched_prompt(prompt_text: str, book: dict) -> str:
+    return _run_iterate_hook("ensureEnrichedPrompt", {"promptText": prompt_text, "book": book})
+
+
 def test_iterate_prompt_builder_keeps_library_prompt_precomposed():
     result = _run_iterate_prompt_builder(
         {
@@ -148,6 +152,37 @@ def test_iterate_prompt_builder_keeps_legacy_style_diversifier_for_default_auto(
     assert result["libraryPromptId"] == ""
 
 
+def test_iterate_prompt_builder_appends_enrichment_for_default_auto_when_available():
+    result = _run_iterate_prompt_builder(
+        {
+            "book": {
+                "title": "Gulliver's Travels",
+                "author": "Jonathan Swift",
+                "enrichment": {
+                    "iconic_scenes": [
+                        "Gulliver wakes on the beach bound by hundreds of tiny ropes while Lilliputians climb over him",
+                    ],
+                    "protagonist": "Gulliver",
+                    "setting_primary": "the shore of Lilliput",
+                    "emotional_tone": "satirical wonder with unease",
+                    "era": "18th-century voyage literature",
+                },
+            },
+            "templateObj": None,
+            "promptId": "",
+            "customPrompt": "",
+            "sceneVal": "",
+            "moodVal": "",
+            "eraVal": "",
+            "style": {"id": "romantic-sublime", "label": "Romantic Sublime"},
+        }
+    )
+
+    assert "Gulliver wakes on the beach bound by hundreds of tiny ropes" in result["prompt"]
+    assert "The illustration must depict:" in result["prompt"]
+    assert "A pivotal dramatic moment from the literary work" not in result["prompt"]
+
+
 def test_iterate_prompt_builder_uses_evocative_scene_fallback_when_scene_missing():
     result = _run_iterate_prompt_builder(
         {
@@ -171,6 +206,32 @@ def test_iterate_prompt_builder_uses_evocative_scene_fallback_when_scene_missing
 
     assert 'A pivotal dramatic moment from the literary work "A Room with a View" by E. M. Forster' in result["prompt"]
     assert "centered and fully contained" not in result["prompt"]
+
+
+def test_ensure_enriched_prompt_replaces_generic_scene_and_mood():
+    resolved = _run_iterate_ensure_enriched_prompt(
+        'Create a colorful circular medallion illustration for "Gulliver\'s Travels" by Jonathan Swift. '
+        'A pivotal dramatic moment from the literary work "Gulliver\'s Travels" by Jonathan Swift, '
+        'depicting the central emotional conflict with period-accurate setting, costume, and atmosphere. '
+        'Mood: classical, timeless, evocative.',
+        {
+            "title": "Gulliver's Travels",
+            "author": "Jonathan Swift",
+            "enrichment": {
+                "iconic_scenes": [
+                    "Gulliver wakes on the beach bound by hundreds of tiny ropes while Lilliputians climb over him",
+                ],
+                "protagonist": "Gulliver",
+                "setting_primary": "the shore of Lilliput",
+                "emotional_tone": "satirical wonder with unease",
+                "era": "18th-century voyage literature",
+            },
+        },
+    )
+
+    assert "A pivotal dramatic moment from the literary work" not in resolved
+    assert "Gulliver wakes on the beach bound by hundreds of tiny ropes" in resolved
+    assert "satirical wonder with unease" in resolved
 
 
 def test_build_scene_pool_uses_enrichment_sources_and_variation_prefixes():

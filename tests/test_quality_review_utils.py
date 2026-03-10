@@ -2421,6 +2421,32 @@ def test_sanitize_prompt_placeholders_logs_and_replaces(caplog: pytest.LogCaptur
     assert "Sanitized unresolved placeholder {ERA}" in caplog.text
 
 
+def test_ensure_enriched_prompt_replaces_generic_scene_and_mood():
+    book = {
+        "title": "Gulliver's Travels",
+        "author": "Jonathan Swift",
+        "enrichment": {
+            "iconic_scenes": ["Gulliver bound by tiny ropes in Lilliput while miniature figures swarm over him"],
+            "protagonist": "Gulliver",
+            "setting_primary": "the shore of Lilliput",
+            "emotional_tone": "satirical wonder with unease",
+            "era": "18th-century voyage literature",
+        },
+    }
+
+    resolved = qr._ensure_enriched_prompt(
+        'Create a colorful circular medallion illustration for "Gulliver\'s Travels" by Jonathan Swift. '
+        'A pivotal dramatic moment from the literary work "Gulliver\'s Travels" by Jonathan Swift, '
+        'depicting the central emotional conflict with period-accurate setting, costume, and atmosphere. '
+        'Mood: classical, timeless, evocative.',
+        book,
+    )
+
+    assert "A pivotal dramatic moment from the literary work" not in resolved
+    assert "Gulliver bound by tiny ropes in Lilliput" in resolved
+    assert "satirical wonder with unease" in resolved
+
+
 def test_execute_generation_payload_preserves_precomposed_prompt_when_compose_prompt_disabled(tmp_path: Path, monkeypatch):
     cfg = _build_runtime_for_startup_checks(tmp_path)
     cfg = replace(cfg, openrouter_api_key="test-key")
@@ -2516,6 +2542,61 @@ def test_execute_generation_payload_sanitizes_unresolved_placeholders_before_gen
     assert "{MOOD}" not in captured["prompt_text"]
     assert "{ERA}" not in captured["prompt_text"]
     assert "Gulliver bound by tiny ropes in Lilliput" in captured["prompt_text"]
+    assert "satirical wonder with unease" in captured["prompt_text"]
+
+
+def test_execute_generation_payload_appends_enrichment_for_generic_prompt(tmp_path: Path, monkeypatch):
+    cfg = _build_runtime_for_startup_checks(tmp_path)
+    cfg = replace(cfg, openrouter_api_key="test-key")
+    monkeypatch.setattr(qr.config, "get_config", lambda *_args, **_kwargs: cfg)
+
+    captured: dict[str, Any] = {}
+
+    def _fake_generate_single_book(**kwargs):  # type: ignore[no-untyped-def]
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr(qr.image_generator, "generate_single_book", _fake_generate_single_book)
+    monkeypatch.setattr(qr, "_serialize_generation_results", lambda **_kwargs: [])
+    monkeypatch.setattr(qr.cover_compositor, "composite_all_variants", lambda **_kwargs: None)
+    monkeypatch.setattr(qr, "_record_generation_costs", lambda **_kwargs: None)
+    monkeypatch.setattr(qr.state_db_store, "append_generation_records", lambda **_kwargs: 0)
+    monkeypatch.setattr(qr.state_db_store, "export_history_payload", lambda **_kwargs: {"items": []})
+    monkeypatch.setattr(qr, "_build_review_data_payload", lambda *_args, **_kwargs: {"books": []})
+    monkeypatch.setattr(qr, "_invalidate_cache", lambda *_args, **_kwargs: 1)
+    monkeypatch.setattr(
+        qr,
+        "_book_row_for_number",
+        lambda **_kwargs: {
+            "number": 52,
+            "title": "Gulliver's Travels",
+            "author": "Jonathan Swift",
+            "enrichment": {
+                "iconic_scenes": ["Gulliver wakes on the beach bound by hundreds of tiny ropes while Lilliputians climb over him"],
+                "protagonist": "Gulliver",
+                "setting_primary": "the shore of Lilliput",
+                "emotional_tone": "satirical wonder with unease",
+                "era": "18th-century voyage literature",
+            },
+        },
+    )
+
+    qr._execute_generation_payload(
+        {
+            "catalog": "classics",
+            "book": 52,
+            "models": ["openrouter/google/gemini-3-pro-image-preview"],
+            "variants": 1,
+            "prompt": 'Create a colorful circular medallion illustration for "Gulliver\'s Travels" by Jonathan Swift.',
+            "prompt_source": "custom",
+            "compose_prompt": False,
+            "provider": "all",
+            "cover_source": "drive",
+            "dry_run": True,
+        }
+    )
+
+    assert "The illustration must depict: Gulliver wakes on the beach bound by hundreds of tiny ropes" in captured["prompt_text"]
     assert "satirical wonder with unease" in captured["prompt_text"]
 
 

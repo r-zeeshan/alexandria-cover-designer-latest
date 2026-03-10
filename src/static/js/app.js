@@ -116,7 +116,7 @@ window.JobQueue = {
   COMPOSITE_TIMEOUT: 15000,
   RETRY_THRESHOLD: 0.35,
   MAX_RETRIES: 2,
-  DEAD_JOB_TIMEOUT: 180000,
+  DEAD_JOB_TIMEOUT: 480000,
 
   queue: [],
   running: new Map(),
@@ -196,6 +196,22 @@ window.JobQueue = {
     };
   },
 
+  _modelLabel(modelId) {
+    const match = Array.isArray(OpenRouter.MODELS)
+      ? OpenRouter.MODELS.find((entry) => String(entry?.id || '') === String(modelId || ''))
+      : null;
+    return String(match?.label || modelId || 'model');
+  },
+
+  _nextRetryModel(job) {
+    const fallbackModels = Array.isArray(job?.fallback_models) ? job.fallback_models : [];
+    const attemptedModels = Array.isArray(job?._attempted_models) ? job._attempted_models : [];
+    return fallbackModels.find((candidate) => {
+      const token = String(candidate || '').trim();
+      return token && !attemptedModels.includes(token);
+    }) || '';
+  },
+
   _snapshot() {
     const now = Date.now();
     const allJobs = DB.dbGetAll('jobs');
@@ -257,6 +273,12 @@ window.JobQueue = {
         entry.job._subStatus = `Waiting on backend queue (${backendAge}s since update)`;
       }
       if (elapsedMs > this.DEAD_JOB_TIMEOUT) {
+        const backendStatus = String(entry.job._backendStatus || '').trim().toLowerCase();
+        const backendStillActive = backendStatus === 'running' || backendStatus === 'retrying';
+        if (backendStillActive) {
+          DB.dbPut('jobs', entry.job);
+          continue;
+        }
         entry.abortController.abort();
         entry.job.status = 'failed';
         entry.job.error = 'Job timed out';
@@ -274,6 +296,10 @@ window.JobQueue = {
     this.running.set(job.id, { job, abortController, startTime: Date.now() });
     job.started_at = new Date().toISOString();
     job.cost_usd = Number(job.cost_usd || 0);
+    job._attempted_models = Array.isArray(job._attempted_models) ? job._attempted_models : [];
+    if (job.model && !job._attempted_models.includes(job.model)) {
+      job._attempted_models.push(job.model);
+    }
 
     const setStatus = (status, sub = '') => {
       job.status = status;
@@ -383,7 +409,14 @@ window.JobQueue = {
           }
           const transient = /timed out|timeout|missing image payload|polling failed: http 5\d\d|temporarily unavailable/i.test(message);
           if (transient && attempts < this.MAX_RETRIES + 1) {
-            setStatus('retrying', `Transient error, retry ${attempts}/${this.MAX_RETRIES}`);
+            const nextModel = this._nextRetryModel(job);
+            if (nextModel) {
+              job.model = nextModel;
+              job._attempted_models.push(nextModel);
+              setStatus('retrying', `Transient error; switching to ${this._modelLabel(nextModel)} (${attempts}/${this.MAX_RETRIES})`);
+            } else {
+              setStatus('retrying', `Transient error, retry ${attempts}/${this.MAX_RETRIES}`);
+            }
             await new Promise((resolve) => setTimeout(resolve, Math.min((attempts + 1) * 4000, 30000)));
             continue;
           }

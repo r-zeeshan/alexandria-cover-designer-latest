@@ -1104,11 +1104,23 @@ class JobWorkerPool:
                     _batch_publish_progress_for_job(row)
                 self._write_heartbeat(worker_id=worker_id, state="idle")
             except JobStageError as exc:
+                error_payload = {
+                    "message": str(exc),
+                    "type": exc.__class__.__name__,
+                    "stage": exc.stage,
+                    **({"failures": exc.details.get("failures", [])} if exc.details.get("failures") else {}),
+                }
+                attempt_meta = {
+                    "worker_id": worker_id,
+                    "stage": exc.stage,
+                    "error_type": exc.__class__.__name__,
+                    **({"failures": exc.details.get("failures", [])} if exc.details.get("failures") else {}),
+                }
                 if exc.retryable:
                     delay = min(60.0, max(2.0, 2.0 ** attempt_number))
                     state = self.store.mark_failed(
                         job.id,
-                        error={"message": str(exc), "type": exc.__class__.__name__, "stage": exc.stage},
+                        error=error_payload,
                         retryable=True,
                         retry_delay_seconds=delay,
                     )
@@ -1117,7 +1129,7 @@ class JobWorkerPool:
                         attempt_id,
                         status=status,
                         error_text=str(exc),
-                        meta={"worker_id": worker_id, "retry_delay_seconds": delay, "stage": exc.stage},
+                        meta={**attempt_meta, "retry_delay_seconds": delay},
                     )
                     job_event_broker.publish(
                         "job_failed",
@@ -1139,7 +1151,7 @@ class JobWorkerPool:
                 else:
                     row = self.store.mark_failed(
                         job.id,
-                        error={"message": str(exc), "type": exc.__class__.__name__, "stage": exc.stage},
+                        error=error_payload,
                         retryable=False,
                         retry_delay_seconds=0.0,
                     )
@@ -1148,7 +1160,7 @@ class JobWorkerPool:
                         attempt_id,
                         status=status,
                         error_text=str(exc),
-                        meta={"worker_id": worker_id, "stage": exc.stage},
+                        meta=attempt_meta,
                     )
                     job_event_broker.publish(
                         "job_failed",
@@ -1173,9 +1185,10 @@ class JobWorkerPool:
                 self._write_heartbeat(worker_id=worker_id, state="idle")
             except (image_generator.RetryableGenerationError, requests.RequestException) as exc:
                 delay = min(60.0, max(2.0, 2.0 ** attempt_number))
+                error_payload = {"message": str(exc), "type": exc.__class__.__name__, "stage": "generate"}
                 state = self.store.mark_failed(
                     job.id,
-                    error={"message": str(exc), "type": exc.__class__.__name__, "stage": "generate"},
+                    error=error_payload,
                     retryable=True,
                     retry_delay_seconds=delay,
                 )
@@ -1184,7 +1197,12 @@ class JobWorkerPool:
                     attempt_id,
                     status=status,
                     error_text=str(exc),
-                    meta={"worker_id": worker_id, "retry_delay_seconds": delay, "stage": "generate"},
+                    meta={
+                        "worker_id": worker_id,
+                        "retry_delay_seconds": delay,
+                        "stage": "generate",
+                        "error_type": exc.__class__.__name__,
+                    },
                 )
                 job_event_broker.publish(
                     "job_failed",
@@ -1205,9 +1223,10 @@ class JobWorkerPool:
                     _batch_publish_progress_for_job(state)
                 self._write_heartbeat(worker_id=worker_id, state="idle")
             except Exception as exc:  # pragma: no cover - defensive
+                error_payload = {"message": str(exc), "type": exc.__class__.__name__}
                 row = self.store.mark_failed(
                     job.id,
-                    error={"message": str(exc), "type": exc.__class__.__name__},
+                    error=error_payload,
                     retryable=False,
                     retry_delay_seconds=0.0,
                 )
@@ -1215,7 +1234,7 @@ class JobWorkerPool:
                     attempt_id,
                     status="failed",
                     error_text=str(exc),
-                    meta={"worker_id": worker_id},
+                    meta={"worker_id": worker_id, "error_type": exc.__class__.__name__},
                 )
                 job_event_broker.publish(
                     "job_failed",
@@ -1883,6 +1902,7 @@ def _serialize_generation_results(
                 "book_number": row.book_number,
                 "variant": row.variant,
                 "model": row.model,
+                "provider": row.provider,
                 "prompt": row.prompt,
                 "image_path": image_rel,
                 "raw_art_path": persisted_raw_path,
@@ -1895,6 +1915,8 @@ def _serialize_generation_results(
                 "generation_time": row.generation_time,
                 "cost": row.cost,
                 "dry_run": row.dry_run,
+                "attempts": row.attempts,
+                "failure_meta": row.failure_meta,
                 "similarity_warning": row.similarity_warning,
                 "similar_to_book": row.similar_to_book,
                 "distinctiveness_score": row.distinctiveness_score,
@@ -2050,10 +2072,18 @@ def _prune_stale_generated_variants_for_book(*, runtime: config.Config, book_num
 class JobStageError(RuntimeError):
     """Stage-scoped execution error for retry-aware async jobs."""
 
-    def __init__(self, *, stage: str, message: str, retryable: bool):
+    def __init__(
+        self,
+        *,
+        stage: str,
+        message: str,
+        retryable: bool,
+        details: dict[str, Any] | None = None,
+    ):
         super().__init__(message)
         self.stage = str(stage or "execute")
         self.retryable = bool(retryable)
+        self.details = details if isinstance(details, dict) else {}
 
 
 def _checkpoint_catalog_token(catalog_id: str) -> str:
@@ -2292,6 +2322,7 @@ def _execute_generation_payload(
         )
     if book_row is not None:
         prompt = _sanitize_prompt_placeholders(prompt, book_row)
+        prompt = _ensure_enriched_prompt(prompt, book_row)
     if book_row is not None:
         logger.info("Generation prompt for book %s (%s): %s", book, prompt_source, prompt)
 
@@ -2358,12 +2389,11 @@ def _execute_generation_payload(
             if not dry_run:
                 successful_rows = [row for row in serialized if isinstance(row, dict) and bool(row.get("success"))]
                 if not successful_rows:
+                    summarized_failures = _summarize_generation_failures(serialized)
                     failure_details: list[str] = []
-                    for row in serialized:
-                        if not isinstance(row, dict):
-                            continue
+                    for row in summarized_failures:
                         model = str(row.get("model", "unknown"))
-                        variant = _safe_int(row.get("variant", row.get("variant_id", 0)), 0)
+                        variant = _safe_int(row.get("variant"), 0)
                         error_text = str(row.get("error", "") or "unknown error").strip()
                         failure_details.append(f"{model} v{variant}: {error_text}")
                     detail_blob = "; ".join(failure_details[:4])
@@ -2372,20 +2402,31 @@ def _execute_generation_payload(
                     message = "All generation attempts failed; no successful variants."
                     if detail_blob:
                         message = f"{message} {detail_blob}"
-                    raise JobStageError(stage="generate", message=message, retryable=False)
+                    raise JobStageError(
+                        stage="generate",
+                        message=message,
+                        retryable=False,
+                        details={"failures": summarized_failures},
+                    )
         except Exception as exc:
             if checkpoint:
                 _set_checkpoint_stage(
                     checkpoint,
                     stage="generate",
                     status="failed",
-                    error={"message": str(exc), "type": exc.__class__.__name__, "stage": "generate"},
+                    error={
+                        "message": str(exc),
+                        "type": exc.__class__.__name__,
+                        "stage": "generate",
+                        **({"details": exc.details} if isinstance(exc, JobStageError) and exc.details else {}),
+                    },
                 )
                 _save_job_checkpoint(runtime=runtime, checkpoint=checkpoint)
             raise JobStageError(
                 stage="generate",
                 message=str(exc),
                 retryable=_is_retryable_stage_error(stage="generate", exc=exc),
+                details=exc.details if isinstance(exc, JobStageError) else None,
             ) from exc
         if checkpoint:
             checkpoint["results"] = serialized
@@ -4107,6 +4148,7 @@ def _iterate_data_dependency_paths(*, runtime: config.Config, prompts_path: Path
         config.enriched_catalog_path(catalog_id=runtime.catalog_id, config_dir=runtime.config_dir),
         _prompt_performance_path_for_runtime(runtime),
         _winner_path_for_runtime(runtime),
+        PROJECT_ROOT / "scripts" / "quality_review.py",
         PROJECT_ROOT / "src" / "config.py",
     ]
 
@@ -4163,6 +4205,8 @@ def write_iterate_books_data(*, runtime: config.Config | None = None, prompts_pa
     winners_payload = _load_winner_payload(_winner_path_for_runtime(runtime))
     winner_map = winners_payload.get("selections", {}) if isinstance(winners_payload, dict) else {}
     genre_prompts = _genre_prompt_payload(runtime=runtime)
+    template_rows = _template_rows_for_runtime(runtime=runtime)
+    default_template_id = str(template_rows[0].get("id", "")).strip() if template_rows else ""
 
     enriched_by_book: dict[int, dict[str, Any]] = {}
     if isinstance(enriched_catalog, list):
@@ -4207,6 +4251,24 @@ def write_iterate_books_data(*, runtime: config.Config | None = None, prompts_pa
             metadata_genre=str(enrichment.get("genre", "") or book.get("genre", "")),
             prompts=genre_prompts,
         )
+        composed = _compose_prompt_for_book(
+            runtime=runtime,
+            book={
+                "number": number,
+                "title": title,
+                "author": author,
+                "genre": book.get("genre", prompt_row.get("genre", "")),
+                "enrichment": enrichment,
+            },
+            base_prompt=str(
+                default_prompt
+                or (
+                    f'Cinematic full-bleed narrative scene for "{title}" by {author}, '
+                    "single dominant focal subject, scene artwork only, no text, no logos, no borders or frames."
+                )
+            ),
+            template_id=default_template_id,
+        )
         winner_row = winner_map.get(str(number), {})
         winner_variant = _safe_int(winner_row.get("winner") if isinstance(winner_row, dict) else winner_row, 0)
         books.append(
@@ -4220,9 +4282,10 @@ def write_iterate_books_data(*, runtime: config.Config | None = None, prompts_pa
                 "cover_name": str(book.get("cover_name", book.get("drive_name", title))).strip(),
                 "drive_kind": str(book.get("drive_kind", "")).strip(),
                 "default_prompt": default_prompt,
-                "genre": str(inferred.get("genre", "literary_fiction") or "literary_fiction"),
+                "genre": str(composed.get("genre", inferred.get("genre", "literary_fiction")) or "literary_fiction"),
+                "composed_prompt": str(composed.get("prompt", default_prompt)).strip(),
                 "prompt_components": {
-                    "title_keywords": genre_intelligence.extract_title_keywords(title=title, limit=6),
+                    "title_keywords": composed.get("title_keywords", genre_intelligence.extract_title_keywords(title=title, limit=6)),
                 },
                 "enrichment": enrichment,
                 "local_cover_available": _folder_has_local_cover(runtime.input_dir / folder_name) or bool(book.get("cover_jpg_id")),
@@ -4945,6 +5008,13 @@ def _ensure_prompt_book_context(*, prompt: str, book: dict[str, Any], require_mo
 
 
 _PLACEHOLDER_PATTERN = re.compile(r"\{(SCENE|MOOD|ERA|TITLE|AUTHOR|SUBTITLE)\}", re.IGNORECASE)
+_GENERIC_SCENE_PATTERN = re.compile(
+    r'A pivotal dramatic moment from the literary work\s+"[^"]*"'
+    r'(?:\s+by\s+[^,."]+)?'
+    r'(?:,\s*depicting the central emotional conflict[^.]*\.?)?',
+    re.IGNORECASE,
+)
+_GENERIC_MOOD_PATTERN = re.compile(r"classical,\s+timeless,\s+evocative", re.IGNORECASE)
 
 
 def _alexandria_placeholder_replacements(book: dict[str, Any]) -> dict[str, str]:
@@ -5034,6 +5104,47 @@ def _sanitize_prompt_placeholders(prompt: str, book: dict[str, Any]) -> str:
     return _PLACEHOLDER_PATTERN.sub(_replace, text).strip()
 
 
+def _ensure_enriched_prompt(prompt: str, book: dict[str, Any]) -> str:
+    """Ensure the final prompt carries concrete book-specific enrichment."""
+    text = str(prompt or "").strip()
+    enrichment = book.get("enrichment", {}) if isinstance(book.get("enrichment"), dict) else {}
+    iconic_scenes = enrichment.get("iconic_scenes", []) if isinstance(enrichment.get("iconic_scenes"), list) else []
+    populated_scenes = [str(item or "").strip() for item in iconic_scenes if str(item or "").strip()]
+    first_scene = populated_scenes[0] if populated_scenes else ""
+    scene_sentence = first_scene.rstrip(" .!?")
+    protagonist = str(enrichment.get("protagonist", "") or "").strip()
+    setting = str(enrichment.get("setting_primary", "") or "").strip()
+    emotional_tone = str(enrichment.get("emotional_tone", "") or enrichment.get("mood", "") or "").strip()
+    era = str(enrichment.get("era", "") or "").strip()
+
+    if emotional_tone and text:
+        text = _GENERIC_MOOD_PATTERN.sub(emotional_tone, text)
+    if not first_scene:
+        return text
+
+    result = _GENERIC_SCENE_PATTERN.sub(first_scene, text)
+    lowered = result.lower()
+    scene_present = any(scene[:30].lower() in lowered for scene in populated_scenes[:3] if scene[:30].strip())
+    if not scene_present:
+        enrichment_sentences = [f"The illustration must depict: {scene_sentence or first_scene}."]
+        if protagonist:
+            enrichment_sentences.append(f"Character: {protagonist}.")
+        if setting:
+            enrichment_sentences.append(f"Setting: {setting}.")
+        if emotional_tone:
+            enrichment_sentences.append(f"Mood: {emotional_tone}.")
+        if era:
+            enrichment_sentences.append(f"Era: {era}.")
+        prefix = result.rstrip()
+        if prefix and prefix[-1] not in ".!?":
+            prefix = f"{prefix}."
+        result = " ".join(part for part in [prefix, *enrichment_sentences] if part).strip()
+
+    if emotional_tone and result:
+        result = _GENERIC_MOOD_PATTERN.sub(emotional_tone, result)
+    return result.strip()
+
+
 def _compose_prompt_for_book(
     *,
     runtime: config.Config,
@@ -5078,9 +5189,9 @@ def _compose_prompt_for_book(
         ),
         genre_negative_modifier=negative,
     )
-    composed["prompt"] = prompt_generator.enforce_prompt_constraints(
-        _resolve_alexandria_placeholders(str(composed.get("prompt", "")).strip(), book)
-    )
+    resolved_prompt = _resolve_alexandria_placeholders(str(composed.get("prompt", "")).strip(), book)
+    constrained_prompt = prompt_generator.enforce_prompt_constraints(resolved_prompt)
+    composed["prompt"] = _ensure_enriched_prompt(constrained_prompt, book)
     composed["genre_modifier"] = composed.get("genre", "")
     composed["genre"] = inferred_genre
     composed["genre_source"] = str(inferred.get("source", "default"))
@@ -5120,6 +5231,53 @@ def _friendly_model_label(model: str) -> str:
         else:
             words.append(lower.capitalize())
     return " ".join(words) or token
+
+
+def _recent_generation_failures_payload(*, runtime: config.Config, limit: int = 20) -> dict[str, Any]:
+    target_limit = max(1, min(200, int(limit)))
+    jobs = job_db_store.list_jobs(
+        limit=max(50, target_limit * 5),
+        statuses=["failed", "retrying"],
+        catalog_id=runtime.catalog_id,
+    )
+    rows: list[dict[str, Any]] = []
+    for job in jobs:
+        if str(job.job_type or "").strip().lower() != "generate_cover":
+            continue
+        job_error = job.error if isinstance(job.error, dict) else {}
+        attempts = job_db_store.list_attempts(job.id)
+        latest_attempt = attempts[-1] if attempts else None
+        latest_meta = latest_attempt.get("meta", {}) if isinstance(latest_attempt, dict) and isinstance(latest_attempt.get("meta"), dict) else {}
+        failure_rows = job_error.get("failures", []) if isinstance(job_error.get("failures"), list) else []
+        if not failure_rows and isinstance(latest_meta.get("failures"), list):
+            failure_rows = latest_meta.get("failures", [])
+        payload_models = job.payload.get("models", []) if isinstance(job.payload, dict) and isinstance(job.payload.get("models"), list) else []
+        rows.append(
+            {
+                "job_id": str(job.id),
+                "book_number": int(job.book_number or 0),
+                "status": str(job.status or "").strip().lower(),
+                "attempts": int(job.attempts or 0),
+                "max_attempts": int(job.max_attempts or 0),
+                "created_at": str(job.created_at or ""),
+                "updated_at": str(job.updated_at or ""),
+                "stage": str(job_error.get("stage", latest_meta.get("stage", ""))).strip(),
+                "error": str(job_error.get("message", "") or (latest_attempt or {}).get("error_text", "")).strip(),
+                "error_type": str(job_error.get("type", "") or latest_meta.get("error_type", "")).strip(),
+                "models": [str(item).strip() for item in payload_models if str(item).strip()],
+                "provider": str((job.payload or {}).get("provider", "")).strip().lower() if isinstance(job.payload, dict) else "",
+                "failures": [row for row in failure_rows if isinstance(row, dict)],
+                "latest_attempt": latest_attempt if isinstance(latest_attempt, dict) else None,
+            }
+        )
+        if len(rows) >= target_limit:
+            break
+    return {
+        "ok": True,
+        "catalog": runtime.catalog_id,
+        "failures": rows,
+        "count": len(rows),
+    }
 
 
 def _api_models_payload(*, runtime: config.Config) -> dict[str, Any]:
@@ -7820,6 +7978,9 @@ def serve_review_webapp(
                     catalog_id=runtime_req.catalog_id,
                 )
                 return self._send_json({"ok": True, "jobs": [job.to_dict() for job in jobs], "count": len(jobs)})
+            if path == "/api/generation-failures":
+                limit = _safe_int(query.get("limit", ["20"])[0], 20)
+                return self._send_json(_recent_generation_failures_payload(runtime=runtime_req, limit=limit))
             if path == "/api/jobs/events":
                 return self._serve_job_events(catalog_id=runtime_req.catalog_id)
             if path.startswith("/api/jobs/"):
@@ -9218,6 +9379,7 @@ def serve_review_webapp(
                             prompt = str(composed_prompt_payload.get("prompt", prompt)).strip()
                 if book_row is not None:
                     prompt = _sanitize_prompt_placeholders(prompt, book_row)
+                    prompt = _ensure_enriched_prompt(prompt, book_row)
                 idempotency_key = str(body.get("idempotency_key", "")).strip() or _generation_idempotency_key(
                     catalog_id=runtime_req.catalog_id,
                     book=book,
@@ -10933,6 +11095,7 @@ def serve_review_webapp(
                             prompt = str(composed_prompt_payload.get("prompt", prompt)).strip()
                 if book_row is not None:
                     prompt = _sanitize_prompt_placeholders(prompt, book_row)
+                    prompt = _ensure_enriched_prompt(prompt, book_row)
                 active_models = [str(item).strip() for item in models if str(item).strip()]
                 if not active_models:
                     return self._send_error(
@@ -13052,6 +13215,28 @@ def _register_export_result(*, runtime: config.Config, export_type: str, summary
     _save_export_manifest(runtime, manifest)
     _record_export_tracking(runtime=runtime, export_type=export_type, summary=summary, export_id=token)
     return token
+
+
+def _summarize_generation_failures(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    failures: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict) or bool(row.get("success")):
+            continue
+        failure_meta = row.get("failure_meta", {}) if isinstance(row.get("failure_meta"), dict) else {}
+        status_code = _safe_int(failure_meta.get("status_code"), 0)
+        failures.append(
+            {
+                "model": str(row.get("model", "")).strip(),
+                "variant": _safe_int(row.get("variant", row.get("variant_id", 0)), 0),
+                "provider": str(row.get("provider", failure_meta.get("provider", ""))).strip(),
+                "attempts": _safe_int(row.get("attempts"), 0),
+                "status_code": status_code if status_code > 0 else None,
+                "error": str(row.get("error", "") or failure_meta.get("error", "") or "unknown error").strip(),
+                "retry_count": _safe_int(failure_meta.get("retry_count"), _safe_int(row.get("attempts"), 0)),
+                "error_type": str(failure_meta.get("error_type", "")).strip(),
+            }
+        )
+    return failures
 
 
 def _exports_listing_payload(*, runtime: config.Config) -> dict[str, Any]:
@@ -15860,6 +16045,7 @@ def _build_api_docs_html() -> str:
         ("POST", "/api/admin/migrate-to-sqlite", "Migrate JSON -> SQLite", "{\"db_path\":\"data/alexandria.db\"}", "{\"ok\":true,\"summary\":{...}}", "One-shot migration command for scale mode."),
         ("GET", "/api/jobs?status=queued,running&limit=50", "List async jobs", "status,limit,book,catalog", "{\"jobs\":[...],\"count\":12}", "List persisted async generation jobs."),
         ("GET", "/api/jobs/{id}", "Get async job", "job_id", "{\"job\":{...},\"attempts\":[...]}", "Inspect one async job including attempt history."),
+        ("GET", "/api/generation-failures?catalog=classics&limit=20", "Generation failures", "catalog,limit", "{\"failures\":[...]}", "Inspect recent failed or retrying generation jobs with attempt diagnostics."),
         ("GET", "/api/batch-generate", "List batches", "catalog,limit,offset", "{\"batches\":[...],\"pagination\":{...}}", "List recent batch generation runs."),
         ("GET", "/api/batch-generate/{batchId}/status", "Batch status", "batchId,catalog,limit,offset", "{\"status\":\"running\",\"books\":[...]}", "Get live per-book batch progress with pagination."),
         ("GET", "/api/events/job/{id}", "Job SSE stream", "id,catalog", "event-stream", "Real-time stream for one async job."),

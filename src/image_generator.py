@@ -124,6 +124,13 @@ VIVID_COLOR_GUARDRAIL = (
     "Color direction: vivid, high-saturation painterly palette with rich contrast and luminous highlights."
 )
 GENERATION_GUARDRAIL = f"{STRICT_SCENE_GUARDRAIL} {NO_ORNAMENT_GUARDRAIL} {VIVID_COLOR_GUARDRAIL}"
+GENERIC_SCENE_PATTERN = re.compile(
+    r'A pivotal dramatic moment from the literary work\s+"[^"]*"'
+    r'(?:\s+by\s+[^,."]+)?'
+    r'(?:,\s*depicting the central emotional conflict[^.]*\.?)?',
+    re.IGNORECASE,
+)
+GENERIC_MOOD_PATTERN = re.compile(r"classical,\s+timeless,\s+evocative", re.IGNORECASE)
 MAX_CONTENT_VIOLATION_SCORE = 0.24
 TEXT_ARTIFACT_HARD_SCORE_FLOOR = 0.20
 TEXT_ARTIFACT_HARD_TEXT_PENALTY = 0.62
@@ -139,6 +146,8 @@ ARTIFACT_RETRY_APPEND = (
     "banners, plaques, medallion rings, circular frames, ornamental borders, decorative edges, "
     "filigree, scrollwork, arabesques, ornamental curls, black ornamental silhouettes, or lace-like cutout motifs."
 )
+_ENRICHED_BOOK_LOOKUP_CACHE: dict[str, Any] = {"path": "", "mtime": -1.0, "lookup": {}}
+_ENRICHED_BOOK_LOOKUP_LOCK = threading.Lock()
 ALEXANDRIA_NEGATIVE_PROMPT = (
     "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, "
     "no labels, no watermarks, no signatures, no inscriptions of any kind. No modern elements, no photography, "
@@ -331,6 +340,7 @@ class GenerationResult:
     similarity_warning: str | None = None
     similar_to_book: int | None = None
     distinctiveness_score: float | None = None
+    failure_meta: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
@@ -348,6 +358,167 @@ class RetryableGenerationError(GenerationError):
     def __init__(self, message: str, status_code: int | None = None):
         super().__init__(message)
         self.status_code = status_code
+
+
+def _generation_failure_status_code(exc: Exception) -> int | None:
+    status_code = getattr(exc, "status_code", None)
+    if isinstance(status_code, int) and status_code > 0:
+        return status_code
+    response = getattr(exc, "response", None)
+    response_code = getattr(response, "status_code", None)
+    if isinstance(response_code, int) and response_code > 0:
+        return response_code
+    return None
+
+
+def _generation_failure_meta(
+    *,
+    exc: Exception,
+    model: str,
+    provider: str,
+    book_number: int,
+    variant: int,
+    retry_count: int,
+    max_attempts: int,
+) -> dict[str, Any]:
+    status_code = _generation_failure_status_code(exc)
+    payload = {
+        "book_number": int(book_number),
+        "variant": int(variant),
+        "model": str(model or "").strip(),
+        "provider": str(provider or "").strip().lower(),
+        "retry_count": int(retry_count),
+        "max_attempts": int(max_attempts),
+        "status_code": status_code,
+        "error": str(exc),
+        "error_type": exc.__class__.__name__,
+    }
+    return payload
+
+
+def _log_generation_attempt_failure(
+    *,
+    exc: Exception,
+    model: str,
+    provider: str,
+    book_number: int,
+    variant: int,
+    retry_count: int,
+    max_attempts: int,
+    retryable: bool,
+) -> dict[str, Any]:
+    payload = _generation_failure_meta(
+        exc=exc,
+        model=model,
+        provider=provider,
+        book_number=book_number,
+        variant=variant,
+        retry_count=retry_count,
+        max_attempts=max_attempts,
+    )
+    logger.warning(
+        "Generation attempt failed for book %s model %s variant %s via %s (%s/%s): %s",
+        book_number,
+        model,
+        variant,
+        provider,
+        retry_count,
+        max_attempts,
+        exc,
+        extra={**payload, "retryable": bool(retryable)},
+    )
+    return payload
+
+
+def _enriched_book_lookup(runtime: config.Config) -> dict[int, dict[str, Any]]:
+    catalog_id = str(getattr(runtime, "catalog_id", config.DEFAULT_CATALOG_ID) or config.DEFAULT_CATALOG_ID)
+    config_dir = getattr(runtime, "config_dir", config.CONFIG_DIR)
+    path = config.enriched_catalog_path(catalog_id=catalog_id, config_dir=config_dir)
+    try:
+        mtime = float(path.stat().st_mtime)
+    except OSError:
+        mtime = -1.0
+    cache_key = str(path.resolve()) if path.exists() else str(path)
+    with _ENRICHED_BOOK_LOOKUP_LOCK:
+        if _ENRICHED_BOOK_LOOKUP_CACHE["path"] == cache_key and _ENRICHED_BOOK_LOOKUP_CACHE["mtime"] == mtime:
+            return dict(_ENRICHED_BOOK_LOOKUP_CACHE["lookup"])
+
+    raw_payload = safe_json.load_json(path, {"rows": []})
+    rows = []
+    if isinstance(raw_payload, dict):
+        for key in ("rows", "books", "items"):
+            candidate = raw_payload.get(key)
+            if isinstance(candidate, list):
+                rows = candidate
+                break
+    elif isinstance(raw_payload, list):
+        rows = raw_payload
+
+    lookup: dict[int, dict[str, Any]] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        number = int(row.get("number", 0) or 0)
+        enrichment = row.get("enrichment", {})
+        if number > 0 and isinstance(enrichment, dict):
+            lookup[number] = enrichment
+
+    with _ENRICHED_BOOK_LOOKUP_LOCK:
+        _ENRICHED_BOOK_LOOKUP_CACHE["path"] = cache_key
+        _ENRICHED_BOOK_LOOKUP_CACHE["mtime"] = mtime
+        _ENRICHED_BOOK_LOOKUP_CACHE["lookup"] = dict(lookup)
+    return lookup
+
+
+def _ensure_prompt_enrichment(prompt: str, *, runtime: config.Config, book_number: int, title: str, author: str) -> str:
+    text = str(prompt or "").strip()
+    enrichment = _enriched_book_lookup(runtime).get(int(book_number), {})
+    if not isinstance(enrichment, dict):
+        enrichment = {}
+    populated_scenes = [
+        str(item or "").strip()
+        for item in (enrichment.get("iconic_scenes", []) if isinstance(enrichment.get("iconic_scenes"), list) else [])
+        if str(item or "").strip()
+    ]
+    first_scene = populated_scenes[0] if populated_scenes else ""
+    scene_sentence = first_scene.rstrip(" .!?")
+    protagonist = str(enrichment.get("protagonist", "") or "").strip()
+    setting = str(enrichment.get("setting_primary", "") or "").strip()
+    emotional_tone = str(enrichment.get("emotional_tone", "") or enrichment.get("mood", "") or "").strip()
+    era = str(enrichment.get("era", "") or "").strip()
+
+    if emotional_tone and text:
+        text = GENERIC_MOOD_PATTERN.sub(emotional_tone, text)
+    if not first_scene:
+        return text
+
+    result = GENERIC_SCENE_PATTERN.sub(first_scene, text)
+    lowered = result.lower()
+    scene_present = any(scene[:30].lower() in lowered for scene in populated_scenes[:3] if scene[:30].strip())
+    if not scene_present:
+        parts = [f"The illustration must depict: {scene_sentence or first_scene}."]
+        if protagonist:
+            parts.append(f"Character: {protagonist}.")
+        if setting:
+            parts.append(f"Setting: {setting}.")
+        if emotional_tone:
+            parts.append(f"Mood: {emotional_tone}.")
+        if era:
+            parts.append(f"Era: {era}.")
+        prefix = result.rstrip()
+        if prefix and prefix[-1] not in ".!?":
+            prefix = f"{prefix}."
+        result = " ".join(part for part in [prefix, *parts] if part).strip()
+        logger.info(
+            "Injected enrichment into generation prompt for book %s (%s by %s)",
+            book_number,
+            title or f"Book {book_number}",
+            author or "Unknown author",
+        )
+
+    if emotional_tone and result:
+        result = GENERIC_MOOD_PATTERN.sub(emotional_tone, result)
+    return result.strip()
 
 
 class BaseProvider:
@@ -1733,6 +1904,15 @@ def generate_single_book(
     if not selected_prompt:
         selected_prompt = str(base_variant.get("prompt", "")).strip()
     selected_prompt = _sanitize_prompt_text(str(selected_prompt or ""))
+    selected_prompt = _sanitize_prompt_text(
+        _ensure_prompt_enrichment(
+            selected_prompt,
+            runtime=runtime,
+            book_number=book_number,
+            title=title,
+            author=author,
+        )
+    )
 
     active_models = models[:] if models else runtime.all_models[:]
     if not active_models:
@@ -1956,6 +2136,7 @@ def _generate_one(
 
     start = time.perf_counter()
     last_error: str | None = None
+    last_failure_meta: dict[str, Any] | None = None
     model_prefix = _model_provider_prefix(runtime, model)
     if model_prefix:
         provider_chain = [model_prefix]
@@ -2060,6 +2241,16 @@ def _generate_one(
             )
         except RetryableGenerationError as exc:
             last_error = str(exc)
+            last_failure_meta = _log_generation_attempt_failure(
+                exc=exc,
+                model=model,
+                provider=active_provider,
+                book_number=book_number,
+                variant=variant,
+                retry_count=attempt,
+                max_attempts=max_attempts,
+                retryable=True,
+            )
             consecutive_provider_failures += 1
             if consecutive_provider_failures >= 3 and provider_index < (len(provider_chain) - 1):
                 previous_provider = active_provider
@@ -2104,6 +2295,16 @@ def _generate_one(
             time.sleep(backoff)
         except GenerationError as exc:
             last_error = str(exc)
+            last_failure_meta = _log_generation_attempt_failure(
+                exc=exc,
+                model=model,
+                provider=active_provider,
+                book_number=book_number,
+                variant=variant,
+                retry_count=attempt,
+                max_attempts=max_attempts,
+                retryable=False,
+            )
             if _is_artifact_generation_error(last_error) and artifact_retry_count < ARTIFACT_RETRY_LIMIT:
                 artifact_retry_count += 1
                 working_prompt = _artifact_retry_prompt(prompt=working_prompt, retry_index=artifact_retry_count)
@@ -2136,6 +2337,16 @@ def _generate_one(
                 break
         except requests.RequestException as exc:
             last_error = f"Request failure: {exc}"
+            last_failure_meta = _log_generation_attempt_failure(
+                exc=exc,
+                model=model,
+                provider=active_provider,
+                book_number=book_number,
+                variant=variant,
+                retry_count=attempt,
+                max_attempts=max_attempts,
+                retryable=True,
+            )
             consecutive_provider_failures += 1
             if consecutive_provider_failures >= 3 and provider_index < (len(provider_chain) - 1):
                 previous_provider = active_provider
@@ -2178,6 +2389,7 @@ def _generate_one(
         cost=0.0,
         provider=active_provider,
         attempts=attempt,
+        failure_meta=last_failure_meta,
     )
 
 

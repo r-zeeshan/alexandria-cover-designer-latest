@@ -520,6 +520,9 @@ function cleanupResolvedPrompt(promptText) {
     .trim();
 }
 
+const GENERIC_SCENE_PATTERN = /A pivotal dramatic moment from the literary work\s+"[^"]*"(?:\s+by\s+[^,."]+)?(?:,\s*depicting the central emotional conflict[^.]*\.?)?/gi;
+const GENERIC_MOOD_PATTERN = /classical,\s+timeless,\s+evocative/gi;
+
 function applyPromptPlaceholders(promptText, book, sceneOverride, moodOverride, eraOverride) {
   const scene = String(sceneOverride || defaultSceneForBook(book)).trim();
   const mood = String(moodOverride || defaultMoodForBook(book)).trim();
@@ -549,6 +552,45 @@ function resolvePrompt(templateObj, book, customPrompt, sceneVal, moodVal, eraVa
   return resolved.trim();
 }
 
+function ensureEnrichedPrompt(promptText, book) {
+  const prompt = String(promptText || '').trim();
+  const enrichment = _bookEnrichment(book);
+  const populatedScenes = (Array.isArray(enrichment.iconic_scenes) ? enrichment.iconic_scenes : [])
+    .map((item) => String(item || '').trim())
+    .filter(Boolean);
+  const firstScene = populatedScenes[0] || '';
+  const sceneSentence = firstScene.replace(/[.!?]+$/g, '');
+  const protagonist = String(enrichment.protagonist || '').trim();
+  const setting = String(enrichment.setting_primary || '').trim();
+  const emotionalTone = String(enrichment.emotional_tone || enrichment.mood || '').trim();
+  const era = String(enrichment.era || '').trim();
+
+  let result = emotionalTone ? prompt.replace(GENERIC_MOOD_PATTERN, emotionalTone) : prompt;
+  if (!firstScene) {
+    return cleanupResolvedPrompt(result);
+  }
+
+  result = result.replace(GENERIC_SCENE_PATTERN, firstScene);
+  const lowered = result.toLowerCase();
+  const hasScene = populatedScenes
+    .slice(0, 3)
+    .some((scene) => scene.substring(0, 30).trim() && lowered.includes(scene.substring(0, 30).toLowerCase()));
+  if (!hasScene) {
+    const enrichmentParts = [`The illustration must depict: ${sceneSentence || firstScene}.`];
+    if (protagonist) enrichmentParts.push(`Character: ${protagonist}.`);
+    if (setting) enrichmentParts.push(`Setting: ${setting}.`);
+    if (emotionalTone) enrichmentParts.push(`Mood: ${emotionalTone}.`);
+    if (era) enrichmentParts.push(`Era: ${era}.`);
+    const prefix = result.trim();
+    const normalizedPrefix = prefix && !/[.!?]$/.test(prefix) ? `${prefix}.` : prefix;
+    result = [normalizedPrefix, ...enrichmentParts].filter(Boolean).join(' ');
+  }
+  if (emotionalTone) {
+    result = result.replace(GENERIC_MOOD_PATTERN, emotionalTone);
+  }
+  return cleanupResolvedPrompt(result);
+}
+
 function buildGenerationJobPrompt({ book, templateObj, promptId, customPrompt, sceneVal, moodVal, eraVal, style }) {
   const trimmedPromptId = String(promptId || '').trim();
   const trimmedCustomPrompt = String(customPrompt || '').trim();
@@ -559,9 +601,12 @@ function buildGenerationJobPrompt({ book, templateObj, promptId, customPrompt, s
   const customPromptOverride = promptSource === 'custom' ? customPrompt : '';
   const basePrompt = resolvePrompt(templateObj, book, customPromptOverride, sceneVal, moodVal, eraVal);
   const usesStandalonePrompt = Boolean(trimmedPromptId || trimmedCustomPrompt);
-  const prompt = usesStandalonePrompt
-    ? basePrompt
-    : `${StyleDiversifier.buildDiversifiedPrompt(book.title, book.author, style)} ${basePrompt}`.trim();
+  const prompt = ensureEnrichedPrompt(
+    usesStandalonePrompt
+      ? basePrompt
+      : `${StyleDiversifier.buildDiversifiedPrompt(book.title, book.author, style)} ${basePrompt}`.trim(),
+    book,
+  );
   const templateName = String(templateObj?.name || '').trim();
   const styleLabel = usesStandalonePrompt
     ? (
@@ -584,6 +629,7 @@ function buildGenerationJobPrompt({ book, templateObj, promptId, customPrompt, s
 
 window.__ITERATE_TEST_HOOKS__ = window.__ITERATE_TEST_HOOKS__ || {};
 window.__ITERATE_TEST_HOOKS__.buildGenerationJobPrompt = buildGenerationJobPrompt;
+window.__ITERATE_TEST_HOOKS__.ensureEnrichedPrompt = ({ promptText, book }) => ensureEnrichedPrompt(promptText, book);
 window.__ITERATE_TEST_HOOKS__.defaultMoodForBook = (book) => defaultMoodForBook(book);
 window.__ITERATE_TEST_HOOKS__.buildScenePool = ({ book, count, ...rawBook }) => {
   const targetBook = book && typeof book === 'object' ? book : rawBook;
@@ -1327,7 +1373,14 @@ window.Pages.iterate = {
       const activePromptText = String(templateObj?.prompt_template || customPrompt || customPromptEl?.value || '').trim();
       const usesAlexandriaFields = Boolean(book) && (isAutoRotateSelection(promptId, customPrompt) || activePromptText.includes('{SCENE}'));
       varFieldsEl.classList.toggle('hidden', !usesAlexandriaFields);
-      if (!usesAlexandriaFields) return;
+      if (!book) {
+        if (forceDefaults) {
+          sceneEl.value = '';
+          moodEl.value = '';
+          eraEl.value = '';
+        }
+        return;
+      }
       if (forceDefaults || !String(sceneEl.value || '').trim()) sceneEl.value = defaultSceneForBook(book);
       if (forceDefaults || !String(moodEl.value || '').trim()) moodEl.value = defaultMoodForBook(book);
       if (forceDefaults || !String(eraEl.value || '').trim()) eraEl.value = defaultEraForBook(book);
@@ -1718,6 +1771,7 @@ window.Pages.iterate = {
           id: uuid(),
           book_id: bookId,
           model,
+          fallback_models: selectedModels.filter((candidate) => candidate !== model),
           variant,
           status: 'queued',
           prompt: promptPayload.prompt,
