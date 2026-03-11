@@ -2879,7 +2879,6 @@ window.Pages.iterate = {
         body: JSON.stringify({
           job_id: backendJobId,
           style_label: String(job.style_label || '').trim(),
-          expected_variant: Number(job.variant || 0),
           expected_model: String(job.model || '').trim(),
           expected_raw_art_path: String(resultRow.raw_art_path || '').trim(),
           expected_saved_composited_path: String(resultRow.saved_composited_path || resultRow.composited_path || '').trim(),
