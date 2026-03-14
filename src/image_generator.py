@@ -168,28 +168,19 @@ ARTIFACT_RETRY_APPEND = (
 _ENRICHED_BOOK_LOOKUP_CACHE: dict[str, Any] = {"path": "", "mtime": -1.0, "lookup": {}}
 _ENRICHED_BOOK_LOOKUP_LOCK = threading.Lock()
 ALEXANDRIA_NEGATIVE_PROMPT = (
-    "ABSOLUTELY FORBIDDEN — do NOT include ANY of these: "
-    "circular frame, circular border, circular vignette, medallion, medallion frame, ornamental frame, "
-    "decorative border, ornamental border, scrollwork frame, filigree frame, oval frame, round frame, "
-    "ANY frame or border of any shape, corner ornaments, edge decorations, dividers. "
-    "The scene MUST fill the full rectangular canvas with NO framing elements whatsoever. "
-    "Also forbidden: text, letters, words, numbers, titles, author names, typography, captions, "
-    "labels, watermarks, signatures, inscriptions of any kind. "
-    "Also forbidden: modern elements, photography look, 3D rendering, digital art aesthetic, "
-    "smooth digital gradients, neon colours, AI-generated look, plastic-looking surfaces, "
-    "overly perfect symmetry, characteristic AI sheen, stock photo look, cartoonish style, "
-    "anime influence, blurry illustration, white or light backgrounds."
+    "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, "
+    "no labels, no watermarks, no signatures, no inscriptions of any kind. "
+    "No modern elements, no photography look, no 3D rendering, no CGI, no digital art aesthetic, "
+    "no smooth digital gradients, no neon colours, no plastic-looking surfaces, no AI-generated sheen, "
+    "no perfectly smooth skin, no hyper-symmetrical composition, no stock photo look, "
+    "no cartoonish style, no anime influence, no blurry illustration, no white or light backgrounds."
 )
-ALEXANDRIA_ILLUSTRATION_STYLE_PREFIX = (
-    "CRITICAL RENDERING RULES — follow these exactly:\n"
-    "1. FULL RECTANGULAR CANVAS — the illustration MUST fill the entire rectangular image edge-to-edge. "
-    "NEVER compose the scene inside a circle, oval, medallion, or any shaped frame. "
-    "NO circular vignette. NO ornamental border. The scene fills the FULL rectangle.\n"
-    "2. TRADITIONAL ILLUSTRATION STYLE — render this as a hand-painted illustration, NOT as digital art. "
-    "Use visible brushwork texture, painted edges, traditional media quality (oil paint, gouache, or watercolor). "
-    "The result must look like a painting in a museum or a premium illustrated book — NOT like AI-generated art. "
-    "Avoid: perfectly smooth gradients, overly symmetrical compositions, plastic-looking surfaces, "
-    "the characteristic 'AI sheen' of digital generation.\n\n"
+ALEXANDRIA_RENDERING_PREFIX = (
+    "IMPORTANT RENDERING STYLE: This image must look like a HAND-PAINTED traditional illustration "
+    "— NOT like digital art, NOT like AI-generated art, NOT like a 3D render. "
+    "Use visible brushwork texture throughout, painted edges, the quality of oil paint or gouache on canvas. "
+    "Surfaces must show layered pigment and brush texture, NOT smooth digital gradients. "
+    "The overall feel should be a premium illustrated book or a painting hanging in a gallery.\n\n"
 )
 _PROMPT_REMOVAL_PATTERNS: tuple[str, ...] = (
     r"(?<!no )\bcircular\s+medallion(?:\s+illustration)?\b",
@@ -1092,14 +1083,10 @@ class OpenRouterProvider(BaseProvider):
                 {
                     "role": "system",
                     "content": (
-                        "You are generating a traditional-style painted illustration for a book cover. "
-                        "CRITICAL RULES: "
-                        "1. The illustration MUST fill the FULL RECTANGULAR canvas edge-to-edge. "
-                        "NEVER place the scene inside a circle, medallion, oval, or any frame shape. "
-                        "NO circular compositions. NO ornamental borders of any kind. "
-                        "2. Render in traditional painted illustration style — visible brushwork, painted texture, "
-                        "like a museum painting or premium illustrated book. NOT digital art, NOT AI-looking. "
-                        "3. Return ONLY the artwork. No text, no letters, no words, no titles, no typography."
+                        "You are generating a traditional-style hand-painted illustration for a book cover. "
+                        "The image must look like a real painting — visible brushwork, painted texture, "
+                        "the quality of oil paint or gouache on canvas. NOT digital art, NOT AI-looking. "
+                        "Return ONLY the artwork. No text, no letters, no words, no titles, no typography of any kind."
                     ),
                 },
                 {
@@ -1737,7 +1724,7 @@ def generate_image(
     runtime = config.get_config()
 
     negative_prompt = _merge_negative_prompt(negative_prompt)
-    prompt = f"{ALEXANDRIA_ILLUSTRATION_STYLE_PREFIX}{prompt}"
+    prompt = f"{ALEXANDRIA_RENDERING_PREFIX}{prompt}"
     requested_provider = str(params.get("provider", "") or "").strip().lower()
     model_prefix = _model_provider_prefix(runtime, model)
     provider_candidates = _model_provider_chain(
