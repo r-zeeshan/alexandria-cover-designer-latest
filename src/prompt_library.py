@@ -77,19 +77,10 @@ ALEXANDRIA_PROMPT_CATALOG: tuple[dict[str, object], ...] = (
             "and wildflower gardens, painterly brushwork with visible gilded texture like an illuminated manuscript"
         ),
         "prompt_template": (
-            "Book cover illustration only — no text, no lettering of any kind. This illustration MUST depict "
-            "the following specific scene: {SCENE}. Every figure, object, and setting element in this scene "
-            "must be clearly recognizable and faithful to the source material. RENDERING TECHNIQUE: Rich oil "
-            "painting with HYPER-DETAILED botanical precision — every individual flower petal, leaf vein, fabric "
-            "fold, and architectural detail must be meticulously rendered as if painted by a master miniaturist. "
-            "Use thick impasto brushwork for highlights and thin glazed layers for shadows. Color palette: deep "
-            "midnight navy (#0a1628) for backgrounds and shadow, warm burnished gold (#c5941a) and antique brass "
-            "(#b5884e) for all warm light and highlights, rich cobalt (#0047ab) for mid-tones, earth ochre "
-            "(#cc7722) for landscapes. Golden-hour lighting makes every surface glow with warm amber light. "
-            "Surfaces show the texture of real oil paint on canvas — visible brushstrokes, layered pigment, "
-            "canvas grain. The overall quality should look like a painting in a European museum, NOT like "
-            "digital art. The mood is {MOOD}. Era reference: {ERA}. Full scene composition, high resolution, "
-            "print-ready."
+            "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Rich oil painting with "
+            "hyper-detailed botanical precision. Deep midnight navy (#0a1628) and burnished gold (#c5941a). "
+            "Thick impasto brushwork on gilded elements, fine detail on flora. Sacred, contemplative atmosphere "
+            "with warm candlelight glow. Mood: {MOOD}. Era: {ERA}."
         ),
         "full_canvas": True,
         "negative_prompt": ALEXANDRIA_BASE_NEGATIVE_PROMPT,
@@ -106,18 +97,11 @@ ALEXANDRIA_PROMPT_CATALOG: tuple[dict[str, object], ...] = (
             "source, grave reflective atmosphere"
         ),
         "prompt_template": (
-            "Book cover illustration only — no text, no lettering of any kind. This illustration MUST depict "
-            "the following specific scene: {SCENE}. Every figure, object, and setting element in this scene "
-            "must be clearly recognizable and faithful to the source material. RENDERING TECHNIQUE: Dramatic "
-            "chiaroscuro oil painting — a single strong directional light source creates deep pools of shadow "
-            "and sharp-edged highlights. Painted with the heavy texture of Rembrandt-era oil painting: thick "
-            "impasto on illuminated faces and hands, deep transparent glazes in shadow areas, visible canvas "
-            "weave throughout. Color palette: deep raw umber (#3e2723) and burnt sienna (#8d6e4c) dominate, "
-            "with muted gold ochre (#b8860b) for the single warm light source, charcoal grey (#36454f) and "
-            "cold slate blue (#4a6670) in shadow, parchment cream (#f5e6c8) only where light falls directly. "
-            "Most of the canvas should be in deep shadow with the subject emerging from darkness. Austere, "
-            "contemplative atmosphere with no decorative excess. The mood is {MOOD}. Era reference: {ERA}. "
-            "Full scene composition, high resolution, print-ready."
+            "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Dramatic chiaroscuro oil "
+            "painting. Single strong directional light carves figures from deep shadow. Raw umber (#3e2723) "
+            "and burnt sienna (#8d6e4c) dominate, muted gold ochre (#b8860b) for warm light, charcoal grey "
+            "(#36454f) in shadow. Rembrandt-era heavy impasto on highlights, transparent glazes in shadows. "
+            "Mood: {MOOD}. Era: {ERA}."
         ),
         "full_canvas": True,
         "negative_prompt": ALEXANDRIA_BASE_NEGATIVE_PROMPT,
@@ -134,18 +118,11 @@ ALEXANDRIA_PROMPT_CATALOG: tuple[dict[str, object], ...] = (
             "silhouettes against turbulent skies"
         ),
         "prompt_template": (
-            "Book cover illustration only — no text, no lettering of any kind. This illustration MUST depict "
-            "the following specific scene: {SCENE}. Every figure, object, and setting element in this scene "
-            "must be clearly recognizable and faithful to the source material. RENDERING TECHNIQUE: Dark "
-            "atmospheric painting with expressionist energy — loose, aggressive brushwork with visible palette "
-            "knife marks and dripping paint texture. Moonlight or candlelight creates dramatic pools of cold "
-            "blue-white light against vast oppressive darkness. Color palette: deep indigo (#1a1a2e) and "
-            "midnight blue (#191970) dominate the canvas, with muted blood red (#722f37) and dried crimson "
-            "(#8b0000) for dramatic accents, cold moonlit silver (#c0c0c0) and pale ice blue (#b0c4de) for "
-            "light sources, storm grey (#708090) for fog and mist. Thick painted texture — rough impasto on "
-            "stone and architecture, swirling brushwork in skies and mist, sharp scratched details in bare "
-            "branches and ironwork. The feeling of dread and unease permeates every stroke. The mood is {MOOD}. "
-            "Era reference: {ERA}. Full scene composition, high resolution, print-ready."
+            "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Dark atmospheric "
+            "painting with expressionist energy. Loose, aggressive brushwork with palette knife marks. Moonlit "
+            "indigo (#1a1a3e) and deep crimson (#8b0000) with silvered edge highlights. Dramatic contrast "
+            "between shadow and cold moonlight. Gothic tension, foreboding atmosphere. Mood: {MOOD}. Era: "
+            "{ERA}."
         ),
         "full_canvas": True,
         "negative_prompt": ALEXANDRIA_BASE_NEGATIVE_PROMPT,
@@ -165,19 +142,11 @@ ALEXANDRIA_PROMPT_CATALOG: tuple[dict[str, object], ...] = (
             "intimate compositions, painterly brushwork like a gilded 19th-century illustration"
         ),
         "prompt_template": (
-            "Book cover illustration only — no text, no lettering of any kind. This illustration MUST depict "
-            "the following specific scene: {SCENE}. Every figure, object, and setting element in this scene "
-            "must be clearly recognizable and faithful to the source material. RENDERING TECHNIQUE: Warm "
-            "romantic landscape painting in the tradition of 19th-century Romanticism — soft, luminous brushwork "
-            "with the quality of watercolor washes layered over oil paint. Warm golden-hour sunlight saturates "
-            "the entire scene in amber glow. Color palette: deep navy (#0e1f3d) for distant sky and deep "
-            "shadows, warm honey gold (#d4a017) and amber (#cc7722) for sunlight flooding every surface, rich "
-            "burgundy (#8b0000) and dusty rose (#c08b7a) for warm accents in clothing and flowers, deep sage "
-            "green (#2d5a27) and soft olive (#6b8e5e) for lush foliage. Figures have soft, idealized features "
-            "with rosy cheeks and wind-swept hair. Skies are dramatic with towering cumulus clouds painted in "
-            "warm peach and lavender. Every natural element (trees, flowers, grass, water) is painted with "
-            "loving botanical detail. The mood is {MOOD}. Era reference: {ERA}. Full scene composition, high "
-            "resolution, print-ready."
+            "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Warm romantic landscape "
+            "painting in 19th-century Romanticism tradition. Soft luminous brushwork, watercolor washes layered "
+            "over oil. Golden-hour amber (#d4a017) and warm sienna (#a0522d), soft sky blue (#87ceeb), deep "
+            "forest green (#228b22). Sweeping atmospheric perspective with warm haze. Mood: {MOOD}. Era: "
+            "{ERA}."
         ),
         "full_canvas": True,
         "negative_prompt": ALEXANDRIA_BASE_NEGATIVE_PROMPT,
@@ -194,19 +163,10 @@ ALEXANDRIA_PROMPT_CATALOG: tuple[dict[str, object], ...] = (
             "lighting, symbolic depth"
         ),
         "prompt_template": (
-            "Book cover illustration only — no text, no lettering of any kind. This illustration MUST depict "
-            "the following specific scene: {SCENE}. Every figure, object, and setting element in this scene "
-            "must be clearly recognizable and faithful to the source material. RENDERING TECHNIQUE: Visionary "
-            "painting with luminous depth — translucent layered glazes create an inner glow as if light "
-            "emanates from within the painting itself. Celestial bodies and mystical light sources radiate warm "
-            "gold against vast cosmic darkness. Color palette: midnight blue (#0a1628) and deep cosmic indigo "
-            "(#1a1a3e) for infinite night sky, luminous warm gold (#d4a017) and amber (#cc7722) for divine and "
-            "celestial light, deep mystical purple (#4a0e4e) for shadow and mystery, starlight white "
-            "(#f0f0e8) for points of transcendent brilliance. Paint texture is smooth and luminous in light "
-            "areas (like polished gemstone) but rough and textured in dark areas (like ancient stone). "
-            "Geometric sacred patterns may subtly underlie the composition. Figures have an otherworldly "
-            "quality — slightly elongated, radiating inner light. The mood is {MOOD}. Era reference: {ERA}. "
-            "Full scene composition, high resolution, print-ready."
+            "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Visionary painting with "
+            "luminous depth. Translucent layered glazes create inner glow as if light emanates from within. "
+            "Cosmic indigo (#191970) and celestial gold (#ffd700), deep amethyst (#4b0082), ethereal "
+            "silver-white (#e8e8e8). Mystical symbols emerge from luminous mist. Mood: {MOOD}. Era: {ERA}."
         ),
         "full_canvas": True,
         "negative_prompt": ALEXANDRIA_BASE_NEGATIVE_PROMPT,
@@ -669,6 +629,12 @@ ALEXANDRIA_PROMPT_CATALOG: tuple[dict[str, object], ...] = (
             "visible brushwork texture on every surface, soft blended edges, atmospheric depth, warm light "
             "sources against cool shadows, layered pigment with soft dry-brush transitions"
         ),
+        "prompt_template": (
+            "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Soft gouache and oil "
+            "painting. Visible blended brushwork throughout — soft edges, warm transitions, NO hard lines. "
+            "Muted earthy palette with gentle light. Brushstrokes visible on every surface like a physical "
+            "painting. Dreamy, atmospheric quality of vintage illustrated books. Mood: {MOOD}. Era: {ERA}."
+        ),
         "style_section": (
             "RENDERING TECHNIQUE: HAND-PAINTED illustration in gouache and oil painting style. MANDATORY "
             "visible brushwork texture on every surface — soft blended edges, NO hard vector lines, NO "
@@ -692,6 +658,13 @@ ALEXANDRIA_PROMPT_CATALOG: tuple[dict[str, object], ...] = (
         "style_description": (
             "meticulous individual rendering, saturated jewel-tone palette, golden-hour warmth, luminous light "
             "scatter, maximalist detail density with polished painterly finish"
+        ),
+        "prompt_template": (
+            "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Hyper-detailed "
+            "hand-painted illustration. Meticulous brushwork renders every fabric fold, architectural detail, "
+            "and natural texture individually. Rich saturated colors with controlled precision. Dense visual "
+            "information across every inch. The quality of a museum-quality painting reproduced in a premium "
+            "art book. Mood: {MOOD}. Era: {ERA}."
         ),
         "style_section": (
             "RENDERING TECHNIQUE: HAND-PAINTED hyper-detailed digital painting with meticulously controlled "
