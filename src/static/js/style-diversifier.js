@@ -129,22 +129,14 @@ window.StyleDiversifier = {
 
   buildDiversifiedPrompt(title, author, style) {
     const styleModifier = style?.modifier || 'Classical illustration using ruby red, emerald green, cobalt blue, amber gold, and ivory highlights.';
-    const canvasDirective = 'The final image must be a FULL rectangular canvas of solid painted scene — no circular boundaries, no vignette edges, no decorative rings. Think of this as a square painting that will later be cropped into a circle, NOT as a circular medallion with its own frame.';
     return [
-      `Create a breathtaking, richly colored illustration for the classic book "${title}" by ${author}.`,
-      'Identify the single most iconic, dramatic, and visually striking scene from this specific story — the moment readers remember most vividly.',
-      'No border, no frame, no decorative edge.',
-      'Depict that scene as a luminous full-bleed narrative illustration for a luxury leather-bound edition.',
-      'Adapt all motifs, costumes, architecture, and symbols strictly to this specific book; avoid cross-book visual clichés.',
-      'Fill the entire rectangular composition with rich detail and vivid color — no empty space, no plain backgrounds.',
-      'The artwork must feel like a museum-quality painting that captures the emotional heart of the story.',
+      `HAND-CRAFTED book cover artwork for "${title}" by ${author}.`,
+      'This must look like a REAL traditional artwork made by a skilled human artist — NOT digital art, NOT AI-generated.',
+      'Visible brushwork or pen strokes throughout. The texture of a real physical artwork.',
       styleModifier,
-      'CRITICAL COMPOSITION RULES: Keep one dominant focal subject and edge-to-edge scene detail.',
-      'NO filigree, NO scrollwork, NO arabesques, NO ornamental curls, NO decorative flourishes, NO black ornamental silhouettes.',
+      'COMPOSITION: One dominant focal subject with layered depth and dense detail throughout.',
       'NO text, NO letters, NO words anywhere in the image.',
       'The scene must be COLORFUL and DETAILED — avoid monochrome, avoid sparse compositions.',
-      'Keep one dominant focal subject, layered depth, dense detail.',
-      canvasDirective,
     ].join(' ');
   },
 };

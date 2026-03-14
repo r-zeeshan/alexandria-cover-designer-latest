@@ -170,17 +170,16 @@ _ENRICHED_BOOK_LOOKUP_LOCK = threading.Lock()
 ALEXANDRIA_NEGATIVE_PROMPT = (
     "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, "
     "no labels, no watermarks, no signatures, no inscriptions of any kind. "
-    "No modern elements, no photography look, no 3D rendering, no CGI, no digital art aesthetic, "
+    "No photography, no 3D rendering, no CGI, no digital art aesthetic, "
     "no smooth digital gradients, no neon colours, no plastic-looking surfaces, no AI-generated sheen, "
-    "no perfectly smooth skin, no hyper-symmetrical composition, no stock photo look, "
-    "no cartoonish style, no anime influence, no blurry illustration, no white or light backgrounds."
+    "no perfectly smooth skin, no stock photo look, "
+    "no cartoonish style, no anime influence, no blurry, no white backgrounds."
 )
 ALEXANDRIA_RENDERING_PREFIX = (
-    "IMPORTANT RENDERING STYLE: This image must look like a HAND-PAINTED traditional illustration "
-    "— NOT like digital art, NOT like AI-generated art, NOT like a 3D render. "
-    "Use visible brushwork texture throughout, painted edges, the quality of oil paint or gouache on canvas. "
-    "Surfaces must show layered pigment and brush texture, NOT smooth digital gradients. "
-    "The overall feel should be a premium illustrated book or a painting hanging in a gallery.\n\n"
+    "IMPORTANT RENDERING STYLE: This image must look like a HAND-CRAFTED traditional artwork "
+    "— NOT digital art, NOT AI-generated, NOT 3D rendered, NOT photographic. "
+    "It must have visible brushwork or pen strokes throughout — the texture of a real physical artwork "
+    "made by a skilled human artist. Follow the specific medium and technique described in the style instructions below.\n\n"
 )
 _PROMPT_REMOVAL_PATTERNS: tuple[str, ...] = (
     r"(?<!no )\bcircular\s+medallion(?:\s+illustration)?\b",
@@ -1083,9 +1082,10 @@ class OpenRouterProvider(BaseProvider):
                 {
                     "role": "system",
                     "content": (
-                        "You are generating a traditional-style hand-painted illustration for a book cover. "
-                        "The image must look like a real painting — visible brushwork, painted texture, "
-                        "the quality of oil paint or gouache on canvas. NOT digital art, NOT AI-looking. "
+                        "You are generating a traditional hand-crafted artwork for a book cover. "
+                        "The image must look like a real physical artwork — either a fine illustration "
+                        "(gouache, watercolor, ink) or a traditional painting (oil, acrylic) depending on the style requested. "
+                        "It must NOT look like digital art or AI-generated. Visible brushwork and texture throughout. "
                         "Return ONLY the artwork. No text, no letters, no words, no titles, no typography of any kind."
                     ),
                 },
