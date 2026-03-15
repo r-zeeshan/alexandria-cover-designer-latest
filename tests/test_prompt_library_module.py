@@ -183,7 +183,7 @@ def test_seeded_alexandria_builtins_are_scene_first(tmp_path: Path, monkeypatch)
         assert "{ERA}" in template
 
 
-def test_seeded_alexandria_base_prompts_use_prompt57_templates(tmp_path: Path, monkeypatch):
+def test_seeded_alexandria_base_prompts_use_prompt59_templates(tmp_path: Path, monkeypatch):
     templates_path = tmp_path / "prompt_templates.json"
     templates_path.write_text(json.dumps(_templates_payload()), encoding="utf-8")
     monkeypatch.setattr(pl.config, "PROMPT_TEMPLATES_PATH", templates_path)
@@ -208,7 +208,7 @@ def test_seeded_alexandria_base_prompts_use_prompt57_templates(tmp_path: Path, m
         assert "Scene: {SCENE}." in prompt.prompt_template
         assert "Mood: {MOOD}." in prompt.prompt_template
         assert "Era: {ERA}." in prompt.prompt_template
-        assert len(prompt.prompt_template) < 650
+        assert len(prompt.prompt_template) < 450
         assert "This circular medallion illustration" not in prompt.prompt_template
         assert "Circular vignette composition with soft edges." not in prompt.prompt_template
         assert (
@@ -217,14 +217,14 @@ def test_seeded_alexandria_base_prompts_use_prompt57_templates(tmp_path: Path, m
             "vector art, anime, cartoon, blurry, stock photo"
         ) in prompt.negative_prompt
 
-    assert "STYLE: Rich oil painting with hyper-detailed botanical precision." in prompts["alexandria-base-classical-devotion"].prompt_template
-    assert "STYLE: Dramatic chiaroscuro oil painting." in prompts["alexandria-base-philosophical-gravitas"].prompt_template
-    assert "STYLE: Dark atmospheric painting with expressionist energy." in prompts["alexandria-base-gothic-atmosphere"].prompt_template
-    assert "STYLE: Warm romantic landscape painting in 19th-century Romanticism tradition." in prompts["alexandria-base-romantic-realism"].prompt_template
+    assert "STYLE: Rich oil painting, hyper-detailed botanical precision." in prompts["alexandria-base-classical-devotion"].prompt_template
+    assert "STYLE: Dramatic chiaroscuro." in prompts["alexandria-base-philosophical-gravitas"].prompt_template
+    assert "STYLE: Dark atmospheric painting, expressionist energy." in prompts["alexandria-base-gothic-atmosphere"].prompt_template
+    assert "STYLE: Warm romantic landscape, 19th-century Romanticism." in prompts["alexandria-base-romantic-realism"].prompt_template
     assert "STYLE: Visionary painting with luminous depth." in prompts["alexandria-base-esoteric-mysticism"].prompt_template
 
 
-def test_seeded_painterly_wildcards_use_prompt57_templates(tmp_path: Path, monkeypatch):
+def test_seeded_painterly_wildcards_use_prompt59_templates(tmp_path: Path, monkeypatch):
     templates_path = tmp_path / "prompt_templates.json"
     templates_path.write_text(json.dumps(_templates_payload()), encoding="utf-8")
     monkeypatch.setattr(pl.config, "PROMPT_TEMPLATES_PATH", templates_path)
@@ -249,7 +249,7 @@ def test_seeded_painterly_wildcards_use_prompt57_templates(tmp_path: Path, monke
         assert "Scene: {SCENE}." in prompt.prompt_template
         assert "Mood: {MOOD}." in prompt.prompt_template
         assert "Era: {ERA}." in prompt.prompt_template
-        assert len(prompt.prompt_template) < 650
+        assert len(prompt.prompt_template) < 400
 
     assert "STYLE: Soft gouache and oil painting." in prompts["alexandria-wildcard-painterly-soft"].prompt_template
     assert "STYLE: Hyper-detailed hand-painted illustration." in prompts["alexandria-wildcard-painterly-detailed"].prompt_template
