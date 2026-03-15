@@ -183,7 +183,7 @@ def test_seeded_alexandria_builtins_are_scene_first(tmp_path: Path, monkeypatch)
         assert "{ERA}" in template
 
 
-def test_seeded_alexandria_base_prompts_use_prompt59_templates(tmp_path: Path, monkeypatch):
+def test_seeded_alexandria_base_prompts_use_prompt65_templates(tmp_path: Path, monkeypatch):
     templates_path = tmp_path / "prompt_templates.json"
     templates_path.write_text(json.dumps(_templates_payload()), encoding="utf-8")
     monkeypatch.setattr(pl.config, "PROMPT_TEMPLATES_PATH", templates_path)
@@ -208,7 +208,17 @@ def test_seeded_alexandria_base_prompts_use_prompt59_templates(tmp_path: Path, m
         assert "Scene: {SCENE}." in prompt.prompt_template
         assert "Mood: {MOOD}." in prompt.prompt_template
         assert "Era: {ERA}." in prompt.prompt_template
-        assert len(prompt.prompt_template) < 450
+        assert len(prompt.prompt_template) < 350
+        assert any(
+            token in prompt.prompt_template
+            for token in (
+                "Visible brushwork on canvas throughout.",
+                "Thick impasto paint texture on every surface.",
+                "Ink-wash texture with visible paper grain.",
+                "Oil paint texture with visible canvas weave.",
+                "Hand-painted texture with pigment granulation.",
+            )
+        )
         assert "This circular medallion illustration" not in prompt.prompt_template
         assert "Circular vignette composition with soft edges." not in prompt.prompt_template
         assert (
@@ -224,7 +234,7 @@ def test_seeded_alexandria_base_prompts_use_prompt59_templates(tmp_path: Path, m
     assert "STYLE: Visionary painting with luminous depth." in prompts["alexandria-base-esoteric-mysticism"].prompt_template
 
 
-def test_seeded_painterly_wildcards_use_prompt59_templates(tmp_path: Path, monkeypatch):
+def test_seeded_painterly_wildcards_use_prompt65_templates(tmp_path: Path, monkeypatch):
     templates_path = tmp_path / "prompt_templates.json"
     templates_path.write_text(json.dumps(_templates_payload()), encoding="utf-8")
     monkeypatch.setattr(pl.config, "PROMPT_TEMPLATES_PATH", templates_path)
@@ -250,9 +260,35 @@ def test_seeded_painterly_wildcards_use_prompt59_templates(tmp_path: Path, monke
         assert "Mood: {MOOD}." in prompt.prompt_template
         assert "Era: {ERA}." in prompt.prompt_template
         assert len(prompt.prompt_template) < 400
+        assert "Every stroke must show the physical texture of hand-applied paint." in prompt.prompt_template
 
     assert "STYLE: Soft gouache and oil painting." in prompts["alexandria-wildcard-painterly-soft"].prompt_template
     assert "STYLE: Hyper-detailed hand-painted illustration." in prompts["alexandria-wildcard-painterly-detailed"].prompt_template
+
+
+def test_seeded_alexandria_wildcards_use_prompt65_compact_templates(tmp_path: Path, monkeypatch):
+    templates_path = tmp_path / "prompt_templates.json"
+    templates_path.write_text(json.dumps(_templates_payload()), encoding="utf-8")
+    monkeypatch.setattr(pl.config, "PROMPT_TEMPLATES_PATH", templates_path)
+
+    library = pl.PromptLibrary(tmp_path / "prompt_library.json")
+    wildcard_prompts = [
+        prompt
+        for prompt in library.get_prompts()
+        if prompt.id.startswith("alexandria-wildcard-")
+    ]
+
+    assert len(wildcard_prompts) == 32
+    for prompt in wildcard_prompts:
+        assert prompt.prompt_template.startswith("Book cover illustration — no text, no lettering.")
+        assert "Scene: {SCENE}." in prompt.prompt_template
+        assert "Mood: {MOOD}." in prompt.prompt_template
+        assert "Era: {ERA}." in prompt.prompt_template
+        assert len(prompt.prompt_template) < 400, prompt.id
+        if "painterly" in prompt.id:
+            assert "Every stroke must show the physical texture of hand-applied paint." in prompt.prompt_template
+        else:
+            assert "Rendered with the physical texture of traditional handmade artwork." in prompt.prompt_template
 
 
 def test_build_prompt_best_prompts_add_anchor(tmp_path: Path, monkeypatch):

@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "updated_at": "2026-03-11T18:31:22.822840+00:00",
+  "updated_at": "2026-03-15T23:40:16.243100+00:00",
   "style_anchors": [
     {
       "name": "allegorical_symbolic",
@@ -122,7 +122,7 @@
     {
       "id": "alexandria-base-esoteric-mysticism",
       "name": "BASE 5 — Esoteric Mysticism",
-      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Visionary painting with luminous depth. Translucent glazes create inner glow. Cosmic indigo and celestial gold, deep amethyst, ethereal silver-white. Mystical symbols emerge from luminous mist. Mood: {MOOD}. Era: {ERA}.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Visionary painting with luminous depth. Translucent glazes create inner glow. Cosmic indigo and celestial gold, deep amethyst, ethereal silver-white. Mystical symbols emerge from luminous mist. Mood: {MOOD}. Era: {ERA}. Hand-painted texture with pigment granulation.",
       "style_anchors": [],
       "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
       "source_book": "builtin",
@@ -144,12 +144,12 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-10T17:50:11.870642+00:00"
+      "updated_at": "2026-03-15T23:40:16.243019+00:00"
     },
     {
       "id": "alexandria-base-romantic-realism",
       "name": "BASE 4 — Romantic Realism",
-      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Warm romantic landscape, 19th-century Romanticism. Soft luminous brushwork, watercolor washes over oil. Golden-hour amber and warm sienna, soft sky blue, deep forest green. Sweeping atmospheric perspective. Mood: {MOOD}. Era: {ERA}.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Warm romantic landscape, 19th-century Romanticism. Soft luminous brushwork, watercolor washes over oil. Golden-hour amber and warm sienna, soft sky blue, deep forest green. Sweeping atmospheric perspective. Mood: {MOOD}. Era: {ERA}. Oil paint texture with visible canvas weave.",
       "style_anchors": [],
       "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
       "source_book": "builtin",
@@ -171,12 +171,12 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-10T17:50:11.870639+00:00"
+      "updated_at": "2026-03-15T23:40:16.243016+00:00"
     },
     {
       "id": "alexandria-base-gothic-atmosphere",
       "name": "BASE 3 — Gothic Atmosphere",
-      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Dark atmospheric painting, expressionist energy. Loose aggressive brushwork with palette knife marks. Moonlit indigo and deep crimson with silvered edge highlights. Gothic tension, foreboding atmosphere. Mood: {MOOD}. Era: {ERA}.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Dark atmospheric painting, expressionist energy. Loose aggressive brushwork with palette knife marks. Moonlit indigo and deep crimson with silvered edge highlights. Gothic tension, foreboding atmosphere. Mood: {MOOD}. Era: {ERA}. Ink-wash texture with visible paper grain.",
       "style_anchors": [],
       "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
       "source_book": "builtin",
@@ -198,12 +198,12 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-10T17:50:11.870636+00:00"
+      "updated_at": "2026-03-15T23:40:16.243013+00:00"
     },
     {
       "id": "alexandria-base-philosophical-gravitas",
       "name": "BASE 2 — Philosophical Gravitas",
-      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Dramatic chiaroscuro. Single strong directional light carves figures from deep shadow. Raw umber and burnt sienna dominate, muted gold ochre for warm light, charcoal grey in shadow. Heavy Rembrandt-era texture. Mood: {MOOD}. Era: {ERA}.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Dramatic chiaroscuro. Strong light carves figures from shadow. Raw umber and burnt sienna dominate, gold ochre warms the light, charcoal grey deepens shadow. Heavy Rembrandt-era texture. Mood: {MOOD}. Era: {ERA}. Thick impasto paint texture on every surface.",
       "style_anchors": [],
       "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
       "source_book": "builtin",
@@ -225,12 +225,12 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-10T17:50:11.870633+00:00"
+      "updated_at": "2026-03-15T23:40:16.243009+00:00"
     },
     {
       "id": "alexandria-base-classical-devotion",
       "name": "BASE 1 — Classical Devotion",
-      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Rich oil painting, hyper-detailed botanical precision. Deep midnight navy and burnished gold. Thick impasto on gilded elements, fine detail on flora. Sacred, warm candlelight glow. Mood: {MOOD}. Era: {ERA}.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Rich oil painting, hyper-detailed botanical precision. Deep midnight navy and burnished gold. Thick impasto on gilded elements, fine detail on flora. Sacred, warm candlelight glow. Mood: {MOOD}. Era: {ERA}. Visible brushwork on canvas throughout.",
       "style_anchors": [],
       "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
       "source_book": "builtin",
@@ -252,12 +252,78 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-10T17:50:11.870626+00:00"
+      "updated_at": "2026-03-15T23:40:16.243002+00:00"
+    },
+    {
+      "id": "alexandria-wildcard-painterly-soft",
+      "name": "Painterly Soft Brushwork",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Soft gouache and oil painting. Visible blended brushwork, soft edges, warm transitions, no hard lines. Muted earthy palette with gentle light. Dreamy atmospheric quality of vintage illustrated books. Mood: {MOOD}. Era: {ERA}. Every stroke must show the physical texture of hand-applied paint.",
+      "style_anchors": [
+        "painterly",
+        "gouache",
+        "hand-painted",
+        "brushwork",
+        "atmospheric"
+      ],
+      "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
+      "source_book": "builtin",
+      "source_model": "openrouter/google/gemini-3-pro-image-preview",
+      "quality_score": 1.0,
+      "saved_by": "system",
+      "created_at": "2026-03-13T00:00:00+00:00",
+      "notes": "Alexandria wildcard prompt. Soft hand-painted gouache and oil brushwork with atmospheric depth.",
+      "tags": [
+        "alexandria",
+        "wildcard",
+        "painterly",
+        "soft-brushwork",
+        "gouache",
+        "atmospheric"
+      ],
+      "category": "wildcard",
+      "version": 1,
+      "usage_count": 0,
+      "win_count": 0,
+      "last_used_at": "",
+      "updated_at": "2026-03-15T23:40:16.243094+00:00"
+    },
+    {
+      "id": "alexandria-wildcard-painterly-detailed",
+      "name": "Painterly Hyper-Detailed",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Hyper-detailed hand-painted illustration. Meticulous brushwork on every fabric fold, architectural detail, and texture. Rich saturated colors, dense visual information across every inch. Museum-quality precision. Mood: {MOOD}. Era: {ERA}. Every stroke must show the physical texture of hand-applied paint.",
+      "style_anchors": [
+        "hyper-detailed",
+        "jewel-tone",
+        "polished",
+        "maximalist",
+        "golden-hour"
+      ],
+      "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
+      "source_book": "builtin",
+      "source_model": "openrouter/google/gemini-3-pro-image-preview",
+      "quality_score": 1.0,
+      "saved_by": "system",
+      "created_at": "2026-03-13T00:00:00+00:00",
+      "notes": "Alexandria wildcard prompt. Hyper-detailed painterly rendering with jewel-tone saturation and luminous finish.",
+      "tags": [
+        "alexandria",
+        "wildcard",
+        "painterly",
+        "hyper-detailed",
+        "jewel-tone",
+        "maximalist"
+      ],
+      "category": "wildcard",
+      "version": 1,
+      "usage_count": 0,
+      "win_count": 0,
+      "last_used_at": "",
+      "updated_at": "2026-03-15T23:40:16.243097+00:00"
     },
     {
       "id": "alexandria-wildcard-naturalist-field-drawing",
       "name": "Naturalist Field Drawing",
-      "prompt_template": "Book cover illustration — no text, no lettering. This illustration MUST depict the following specific scene: {SCENE}. Every figure and setting element must be faithful to the source material. Rendered in Victorian naturalist field drawing style — precise pencil and watercolour, expedition-journal authenticity, warm sepia and olive green palette, scientific curiosity with artistic sensitivity, Audubon-inspired detail. The mood is {MOOD}. Era reference: {ERA}. Full scene composition, high resolution, print-ready.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Victorian naturalist field drawing — precise pencil and watercolour, expedition-journal authenticity, warm sepia and olive green palette, scientific curiosity with artistic sensitivity, Audubon-inspired detail. Mood: {MOOD}. Era: {ERA}. Rendered with the physical texture of traditional handmade artwork.",
       "style_anchors": [],
       "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
       "source_book": "builtin",
@@ -278,12 +344,12 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-11T18:31:22.822834+00:00"
+      "updated_at": "2026-03-15T23:40:16.243091+00:00"
     },
     {
       "id": "alexandria-wildcard-maritime-chart",
       "name": "Maritime Chart",
-      "prompt_template": "Book cover illustration — no text, no lettering. This illustration MUST depict the following specific scene: {SCENE}. Every figure and setting element must be faithful to the source material. Rendered in naval maritime illustration style — dramatic seascape composition, storm-grey and deep ocean-blue palette, copper-engraving linework, billowing sails and rigging detail, Turner-inspired atmospheric light on waves. The mood is {MOOD}. Era reference: {ERA}. Full scene composition, high resolution, print-ready.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: naval maritime illustration — dramatic seascape composition, storm-grey and deep ocean-blue palette, copper-engraving linework, billowing sails and rigging detail, Turner-inspired atmospheric light on waves. Mood: {MOOD}. Era: {ERA}. Rendered with the physical texture of traditional handmade artwork.",
       "style_anchors": [],
       "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
       "source_book": "builtin",
@@ -304,12 +370,12 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-11T18:31:22.822832+00:00"
+      "updated_at": "2026-03-15T23:40:16.243089+00:00"
     },
     {
       "id": "alexandria-wildcard-antique-map",
       "name": "Antique Map",
-      "prompt_template": "Book cover illustration — no text, no lettering. This illustration MUST depict the following specific scene: {SCENE}. Every figure and setting element must be faithful to the source material. Rendered in antique cartographic illustration style — aged parchment texture, hand-engraved linework, sepia and faded indigo palette, compass rose elements, sea monsters and ships in margins, Age-of-Exploration wonder. The mood is {MOOD}. Era reference: {ERA}. Full scene composition, high resolution, print-ready.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: antique cartographic illustration — aged parchment texture, hand-engraved linework, sepia and faded indigo palette, compass rose elements, sea monsters and ships in margins, Age-of-Exploration wonder. Mood: {MOOD}. Era: {ERA}. Rendered with the physical texture of traditional handmade artwork.",
       "style_anchors": [],
       "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
       "source_book": "builtin",
@@ -330,12 +396,12 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-11T18:31:22.822829+00:00"
+      "updated_at": "2026-03-15T23:40:16.243087+00:00"
     },
     {
       "id": "alexandria-wildcard-botanical-plate",
       "name": "Botanical Plate",
-      "prompt_template": "Book cover illustration — no text, no lettering. This illustration MUST depict the following specific scene: {SCENE}. Every figure and setting element must be faithful to the source material. Rendered in 18th-century botanical illustration style — precise scientific observation, delicate hand-tinted watercolour washes on cream paper, naturalist field-drawing accuracy, muted sage and rose palette, Redouté-inspired elegance. The mood is {MOOD}. Era reference: {ERA}. Full scene composition, high resolution, print-ready.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: 18th-century botanical illustration — precise scientific observation, delicate hand-tinted watercolour washes on cream paper, naturalist field-drawing accuracy, muted sage and rose palette, Redouté-inspired elegance. Mood: {MOOD}. Era: {ERA}. Rendered with the physical texture of traditional handmade artwork.",
       "style_anchors": [],
       "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
       "source_book": "builtin",
@@ -356,12 +422,12 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-11T18:31:22.822827+00:00"
+      "updated_at": "2026-03-15T23:40:16.243084+00:00"
     },
     {
       "id": "alexandria-wildcard-celtic-knotwork",
       "name": "Celtic Knotwork",
-      "prompt_template": "Book cover illustration — no text, no lettering. This illustration MUST depict the following specific scene: {SCENE}. Every figure and setting element must be faithful to the source material. Rendered in Celtic illuminated manuscript style — interlaced knotwork framing the scene, Book of Kells-inspired zoomorphic details, deep forest green and burnished gold palette, spiralling decorative accents, insular art precision. The mood is {MOOD}. Era reference: {ERA}. Full scene composition, high resolution, print-ready.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Celtic illuminated manuscript — interlaced knotwork framing the scene, Book of Kells-inspired zoomorphic details, deep forest green and burnished gold palette, spiralling decorative accents, insular art precision. Mood: {MOOD}. Era: {ERA}. Rendered with the physical texture of traditional handmade artwork.",
       "style_anchors": [],
       "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
       "source_book": "builtin",
@@ -382,12 +448,12 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-11T18:31:22.822824+00:00"
+      "updated_at": "2026-03-15T23:40:16.243082+00:00"
     },
     {
       "id": "alexandria-wildcard-klimt-gold-leaf",
       "name": "Klimt Gold Leaf",
-      "prompt_template": "Book cover illustration — no text, no lettering. This illustration MUST depict the following specific scene: {SCENE}. Every figure and setting element must be faithful to the source material. Rendered in Gustav Klimt decorative style — lavish gold leaf mosaic patterns integrated with realistic figures, Byzantine-inspired geometric abstraction, warm ochre and deep emerald palette, sensuous flowing forms. The mood is {MOOD}. Era reference: {ERA}. Full scene composition, high resolution, print-ready.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Gustav Klimt decorative — lavish gold leaf mosaic patterns integrated with realistic figures, Byzantine-inspired geometric abstraction, warm ochre and deep emerald palette, sensuous flowing forms. Mood: {MOOD}. Era: {ERA}. Rendered with the physical texture of traditional handmade artwork.",
       "style_anchors": [],
       "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
       "source_book": "builtin",
@@ -408,12 +474,12 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-11T18:31:22.822821+00:00"
+      "updated_at": "2026-03-15T23:40:16.243079+00:00"
     },
     {
       "id": "alexandria-wildcard-william-morris-textile",
       "name": "William Morris Textile",
-      "prompt_template": "Book cover illustration — no text, no lettering. This illustration MUST depict the following specific scene: {SCENE}. Every figure and setting element must be faithful to the source material. Rendered in William Morris Arts and Crafts style — intertwining vines and birds framing the scene, muted sage green and indigo palette, hand-printed woodblock texture, medieval-inspired naturalism, Kelmscott Press decorative richness. The mood is {MOOD}. Era reference: {ERA}. Full scene composition, high resolution, print-ready.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: William Morris Arts and Crafts — intertwining vines and birds framing the scene, muted sage green and indigo palette, hand-printed woodblock texture, medieval-inspired naturalism, Kelmscott Press decorative richness. Mood: {MOOD}. Era: {ERA}. Rendered with the physical texture of traditional handmade artwork.",
       "style_anchors": [],
       "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
       "source_book": "builtin",
@@ -434,12 +500,12 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-11T18:31:22.822819+00:00"
+      "updated_at": "2026-03-15T23:40:16.243077+00:00"
     },
     {
       "id": "alexandria-wildcard-northern-renaissance",
       "name": "Northern Renaissance",
-      "prompt_template": "Book cover illustration — no text, no lettering. This illustration MUST depict the following specific scene: {SCENE}. Every figure and setting element must be faithful to the source material. RENDERING TECHNIQUE: Northern Renaissance painting — extraordinary microscopic detail in every surface. Every hair, every thread, every wood grain, every reflection in glass or metal is individually rendered with a fine-pointed brush. Crystal-clear focus from foreground to background. Rich jewel-tone colours with luminous depth from oil glazes. Palette: deep blue, ruby red, emerald green, warm gold, all with gem-like luminosity. Like Jan van Eyck or Albrecht Dürer. The mood is {MOOD}. Era reference: {ERA}. Full scene composition, high resolution, print-ready.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Northern Renaissance oil painting — Van Eyck meticulous detail, cool silvery light through leaded glass windows, rich textile patterns, precise botanical accuracy, intimate domestic scale with symbolic objects. Mood: {MOOD}. Era: {ERA}. Rendered with the physical texture of traditional handmade artwork.",
       "style_anchors": [],
       "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
       "source_book": "builtin",
@@ -460,12 +526,12 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-11T18:31:22.822816+00:00"
+      "updated_at": "2026-03-15T23:40:16.243075+00:00"
     },
     {
       "id": "alexandria-wildcard-twilight-symbolism",
       "name": "Twilight Symbolism",
-      "prompt_template": "Book cover illustration — no text, no lettering. This illustration MUST depict the following specific scene: {SCENE}. Every figure and setting element must be faithful to the source material. RENDERING TECHNIQUE: Symbolist painting — dreamlike soft-focus atmosphere where forms dissolve at their edges into mist and shadow. Twilight lighting with the sky transitioning from deep blue to pale gold at the horizon. Figures emerge from shadow as if materializing from a dream. Palette: deep twilight blue, soft violet, pale gold, muted rose, silvery grey. Smooth, luminous brushwork with a mysterious inner glow. Like Odilon Redon or Fernand Khnopff. The mood is {MOOD}. Era reference: {ERA}. Full scene composition, high resolution, print-ready.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Symbolist painting — dreamlike twilight atmosphere, deep purple and midnight blue palette with phosphorescent accents, enigmatic figure poses, Redon-inspired otherworldly luminescence, mythology blended with nature. Mood: {MOOD}. Era: {ERA}. Rendered with the physical texture of traditional handmade artwork.",
       "style_anchors": [],
       "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
       "source_book": "builtin",
@@ -486,12 +552,12 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-11T18:31:22.822814+00:00"
+      "updated_at": "2026-03-15T23:40:16.243073+00:00"
     },
     {
       "id": "alexandria-wildcard-pre-raphaelite-dream",
       "name": "Pre-Raphaelite Dream",
-      "prompt_template": "Book cover illustration — no text, no lettering. This illustration MUST depict the following specific scene: {SCENE}. Every figure and setting element must be faithful to the source material. Rendered in Pre-Raphaelite painting style — jewel-bright saturated colours, hyper-detailed botanical elements, flowing auburn hair and medieval-inspired drapery, Waterhouse-like romantic atmosphere. The mood is {MOOD}. Era reference: {ERA}. Full scene composition, high resolution, print-ready.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Pre-Raphaelite painting — jewel-bright saturated colours, hyper-detailed botanical elements, flowing auburn hair and medieval-inspired drapery, Waterhouse-like romantic atmosphere. Mood: {MOOD}. Era: {ERA}. Rendered with the physical texture of traditional handmade artwork.",
       "style_anchors": [],
       "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
       "source_book": "builtin",
@@ -512,12 +578,12 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-11T18:31:22.822811+00:00"
+      "updated_at": "2026-03-15T23:40:16.243070+00:00"
     },
     {
       "id": "alexandria-wildcard-film-noir-shadows",
       "name": "Film Noir Shadows",
-      "prompt_template": "Book cover illustration — no text, no lettering. This illustration MUST depict the following specific scene: {SCENE}. Every figure and setting element must be faithful to the source material. RENDERING TECHNIQUE: Film noir painting — extreme high-contrast with deep shadows occupying most of the canvas. Sharp-edged shadows and dramatic angular light from venetian blinds, street lamps, or doorways. Figures are partially obscured by shadow, creating mystery and tension. Palette: near-black shadows, cool blue-grey mid-tones, sharp white highlights, occasional warm amber from a single light source. Painted with bold confident strokes. Like a painted movie poster from the 1940s. The mood is {MOOD}. Era reference: {ERA}. Full scene composition, high resolution, print-ready.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: film noir cinematic — high-contrast black and white with selective warm amber highlights, venetian blind shadow patterns, rain-slicked surfaces, cigarette-smoke atmosphere, dramatic low-angle perspective. Mood: {MOOD}. Era: {ERA}. Rendered with the physical texture of traditional handmade artwork.",
       "style_anchors": [],
       "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
       "source_book": "builtin",
@@ -538,12 +604,12 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-11T18:31:22.822809+00:00"
+      "updated_at": "2026-03-15T23:40:16.243068+00:00"
     },
     {
       "id": "alexandria-wildcard-ottoman-illumination",
       "name": "Ottoman Illumination",
-      "prompt_template": "Book cover illustration — no text, no lettering. This illustration MUST depict the following specific scene: {SCENE}. Every figure and setting element must be faithful to the source material. Rendered in Ottoman illuminated manuscript style — turquoise and coral palette with gold filigree, tulip and carnation motifs, flat decorative perspective, intricate geometric borders, courtly mineral-pigment elegance. The mood is {MOOD}. Era reference: {ERA}. Full scene composition, high resolution, print-ready.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Ottoman illuminated manuscript — turquoise and coral palette with gold filigree, tulip and carnation motifs, flat decorative perspective, intricate geometric borders, courtly mineral-pigment elegance. Mood: {MOOD}. Era: {ERA}. Rendered with the physical texture of traditional handmade artwork.",
       "style_anchors": [],
       "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
       "source_book": "builtin",
@@ -564,12 +630,12 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-11T18:31:22.822806+00:00"
+      "updated_at": "2026-03-15T23:40:16.243066+00:00"
     },
     {
       "id": "alexandria-wildcard-chinese-ink-wash",
       "name": "Chinese Ink Wash",
-      "prompt_template": "Book cover illustration — no text, no lettering. This illustration MUST depict the following specific scene: {SCENE}. Every figure and setting element must be faithful to the source material. Rendered in Chinese ink wash painting style — misty mountain atmosphere, graded ink tones from deep black to pale grey, negative space as a compositional element, bamboo-brush spontaneity, Song dynasty landscape grandeur. The mood is {MOOD}. Era reference: {ERA}. Full scene composition, high resolution, print-ready.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Chinese ink wash painting — misty mountain atmosphere, graded ink tones from deep black to pale grey, negative space as a compositional element, bamboo-brush spontaneity, Song dynasty landscape grandeur. Mood: {MOOD}. Era: {ERA}. Rendered with the physical texture of traditional handmade artwork.",
       "style_anchors": [],
       "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
       "source_book": "builtin",
@@ -590,12 +656,12 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-11T18:31:22.822803+00:00"
+      "updated_at": "2026-03-15T23:40:16.243063+00:00"
     },
     {
       "id": "alexandria-wildcard-persian-miniature",
       "name": "Persian Miniature",
-      "prompt_template": "Book cover illustration — no text, no lettering. This illustration MUST depict the following specific scene: {SCENE}. Every figure and setting element must be faithful to the source material. Rendered in Persian miniature painting style — bird's-eye multi-level perspective, jewel-bright lapis lazuli and emerald palette, intricate floral details, gold leaf accents, delicate figure rendering with expressive faces. The mood is {MOOD}. Era reference: {ERA}. Full scene composition, high resolution, print-ready.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Persian miniature painting — bird's-eye multi-level perspective, jewel-bright lapis lazuli and emerald palette, intricate floral details, gold leaf accents, delicate figure rendering with expressive faces. Mood: {MOOD}. Era: {ERA}. Rendered with the physical texture of traditional handmade artwork.",
       "style_anchors": [],
       "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
       "source_book": "builtin",
@@ -616,12 +682,12 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-11T18:31:22.822797+00:00"
+      "updated_at": "2026-03-15T23:40:16.243061+00:00"
     },
     {
       "id": "alexandria-wildcard-ukiyo-e-woodblock",
       "name": "Ukiyo-e Woodblock",
-      "prompt_template": "Book cover illustration — no text, no lettering. This illustration MUST depict the following specific scene: {SCENE}. Every figure and setting element must be faithful to the source material. Rendered in Japanese ukiyo-e woodblock print style — flat colour planes with precise black outlines, asymmetric composition, indigo and vermilion palette, stylized wave and cloud motifs, Hokusai-inspired naturalistic detail. The mood is {MOOD}. Era reference: {ERA}. Full scene composition, high resolution, print-ready.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Japanese ukiyo-e woodblock print — flat colour planes with precise black outlines, asymmetric composition, indigo and vermilion palette, stylized wave and cloud motifs, Hokusai-inspired naturalistic detail. Mood: {MOOD}. Era: {ERA}. Rendered with the physical texture of traditional handmade artwork.",
       "style_anchors": [],
       "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
       "source_book": "builtin",
@@ -642,12 +708,12 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-11T18:31:22.822795+00:00"
+      "updated_at": "2026-03-15T23:40:16.243058+00:00"
     },
     {
       "id": "alexandria-wildcard-soviet-constructivist",
       "name": "Soviet Constructivist",
-      "prompt_template": "Book cover illustration — no text, no lettering. This illustration MUST depict the following specific scene: {SCENE}. Every figure and setting element must be faithful to the source material. RENDERING TECHNIQUE: Soviet Constructivist poster painting — bold geometric shapes, strong diagonal compositions, dynamic angular figures in heroic poses. Flat colour areas with sharp edges and limited palette. Palette: revolutionary red, deep black, warm cream/gold, industrial grey. Bold graphic shapes layered with photomontage-inspired depth. Heavy, powerful brushwork with visible texture. Like El Lissitzky or Alexander Rodchenko. The mood is {MOOD}. Era reference: {ERA}. Full scene composition, high resolution, print-ready.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Soviet Constructivist poster — bold angular composition, red black cream and steel grey palette, photomontage-inspired layering, diagonal dynamic energy, heroic monumental scale. Mood: {MOOD}. Era: {ERA}. Rendered with the physical texture of traditional handmade artwork.",
       "style_anchors": [],
       "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
       "source_book": "builtin",
@@ -668,12 +734,12 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-11T18:31:22.822792+00:00"
+      "updated_at": "2026-03-15T23:40:16.243056+00:00"
     },
     {
       "id": "alexandria-wildcard-art-deco-glamour",
       "name": "Art Deco Glamour",
-      "prompt_template": "Book cover illustration — no text, no lettering. This illustration MUST depict the following specific scene: {SCENE}. Every figure and setting element must be faithful to the source material. RENDERING TECHNIQUE: Art Deco illustration — sleek geometric elegance with stylized figures and architectural forms. Clean, precise lines with areas of rich flat colour. Metallic gold and silver accents. Palette: black, gold, silver, deep teal, cream white, coral. Figures are elongated and elegant. Geometric sunburst and zigzag patterns in backgrounds. Painted with precision and glamour. Like Erte or Tamara de Lempicka. The mood is {MOOD}. Era reference: {ERA}. Full scene composition, high resolution, print-ready.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Art Deco glamour illustration — geometric symmetry, sleek metallic gold and silver accents, jade green and midnight black palette, elongated elegant figures, Chrysler Building-era luxury and angular precision. Mood: {MOOD}. Era: {ERA}. Rendered with the physical texture of traditional handmade artwork.",
       "style_anchors": [],
       "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
       "source_book": "builtin",
@@ -694,12 +760,12 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-11T18:31:22.822789+00:00"
+      "updated_at": "2026-03-15T23:40:16.243054+00:00"
     },
     {
       "id": "alexandria-wildcard-woodcut-relief",
       "name": "Woodcut Relief Print",
-      "prompt_template": "Book cover illustration — no text, no lettering. This illustration MUST depict the following specific scene: {SCENE}. Every figure and setting element must be faithful to the source material. RENDERING TECHNIQUE: Woodcut relief print illustration — bold black outlines with carved texture visible in every line. Cross-hatching and parallel line shading create tonal depth. Limited colour palette applied in flat areas between carved lines. Palette: deep black ink, warm parchment, with optional touches of muted red, blue, or green. The texture of carved wood grain visible throughout. Bold, graphic, with the handmade quality of a physical print. The mood is {MOOD}. Era reference: {ERA}. Full scene composition, high resolution, print-ready.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: hand-carved woodcut relief print — bold black lines on warm cream, hatched shadow textures, simplified dramatic forms, limited two-tone palette, Dürer-inspired precision with folk art warmth. Mood: {MOOD}. Era: {ERA}. Rendered with the physical texture of traditional handmade artwork.",
       "style_anchors": [],
       "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
       "source_book": "builtin",
@@ -720,12 +786,12 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-11T18:31:22.822787+00:00"
+      "updated_at": "2026-03-15T23:40:16.243052+00:00"
     },
     {
       "id": "alexandria-wildcard-vintage-pulp-cover",
       "name": "Vintage Pulp Cover",
-      "prompt_template": "Book cover illustration — no text, no lettering. This illustration MUST depict the following specific scene: {SCENE}. Every figure and setting element must be faithful to the source material. RENDERING TECHNIQUE: Vintage pulp magazine cover painting — bold, saturated colours with dramatic action-oriented composition. Thick gouache paint texture with visible brushwork. Strong warm spotlight on the main figure against dark or dramatic backgrounds. Palette: bold primary colours — vivid red, deep blue, bright yellow — with warm skin tones and dark shadows. Dynamic poses, dramatic expressions. The handpainted quality of mid-20th century illustration. The mood is {MOOD}. Era reference: {ERA}. Full scene composition, high resolution, print-ready.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: 1940s vintage pulp illustration — saturated primary colours, high-contrast dramatic lighting, bold expressive faces, painterly gouache texture, action-forward composition with dynamic diagonals. Mood: {MOOD}. Era: {ERA}. Rendered with the physical texture of traditional handmade artwork.",
       "style_anchors": [],
       "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
       "source_book": "builtin",
@@ -746,12 +812,12 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-11T18:31:22.822783+00:00"
+      "updated_at": "2026-03-15T23:40:16.243049+00:00"
     },
     {
       "id": "alexandria-wildcard-art-nouveau-poster",
       "name": "Art Nouveau Poster",
-      "prompt_template": "Book cover illustration — no text, no lettering. This illustration MUST depict the following specific scene: {SCENE}. Every figure and setting element must be faithful to the source material. Rendered in Art Nouveau illustration style — sinuous organic linework, flowing hair and fabric, jewel-tone flat colours with gold outlines, Mucha-inspired decorative elegance, nature-integrated composition. The mood is {MOOD}. Era reference: {ERA}. Full scene composition, high resolution, print-ready.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Art Nouveau illustration — sinuous organic linework, flowing hair and fabric, jewel-tone flat colours with gold outlines, Mucha-inspired decorative elegance, nature-integrated composition. Mood: {MOOD}. Era: {ERA}. Rendered with the physical texture of traditional handmade artwork.",
       "style_anchors": [],
       "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
       "source_book": "builtin",
@@ -772,12 +838,12 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-11T18:31:22.822780+00:00"
+      "updated_at": "2026-03-15T23:40:16.243047+00:00"
     },
     {
       "id": "alexandria-wildcard-baroque-dramatic",
       "name": "Baroque Dramatic",
-      "prompt_template": "Book cover illustration — no text, no lettering. This illustration MUST depict the following specific scene: {SCENE}. Every figure and setting element must be faithful to the source material. RENDERING TECHNIQUE: Baroque dramatic painting — theatrical lighting with extreme contrast between deep shadow and brilliant warm light. Rich, heavy oil paint texture with visible brushwork. Fabric rendered with luxurious weight and sheen — velvet, silk, brocade. Dramatic diagonal compositions with figures in dynamic poses. Palette: deep Venetian red, burnt gold, warm flesh tones against near-black shadow. Warm candlelight or divine light breaks through darkness. Like Caravaggio or Rubens. The mood is {MOOD}. Era reference: {ERA}. Full scene composition, high resolution, print-ready.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Baroque dramatic painting — Caravaggio-intense spotlighting, deep blacks with explosive warm highlights, theatrical gesture and expression, swirling drapery, rich crimson and gold against darkness. Mood: {MOOD}. Era: {ERA}. Rendered with the physical texture of traditional handmade artwork.",
       "style_anchors": [],
       "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
       "source_book": "builtin",
@@ -798,12 +864,12 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-11T18:31:22.822778+00:00"
+      "updated_at": "2026-03-15T23:40:16.243044+00:00"
     },
     {
       "id": "alexandria-wildcard-academic-neoclassical",
       "name": "Academic Neoclassical",
-      "prompt_template": "Book cover illustration — no text, no lettering. This illustration MUST depict the following specific scene: {SCENE}. Every figure and setting element must be faithful to the source material. RENDERING TECHNIQUE: Academic Neoclassical painting — precise, refined technique with smooth blended brushwork and idealized forms. Figures have classical proportions with noble poses. Architecture features columns, arches, and marble. Palette: cool marble white, warm ochre, sky blue, laurel green, with skin tones in warm peach and rose. Balanced, symmetrical compositions with clear focal hierarchy. Like Jacques-Louis David or Bouguereau. The mood is {MOOD}. Era reference: {ERA}. Full scene composition, high resolution, print-ready.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Academic Neoclassical painting — idealized proportions, marble-smooth surfaces, heroic poses, cool grey-blue and warm sandstone palette, classical architectural framing, David-like precision and grandeur. Mood: {MOOD}. Era: {ERA}. Rendered with the physical texture of traditional handmade artwork.",
       "style_anchors": [],
       "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
       "source_book": "builtin",
@@ -824,12 +890,12 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-11T18:31:22.822775+00:00"
+      "updated_at": "2026-03-15T23:40:16.243042+00:00"
     },
     {
       "id": "alexandria-wildcard-impressionist-plein-air",
       "name": "Impressionist Plein Air",
-      "prompt_template": "Book cover illustration — no text, no lettering. This illustration MUST depict the following specific scene: {SCENE}. Every figure and setting element must be faithful to the source material. RENDERING TECHNIQUE: French Impressionist plein air painting — loose visible brushstrokes throughout, dappled natural sunlight filtering through foliage creates dancing spots of warm yellow and cool blue shadow. Paint applied in thick impasto dabs of pure colour placed side by side (NOT blended). Soft atmospheric haze in the distance. Palette: luminous sky blue, lavender, soft pink, leaf green, sunshine yellow. The texture of oil paint on canvas is visible in every stroke. Like a Monet or Renoir painting. The mood is {MOOD}. Era reference: {ERA}. Full scene composition, high resolution, print-ready.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: French Impressionist plein air — visible brushstrokes, dappled natural sunlight, soft focus atmospheric depth, luminous pastel and sky-blue palette, Monet-like light on water and foliage. Mood: {MOOD}. Era: {ERA}. Rendered with the physical texture of traditional handmade artwork.",
       "style_anchors": [],
       "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
       "source_book": "builtin",
@@ -850,12 +916,12 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-11T18:31:22.822772+00:00"
+      "updated_at": "2026-03-15T23:40:16.243040+00:00"
     },
     {
       "id": "alexandria-wildcard-dutch-golden-age",
       "name": "Dutch Golden Age",
-      "prompt_template": "Book cover illustration — no text, no lettering. This illustration MUST depict the following specific scene: {SCENE}. Every figure and setting element must be faithful to the source material. RENDERING TECHNIQUE: Dutch Golden Age painting — intimate domestic scenes lit by soft window light from the left side. Extraordinary attention to material textures: reflective metals, translucent glass, soft bread, worn leather, starched linen. Rich dark backgrounds with warm pools of light. Palette: deep brown, warm gold, cream white, touches of vermillion red and ultramarine blue. Every surface texture is rendered with loving precision. Like Vermeer or Rembrandt. The mood is {MOOD}. Era reference: {ERA}. Full scene composition, high resolution, print-ready.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Dutch Golden Age painting — Rembrandt-like chiaroscuro, intimate domestic lighting, meticulous fabric texture, warm amber and deep brown palette, candlelit atmosphere with selective highlights. Mood: {MOOD}. Era: {ERA}. Rendered with the physical texture of traditional handmade artwork.",
       "style_anchors": [],
       "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
       "source_book": "builtin",
@@ -876,12 +942,12 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-11T18:31:22.822770+00:00"
+      "updated_at": "2026-03-15T23:40:16.243037+00:00"
     },
     {
       "id": "alexandria-wildcard-venetian-renaissance",
       "name": "Venetian Renaissance",
-      "prompt_template": "Book cover illustration — no text, no lettering. This illustration MUST depict the following specific scene: {SCENE}. Every figure and setting element must be faithful to the source material. RENDERING TECHNIQUE: Venetian Renaissance painting — warm, glowing colour applied in rich glazes over warm underpaint. Soft transitions between light and shadow (sfumato). Lush landscapes recede into atmospheric blue distance. Figures have warm, luminous skin painted with multiple translucent layers. Palette: warm Venetian red, deep ultramarine blue, rich gold, soft green, rosy flesh tones. The paint surface glows with inner warmth. Like Titian or Giorgione. The mood is {MOOD}. Era reference: {ERA}. Full scene composition, high resolution, print-ready.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Venetian Renaissance oil painting — Titian-warm glazes, luminous skin tones, rich velvet and brocade fabrics, atmospheric sfumato backgrounds, deep jewel-tone crimson sapphire and gold palette. Mood: {MOOD}. Era: {ERA}. Rendered with the physical texture of traditional handmade artwork.",
       "style_anchors": [],
       "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
       "source_book": "builtin",
@@ -902,12 +968,12 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-11T18:31:22.822763+00:00"
+      "updated_at": "2026-03-15T23:40:16.243035+00:00"
     },
     {
       "id": "alexandria-wildcard-temple-of-knowledge",
       "name": "WILDCARD 5 — Temple of Knowledge",
-      "prompt_template": "Book cover illustration — no text, no lettering. This illustration MUST depict the following specific scene: {SCENE}. Every figure and setting element must be faithful to the source material. Rendered in monumental architectural illustration style — classical columns, dramatic perspective, warm lamplight on stone, scrolls and books as decorative elements, sepia and amber palette with selective gold highlights. The mood is {MOOD}. Era reference: {ERA}. Full scene composition, high resolution, print-ready.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: monumental architectural illustration — classical columns, dramatic perspective, warm lamplight on stone, scrolls and books as decorative elements, sepia and amber palette with selective gold highlights. Mood: {MOOD}. Era: {ERA}. Rendered with the physical texture of traditional handmade artwork.",
       "style_anchors": [],
       "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
       "source_book": "builtin",
@@ -928,12 +994,12 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-11T18:31:22.822760+00:00"
+      "updated_at": "2026-03-15T23:40:16.243033+00:00"
     },
     {
       "id": "alexandria-wildcard-celestial-cartography",
       "name": "WILDCARD 4 — Celestial Cartography",
-      "prompt_template": "Book cover illustration — no text, no lettering. This illustration MUST depict the following specific scene: {SCENE}. Every figure and setting element must be faithful to the source material. Rendered in scientific cartographic illustration style — compass roses, parchment tones, precise linework, sepia and aged-gold palette, navigational chart aesthetics, hand-drawn map detail. The mood is {MOOD}. Era reference: {ERA}. Full scene composition, high resolution, print-ready.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: scientific cartographic illustration — compass roses, parchment tones, precise linework, sepia and aged-gold palette, navigational chart aesthetics, hand-drawn map detail. Mood: {MOOD}. Era: {ERA}. Rendered with the physical texture of traditional handmade artwork.",
       "style_anchors": [],
       "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
       "source_book": "builtin",
@@ -954,12 +1020,12 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-11T18:31:22.822757+00:00"
+      "updated_at": "2026-03-15T23:40:16.243030+00:00"
     },
     {
       "id": "alexandria-wildcard-illuminated-manuscript",
       "name": "WILDCARD 3 — Illuminated Manuscript",
-      "prompt_template": "Book cover illustration — no text, no lettering. This illustration MUST depict the following specific scene: {SCENE}. Every figure and setting element must be faithful to the source material. Rendered in medieval illuminated manuscript style — gold leaf accents, ultramarine blue and vermilion, intricate marginalia patterns, flat perspective with symbolic scale, rich decorative detail. The mood is {MOOD}. Era reference: {ERA}. Full scene composition, high resolution, print-ready.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: medieval illuminated manuscript — gold leaf accents, ultramarine blue and vermilion, intricate marginalia patterns, flat perspective with symbolic scale, rich decorative detail. Mood: {MOOD}. Era: {ERA}. Rendered with the physical texture of traditional handmade artwork.",
       "style_anchors": [],
       "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
       "source_book": "builtin",
@@ -980,12 +1046,12 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-11T18:31:22.822754+00:00"
+      "updated_at": "2026-03-15T23:40:16.243028+00:00"
     },
     {
       "id": "alexandria-wildcard-pre-raphaelite-garden",
       "name": "WILDCARD 2 — Vintage Travel Poster",
-      "prompt_template": "Book cover illustration — no text, no lettering. This illustration MUST depict the following specific scene: {SCENE}. Every figure and setting element must be faithful to the source material. Rendered in bold 1930s vintage travel poster style — flat unblended colour blocks with clean outlines, layered depth planes, burgundy navy cream and forest green palette, geometric confidence. The mood is {MOOD}. Era reference: {ERA}. Full scene composition, high resolution, print-ready.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: bold 1930s vintage travel poster — flat unblended colour blocks with clean outlines, layered depth planes, burgundy navy cream and forest green palette, geometric confidence. Mood: {MOOD}. Era: {ERA}. Rendered with the physical texture of traditional handmade artwork.",
       "style_anchors": [],
       "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
       "source_book": "builtin",
@@ -1007,12 +1073,12 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-11T18:31:22.822751+00:00"
+      "updated_at": "2026-03-15T23:40:16.243025+00:00"
     },
     {
       "id": "alexandria-wildcard-edo-meets-alexandria",
       "name": "WILDCARD 1 — Dramatic Graphic Novel",
-      "prompt_template": "Book cover illustration — no text, no lettering. This illustration MUST depict the following specific scene: {SCENE}. Every figure and setting element must be faithful to the source material. Rendered in dramatic graphic novel engraving style — bold parallel crosshatching, heavy black outlines, expressive faces in close-up, deep black with warm amber and burnt orange highlights, swirling dramatic sky. The mood is {MOOD}. Era reference: {ERA}. Full scene composition, high resolution, print-ready.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: dramatic graphic novel engraving — bold parallel crosshatching, heavy black outlines, expressive faces in close-up, deep black with warm amber and burnt orange highlights, swirling dramatic sky. Mood: {MOOD}. Era: {ERA}. Rendered with the physical texture of traditional handmade artwork.",
       "style_anchors": [],
       "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
       "source_book": "builtin",
@@ -1034,69 +1100,7 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-11T18:31:22.822748+00:00"
-    },
-    {
-      "id": "alexandria-wildcard-painterly-soft",
-      "name": "Painterly Soft Brushwork",
-      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Soft gouache and oil painting. Visible blended brushwork, soft edges, warm transitions, no hard lines. Muted earthy palette with gentle light. Dreamy atmospheric quality of vintage illustrated books. Mood: {MOOD}. Era: {ERA}.",
-      "style_anchors": [
-        "painterly",
-        "gouache",
-        "hand-painted",
-        "brushwork",
-        "atmospheric"
-      ],
-      "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
-      "source_book": "builtin",
-      "source_model": "openrouter/google/gemini-3-pro-image-preview",
-      "quality_score": 1.0,
-      "saved_by": "system",
-      "created_at": "2026-03-13T00:00:00+00:00",
-      "notes": "Alexandria wildcard prompt. Soft hand-painted gouache and oil brushwork with atmospheric depth.",
-      "tags": [
-        "painterly",
-        "soft-brushwork",
-        "gouache",
-        "atmospheric"
-      ],
-      "category": "wildcard",
-      "version": 1,
-      "usage_count": 0,
-      "win_count": 0,
-      "last_used_at": "",
-      "updated_at": "2026-03-13T00:00:00+00:00"
-    },
-    {
-      "id": "alexandria-wildcard-painterly-detailed",
-      "name": "Painterly Hyper-Detailed",
-      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Hyper-detailed hand-painted illustration. Meticulous brushwork on every fabric fold, architectural detail, and texture. Rich saturated colors, dense visual information across every inch. Museum-quality precision. Mood: {MOOD}. Era: {ERA}.",
-      "style_anchors": [
-        "hyper-detailed",
-        "jewel-tone",
-        "polished",
-        "maximalist",
-        "golden-hour"
-      ],
-      "negative_prompt": "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, vector art, anime, cartoon, blurry, stock photo",
-      "source_book": "builtin",
-      "source_model": "openrouter/google/gemini-3-pro-image-preview",
-      "quality_score": 1.0,
-      "saved_by": "system",
-      "created_at": "2026-03-13T00:00:00+00:00",
-      "notes": "Alexandria wildcard prompt. Hyper-detailed painterly rendering with jewel-tone saturation and luminous finish.",
-      "tags": [
-        "painterly",
-        "hyper-detailed",
-        "jewel-tone",
-        "maximalist"
-      ],
-      "category": "wildcard",
-      "version": 1,
-      "usage_count": 0,
-      "win_count": 0,
-      "last_used_at": "",
-      "updated_at": "2026-03-13T00:00:00+00:00"
+      "updated_at": "2026-03-15T23:40:16.243022+00:00"
     },
     {
       "id": "3cb72b01-44c2-48bf-8aaf-c1d5f9923822",

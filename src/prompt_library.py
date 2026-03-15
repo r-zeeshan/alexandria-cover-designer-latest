@@ -46,6 +46,57 @@ ALEXANDRIA_BASE_NEGATIVE_PROMPT = (
     "vector art, anime, cartoon, blurry, stock photo"
 )
 
+ALEXANDRIA_PAINTERLY_TEXTURE_CLAUSE = (
+    "Every stroke must show the physical texture of hand-applied paint."
+)
+
+ALEXANDRIA_WILDCARD_TEXTURE_CLAUSE = (
+    "Rendered with the physical texture of traditional handmade artwork."
+)
+
+ALEXANDRIA_BASE_PROMPT_TEMPLATES: dict[str, str] = {
+    "alexandria-base-classical-devotion": (
+        "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Rich oil painting, "
+        "hyper-detailed botanical precision. Deep midnight navy and burnished gold. Thick impasto on "
+        "gilded elements, fine detail on flora. Sacred, warm candlelight glow. Mood: {MOOD}. Era: {ERA}. "
+        "Visible brushwork on canvas throughout."
+    ),
+    "alexandria-base-philosophical-gravitas": (
+        "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Dramatic chiaroscuro. "
+        "Strong light carves figures from shadow. Raw umber and burnt sienna dominate, gold ochre warms "
+        "the light, charcoal grey deepens shadow. Heavy Rembrandt-era texture. Mood: {MOOD}. Era: {ERA}. "
+        "Thick impasto paint texture on every surface."
+    ),
+    "alexandria-base-gothic-atmosphere": (
+        "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Dark atmospheric "
+        "painting, expressionist energy. Loose aggressive brushwork with palette knife marks. Moonlit "
+        "indigo and deep crimson with silvered edge highlights. Gothic tension, foreboding atmosphere. "
+        "Mood: {MOOD}. Era: {ERA}. Ink-wash texture with visible paper grain."
+    ),
+    "alexandria-base-romantic-realism": (
+        "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Warm romantic landscape, "
+        "19th-century Romanticism. Soft luminous brushwork, watercolor washes over oil. Golden-hour amber "
+        "and warm sienna, soft sky blue, deep forest green. Sweeping atmospheric perspective. Mood: "
+        "{MOOD}. Era: {ERA}. Oil paint texture with visible canvas weave."
+    ),
+    "alexandria-base-esoteric-mysticism": (
+        "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Visionary painting with "
+        "luminous depth. Translucent glazes create inner glow. Cosmic indigo and celestial gold, deep "
+        "amethyst, ethereal silver-white. Mystical symbols emerge from luminous mist. Mood: {MOOD}. "
+        "Era: {ERA}. Hand-painted texture with pigment granulation."
+    ),
+}
+
+
+def _base_prompt_template(prompt_id: str) -> str:
+    return ALEXANDRIA_BASE_PROMPT_TEMPLATES[prompt_id]
+
+
+def _wildcard_texture_clause(prompt_id: str) -> str:
+    if "painterly" in str(prompt_id or ""):
+        return ALEXANDRIA_PAINTERLY_TEXTURE_CLAUSE
+    return ALEXANDRIA_WILDCARD_TEXTURE_CLAUSE
+
 
 def _scene_first_prompt(
     style_label: str,
@@ -53,15 +104,17 @@ def _scene_first_prompt(
     *,
     style_section: str = "",
     full_canvas: bool = False,
+    texture_clause: str = "",
 ) -> str:
-    del full_canvas
-    rendered_section = style_section.strip() or f"Rendered in {style_label} style — {style_description}."
-    return (
-        "Book cover illustration — no text, no lettering. This illustration MUST depict the following "
-        "specific scene: {SCENE}. Every figure and setting element must be faithful to the source material. "
-        f"{rendered_section} "
-        "The mood is {MOOD}. Era reference: {ERA}. Full scene composition, high resolution, print-ready."
+    del style_section, full_canvas
+    rendered_section = f"{style_label} — {style_description}".strip(" —")
+    prompt = (
+        "Book cover illustration — no text, no lettering. "
+        f"Scene: {{SCENE}}. STYLE: {rendered_section}. Mood: {{MOOD}}. Era: {{ERA}}."
     )
+    if texture_clause.strip():
+        prompt = f"{prompt} {texture_clause.strip()}"
+    return prompt
 
 
 ALEXANDRIA_PROMPT_CATALOG: tuple[dict[str, object], ...] = (
@@ -76,11 +129,7 @@ ALEXANDRIA_PROMPT_CATALOG: tuple[dict[str, object], ...] = (
             "period clothing with flowing hair and emotional poses, lush pastoral settings with castles and rivers "
             "and wildflower gardens, painterly brushwork with visible gilded texture like an illuminated manuscript"
         ),
-        "prompt_template": (
-            "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Rich oil painting, "
-            "hyper-detailed botanical precision. Deep midnight navy and burnished gold. Thick impasto on "
-            "gilded elements, fine detail on flora. Sacred, warm candlelight glow. Mood: {MOOD}. Era: {ERA}."
-        ),
+        "prompt_template": _base_prompt_template("alexandria-base-classical-devotion"),
         "full_canvas": True,
         "negative_prompt": ALEXANDRIA_BASE_NEGATIVE_PROMPT,
         "notes": "Alexandria base prompt. Best for: Religious, Apocryphal, Biblical.",
@@ -95,12 +144,7 @@ ALEXANDRIA_PROMPT_CATALOG: tuple[dict[str, object], ...] = (
             "deep shadows, selective warm highlights, muted burnt umber and ochre palette, single focal light "
             "source, grave reflective atmosphere"
         ),
-        "prompt_template": (
-            "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Dramatic chiaroscuro. "
-            "Single strong directional light carves figures from deep shadow. Raw umber and burnt sienna "
-            "dominate, muted gold ochre for warm light, charcoal grey in shadow. Heavy Rembrandt-era texture. "
-            "Mood: {MOOD}. Era: {ERA}."
-        ),
+        "prompt_template": _base_prompt_template("alexandria-base-philosophical-gravitas"),
         "full_canvas": True,
         "negative_prompt": ALEXANDRIA_BASE_NEGATIVE_PROMPT,
         "notes": "Alexandria base prompt. Best for: Philosophy, Self-Help, Strategy.",
@@ -115,12 +159,7 @@ ALEXANDRIA_PROMPT_CATALOG: tuple[dict[str, object], ...] = (
             "moonlit shadows, drifting mist, deep indigo and crimson tones, expressionist contrast, dramatic "
             "silhouettes against turbulent skies"
         ),
-        "prompt_template": (
-            "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Dark atmospheric "
-            "painting, expressionist energy. Loose aggressive brushwork with palette knife marks. Moonlit "
-            "indigo and deep crimson with silvered edge highlights. Gothic tension, foreboding atmosphere. "
-            "Mood: {MOOD}. Era: {ERA}."
-        ),
+        "prompt_template": _base_prompt_template("alexandria-base-gothic-atmosphere"),
         "full_canvas": True,
         "negative_prompt": ALEXANDRIA_BASE_NEGATIVE_PROMPT,
         "notes": "Alexandria base prompt. Best for: Horror, Gothic, Supernatural.",
@@ -138,12 +177,7 @@ ALEXANDRIA_PROMPT_CATALOG: tuple[dict[str, object], ...] = (
             "medieval architecture in the background, figures with flowing auburn or golden hair in emotional "
             "intimate compositions, painterly brushwork like a gilded 19th-century illustration"
         ),
-        "prompt_template": (
-            "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Warm romantic landscape, "
-            "19th-century Romanticism. Soft luminous brushwork, watercolor washes over oil. Golden-hour amber "
-            "and warm sienna, soft sky blue, deep forest green. Sweeping atmospheric perspective. Mood: "
-            "{MOOD}. Era: {ERA}."
-        ),
+        "prompt_template": _base_prompt_template("alexandria-base-romantic-realism"),
         "full_canvas": True,
         "negative_prompt": ALEXANDRIA_BASE_NEGATIVE_PROMPT,
         "notes": "Alexandria base prompt. Best for: Classical Literature, Novels, Drama.",
@@ -158,12 +192,7 @@ ALEXANDRIA_PROMPT_CATALOG: tuple[dict[str, object], ...] = (
             "celestial motifs, sacred geometry accents, deep midnight blue and gold palette, luminous ethereal "
             "lighting, symbolic depth"
         ),
-        "prompt_template": (
-            "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Visionary painting with "
-            "luminous depth. Translucent glazes create inner glow. Cosmic indigo and celestial gold, deep "
-            "amethyst, ethereal silver-white. Mystical symbols emerge from luminous mist. Mood: {MOOD}. "
-            "Era: {ERA}."
-        ),
+        "prompt_template": _base_prompt_template("alexandria-base-esoteric-mysticism"),
         "full_canvas": True,
         "negative_prompt": ALEXANDRIA_BASE_NEGATIVE_PROMPT,
         "notes": "Alexandria base prompt. Best for: Occult, Mystical, Forbidden Texts.",
@@ -629,7 +658,7 @@ ALEXANDRIA_PROMPT_CATALOG: tuple[dict[str, object], ...] = (
             "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Soft gouache and oil "
             "painting. Visible blended brushwork, soft edges, warm transitions, no hard lines. Muted earthy "
             "palette with gentle light. Dreamy atmospheric quality of vintage illustrated books. Mood: "
-            "{MOOD}. Era: {ERA}."
+            "{MOOD}. Era: {ERA}. Every stroke must show the physical texture of hand-applied paint."
         ),
         "style_section": (
             "RENDERING TECHNIQUE: HAND-PAINTED illustration in gouache and oil painting style. MANDATORY "
@@ -659,7 +688,7 @@ ALEXANDRIA_PROMPT_CATALOG: tuple[dict[str, object], ...] = (
             "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Hyper-detailed "
             "hand-painted illustration. Meticulous brushwork on every fabric fold, architectural detail, and "
             "texture. Rich saturated colors, dense visual information across every inch. Museum-quality "
-            "precision. Mood: {MOOD}. Era: {ERA}."
+            "precision. Mood: {MOOD}. Era: {ERA}. Every stroke must show the physical texture of hand-applied paint."
         ),
         "style_section": (
             "RENDERING TECHNIQUE: HAND-PAINTED hyper-detailed digital painting with meticulously controlled "
@@ -690,8 +719,9 @@ ALEXANDRIA_PROMPT_SPECS: tuple[dict[str, object], ...] = tuple(
         "prompt_template": str(spec.get("prompt_template") or _scene_first_prompt(
             str(spec["style_label"]),
             str(spec["style_description"]),
-            style_section=str(spec.get("style_section", "")),
+            style_section="",
             full_canvas=bool(spec.get("full_canvas")),
+            texture_clause=_wildcard_texture_clause(str(spec["id"])),
         )),
         "negative_prompt": str(spec.get("negative_prompt") or ALEXANDRIA_BASE_NEGATIVE_PROMPT),
         "notes": str(spec["notes"]),
