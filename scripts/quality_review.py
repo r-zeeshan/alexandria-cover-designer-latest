@@ -2827,6 +2827,9 @@ def _execute_generation_payload(
     message = "Dry-run generation plan created (no API keys configured)." if dry_run else "Generation complete."
     if job_id:
         _clear_job_model_cancellations(job_id=job_id, catalog_id=runtime.catalog_id)
+    effective_prompt = ""
+    if len(serialized) == 1 and isinstance(serialized[0], dict):
+        effective_prompt = str(serialized[0].get("prompt", "")).strip()
     return {
         "catalog": runtime.catalog_id,
         "book": book,
@@ -2838,6 +2841,9 @@ def _execute_generation_payload(
         "prompt_source": prompt_source,
         "template_id": template_id or None,
         "composed_prompt": str(composed_prompt_payload.get("prompt", "")).strip() or None,
+        "final_prompt": effective_prompt or None,
+        "prompt_used": effective_prompt or None,
+        "effective_prompt": effective_prompt or None,
         "inferred_genre": str(composed_prompt_payload.get("genre", "")).strip() or None,
     }
 

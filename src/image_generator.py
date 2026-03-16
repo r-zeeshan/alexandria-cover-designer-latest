@@ -176,10 +176,10 @@ ALEXANDRIA_NEGATIVE_PROMPT = (
     "no cartoonish style, no anime influence, no blurry, no white backgrounds."
 )
 ALEXANDRIA_RENDERING_PREFIX = (
-    "IMPORTANT RENDERING STYLE: This image must look like a HAND-CRAFTED traditional artwork "
+    "IMPORTANT RENDERING STYLE: This image MUST look like HAND-CRAFTED traditional artwork "
     "— NOT digital art, NOT AI-generated, NOT 3D rendered, NOT photographic. "
-    "It must have visible brushwork or pen strokes throughout — the texture of a real physical artwork "
-    "made by a skilled human artist. Follow the specific medium and technique described in the style instructions below.\n\n"
+    "Visible brushwork or pen strokes throughout. The texture of a REAL physical artwork "
+    "by a skilled human artist. Follow the style instructions in the prompt.\n\n"
 )
 _PROMPT_REMOVAL_PATTERNS: tuple[str, ...] = (
     r"(?<!no )\bcircular\s+medallion(?:\s+illustration)?\b",
