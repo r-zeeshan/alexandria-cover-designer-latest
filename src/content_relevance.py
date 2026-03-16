@@ -106,10 +106,70 @@ _ERA_HINTS: tuple[tuple[str, str], ...] = (
     ("gothic", "Gothic period atmosphere"),
     ("baroque", "Baroque period"),
 )
+_CHARACTER_DESCRIPTION_STARTERS = {
+    "a",
+    "an",
+    "the",
+    "who",
+    "with",
+    "wearing",
+    "in",
+    "of",
+    "known",
+    "described",
+    "dressed",
+    "holding",
+    "standing",
+    "seated",
+}
 
 
 def normalize_text(value: Any) -> str:
     return " ".join(str(value or "").split()).strip()
+
+
+def extract_character_name(value: Any) -> str:
+    text = normalize_text(value)
+    if not text:
+        return ""
+
+    dash_split = re.split(r"\s*[—–]\s*|\s+-\s+", text, maxsplit=1)
+    if len(dash_split) > 1:
+        name = normalize_text(dash_split[0])
+        if len(name) >= 2:
+            return name
+
+    comma_match = re.match(r"^([^,]+),\s*(?:a |an |the |who |with |wearing )", text, re.IGNORECASE)
+    if comma_match:
+        name = normalize_text(comma_match.group(1))
+        if len(name) >= 2:
+            return name
+
+    if len(text) > 60:
+        words = [part for part in re.split(r"\s+", text) if part]
+        name_end = len(words)
+        for index in range(1, len(words)):
+            token = words[index].lower().rstrip(",;")
+            if token in _CHARACTER_DESCRIPTION_STARTERS:
+                name_end = index
+                break
+        trimmed = " ".join(words[: min(name_end, 4)]).rstrip(",;:")
+        if len(trimmed) >= 2:
+            return trimmed
+
+    return text
+
+
+def scene_mentions_character(scene: Any, protagonist: Any) -> bool:
+    base_scene = normalize_text(scene).lower()
+    main_character = extract_character_name(protagonist)
+    if not base_scene or not main_character:
+        return False
+    lowered_character = main_character.lower()
+    if lowered_character in base_scene:
+        return True
+    parts = [part.lower() for part in re.findall(r"[A-Za-z][A-Za-z'-]*", main_character) if len(part) >= 4]
+    return any(part in base_scene for part in parts)
 
 
 def prompt_contains_unresolved_placeholders(value: Any) -> bool:
@@ -243,17 +303,14 @@ def _fallback_scene(*, title: str, author: str, protagonist: str, setting: str, 
 
 def inject_protagonist(scene: Any, protagonist: Any) -> str:
     base_scene = normalize_text(scene)
-    main_character = normalize_text(protagonist)
+    main_character = extract_character_name(protagonist)
     if not base_scene:
         return ""
     if not main_character or is_generic_text(main_character):
         return base_scene
-    lower_scene = base_scene.lower()
-    lower_character = main_character.lower()
-    if lower_character in lower_scene:
+    if scene_mentions_character(base_scene, main_character):
         return base_scene
-    subject_label = "The main characters shown are" if " and " in lower_character else "The main character shown is"
-    return f"{base_scene}. {subject_label} {main_character}."
+    return f"{base_scene}. Depicted prominently: {main_character}."
 
 
 def resolve_prompt_context(book: dict[str, Any]) -> dict[str, Any]:

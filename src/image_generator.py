@@ -55,7 +55,7 @@ MODEL_STYLE_PROFILES: list[dict[str, str]] = [
         "style": "dramatic cinematic classic",
         "detail": "deep chiaroscuro, tactile brush texture, clean scene geometry",
         "palette": "deep navy, gold, warm amber, vivid cobalt contrast",
-        "composition": "full-bleed narrative scene with centered focal subject",
+        "composition": "narrative scene with centered focal subject",
     },
     {
         "style": "heroic painterly realism",
@@ -255,7 +255,8 @@ def _specific_era_text(value: Any) -> str:
 
 
 def _specific_protagonist(enrichment: dict[str, Any]) -> str:
-    return _specific_enrichment_text(enrichment.get("protagonist", ""), min_length=6)
+    protagonist = _specific_enrichment_text(enrichment.get("protagonist", ""), min_length=6)
+    return content_relevance.extract_character_name(protagonist)
 
 
 def _filtered_enrichment_scenes(enrichment: dict[str, Any]) -> list[str]:
@@ -270,12 +271,12 @@ def _motif_scene_for_title_author(title: str, author: str) -> str:
         return ""
 
 
-def _append_protagonist_to_scene(scene: str, protagonist: str, *, lead_in: str = "The main character is") -> str:
+def _append_protagonist_to_scene(scene: str, protagonist: str, *, lead_in: str = "Depicted prominently:") -> str:
     base_scene = _clean_enrichment_text(scene)
-    hero = _specific_enrichment_text(protagonist, min_length=6)
+    hero = content_relevance.extract_character_name(_specific_enrichment_text(protagonist, min_length=6))
     if not base_scene or not hero:
         return base_scene
-    if hero.lower() in base_scene.lower():
+    if content_relevance.scene_mentions_character(base_scene, hero):
         return base_scene
     return f"{base_scene.rstrip(' .!?')}. {lead_in} {hero}"
 
@@ -423,8 +424,8 @@ def _validate_prompt_relevance(
         prefix_parts.append(
             f"CRITICAL SCENE REQUIREMENT — the illustration must specifically depict: {scene_anchor.rstrip(' .!?')}."
         )
-        if protagonist and protagonist.lower() not in scene_anchor.lower():
-            prefix_parts.append(f"The main character shown is {protagonist}.")
+        if protagonist and not content_relevance.scene_mentions_character(scene_anchor, protagonist):
+            prefix_parts.append(f"Depicted prominently: {protagonist}.")
     prefix = ". ".join(prefix_parts).strip().rstrip(".") + "."
     logger.warning("Prompt lacked explicit book reference. Prepending title/scene anchor for '%s'.", title)
     if not base_prompt:
@@ -2036,7 +2037,7 @@ def generate_all_models(
 def _diversify_prompt_for_variant(*, prompt: str, variant: int) -> str:
     base_text = _sanitize_prompt_text(str(prompt or "").strip())
     if not base_text:
-        base_text = "Cinematic full-bleed narrative scene with one dominant focal subject and vivid color"
+        base_text = "Cinematic narrative scene with one dominant focal subject and vivid color"
     base = _guardrailed_prompt(base_text)
     diversified = prompt_generator.diversify_prompt(base, int(variant))
     if int(variant) > 1:

@@ -24,32 +24,16 @@ DEFAULT_CATALOG_PATH = Path("config/book_catalog.json")
 DEFAULT_TEMPLATES_PATH = Path("config/prompt_templates.json")
 DEFAULT_OUTPUT_PATH = Path("config/book_prompts.json")
 
-REQUIRED_PHRASE_COMPOSITION = "full-bleed narrative scene, centered focal subject, edge-to-edge narrative detail"
+REQUIRED_PHRASE_COMPOSITION = "centered focal subject"
 REQUIRED_PHRASE_TEXT = (
     "no text, no letters, no words, no typography"
 )
-REQUIRED_PHRASE_NO_FRAME = (
-    "no border, no frame, no decorative edge. "
-    "CRITICAL: The artwork must NOT contain any circular border, frame, wreath, "
-    "garland, vine ring, floral ring, or ANY decorative edge element. "
-    "The scene fills the full rectangular canvas edge-to-edge with NO circular "
-    "cropping or circular framing of any kind. "
-    "Paint the scene as if it extends infinitely beyond the canvas edges."
-)
+REQUIRED_PHRASE_NO_FRAME = "no decorative edge"
 REQUIRED_PHRASE_VIVID = "vivid, high-saturation painterly color palette, colorful, richly colored, rich contrast"
 REQUIRED_PHRASE_NO_EMPTY = "no empty space, no plain backgrounds"
-REQUIRED_PHRASE_CANVAS = (
-    "The final image must be a FULL rectangular canvas of solid painted scene — "
-    "no circular boundaries, no vignette edges, no decorative rings. "
-    "Think of this as a square painting that will later be cropped into a circle, "
-    "NOT as a circular medallion with its own frame."
-)
-REQUIRED_PHRASE_NO_FRAME_RUNTIME = (
-    "no border, no frame, no circular border, no circular frame, no wreath, no garland, no vine ring, no floral ring"
-)
-REQUIRED_PHRASE_CANVAS_RUNTIME = (
-    "full rectangular canvas, no vignette edges, no decorative rings"
-)
+REQUIRED_PHRASE_CANVAS = "medallion-compatible narrative composition"
+REQUIRED_PHRASE_NO_FRAME_RUNTIME = ""
+REQUIRED_PHRASE_CANVAS_RUNTIME = ""
 REQUIRED_PHRASE_NO_ORNAMENT_RUNTIME = (
     "no filigree, no scrollwork, no arabesques, no ornamental curls, "
     "no decorative flourishes, no black ornamental silhouettes, no lace-like cutout motifs"
@@ -76,7 +60,7 @@ REQUIRED_NEGATIVE_BORDER_TERMS: tuple[str, ...] = (
 )
 
 _PHRASE_REPLACEMENTS: tuple[tuple[str, str], ...] = (
-    (r"\bcircular vignette composition\b", "full-bleed narrative scene"),
+    (r"\bcircular vignette composition\b", "centered focal subject"),
     (r"\bstructured geometry with deliberate text-safe negative space\b", "dense story-focused composition"),
     (r"\btypography[- ]led\b", "painterly"),
     (r"\btext[- ]safe\b", "detail-rich"),
@@ -305,10 +289,7 @@ def build_diversified_prompt(
     ) or "book-specific narrative details"
     motif_symbols = _limit_words(motif_symbols, max_words=14)
     canvas_directive = (
-        "The final image must be a FULL rectangular canvas of solid painted scene — "
-        "no circular boundaries, no vignette edges, no decorative rings. "
-        "Think of this as a square painting that will later be cropped into a circle, "
-        "NOT as a circular medallion with its own frame."
+        "Compose the scene to stay compatible with the circular medallion crop while keeping a centered focal subject."
     )
     base = " ".join(
         [
@@ -318,13 +299,13 @@ def build_diversified_prompt(
             f"Support with subject-specific motifs: {motif_symbols}.",
             f'Create a breathtaking, richly colored illustration for the classic book "{resolved_title}" by {resolved_author}.',
             "Identify the single most iconic, dramatic, and visually striking scene from this specific story — the moment readers remember most vividly.",
-            "No border, no frame, no decorative edge.",
-            "Depict that scene as a luminous full-bleed narrative illustration for a luxury leather-bound edition.",
+            "Keep the painted scene free of embedded ornamental overlays.",
+            "Depict that scene as a luminous narrative illustration for a luxury leather-bound edition.",
             "Adapt all motifs, costumes, architecture, and symbols strictly to this specific book; avoid cross-book visual clichés.",
             "Fill the entire rectangular composition with rich detail and vivid color — no empty space, no plain backgrounds.",
             "The artwork must feel like a museum-quality painting that captures the emotional heart of the story.",
             style_modifier,
-            "CRITICAL COMPOSITION RULES: Keep one dominant focal subject and edge-to-edge scene detail.",
+            "CRITICAL COMPOSITION RULES: Keep one dominant focal subject with layered narrative detail.",
             "NO text, NO letters, NO words anywhere in the image.",
             "The scene must be COLORFUL and DETAILED — avoid monochrome, avoid sparse compositions.",
             "Keep one dominant focal subject, layered depth, dense detail.",
@@ -443,14 +424,8 @@ def _remove_conflicting_directions(prompt: str) -> str:
 def _prepend_missing_runtime_constraints(prompt: str) -> str:
     low = str(prompt or "").lower()
     missing: list[str] = []
-    if "no border" not in low:
-        missing.append("no border")
-    if "no frame" not in low:
-        missing.append("no frame")
     if "no text" not in low:
         missing.append("no text, no letters, no words, no typography")
-    if "full rectangular canvas" not in low:
-        missing.append("full rectangular canvas")
     if "no filigree" not in low:
         missing.append("no filigree")
     if "no scrollwork" not in low:
@@ -469,10 +444,6 @@ def _ensure_prompt_constraints(prompt: str) -> str:
         required_prefix.append(REQUIRED_PHRASE_COMPOSITION)
     if REQUIRED_PHRASE_TEXT not in low:
         required_prefix.append(REQUIRED_PHRASE_TEXT)
-    if "no border" not in low or "no frame" not in low:
-        required_prefix.append(REQUIRED_PHRASE_NO_FRAME_RUNTIME)
-    if "full rectangular canvas" not in low:
-        required_prefix.append(REQUIRED_PHRASE_CANVAS_RUNTIME)
     if "no filigree" not in low or "no scrollwork" not in low:
         required_prefix.append(REQUIRED_PHRASE_NO_ORNAMENT_RUNTIME)
     if REQUIRED_PHRASE_VIVID not in low:

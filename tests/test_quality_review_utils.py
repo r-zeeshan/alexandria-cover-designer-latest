@@ -1899,6 +1899,34 @@ def test_serialize_generation_results_persists_job_unique_raw_and_composite_arti
     assert (qr.PROJECT_ROOT / str(second[0]["saved_composited_path"])).exists()
 
 
+def test_serialize_generation_results_prefers_effective_prompt_for_result_prompt(tmp_path: Path):
+    cfg = _build_runtime_for_startup_checks(tmp_path)
+    model = "openrouter/google/gemini-3-pro-image-preview"
+    image_path = cfg.tmp_dir / "generated" / "1" / qr.image_generator._model_to_directory(model) / "variant_1.png"  # type: ignore[attr-defined]
+    image_path.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (64, 64), (11, 22, 33)).save(image_path, format="PNG")
+
+    result = qr.image_generator.GenerationResult(
+        book_number=1,
+        variant=1,
+        prompt="Legacy prompt text.",
+        model=model,
+        image_path=image_path,
+        success=True,
+        error=None,
+        generation_time=1.2,
+        cost=0.02,
+        provider="openrouter",
+        attempts=1,
+        effective_prompt="IMPORTANT RENDERING STYLE: Effective prompt text.",
+    )
+
+    serialized = qr._serialize_generation_results(runtime=cfg, book=1, results=[result], job_id="job-effective")
+
+    assert serialized[0]["prompt"] == "IMPORTANT RENDERING STYLE: Effective prompt text."
+    assert serialized[0]["effective_prompt"] == "IMPORTANT RENDERING STYLE: Effective prompt text."
+
+
 def test_hydrate_serialized_result_paths_persists_saved_composite_after_compositing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     cfg = _build_runtime_for_startup_checks(tmp_path)
     model = "openrouter/google/gemini-3-pro-image-preview"
@@ -3338,6 +3366,70 @@ def test_execute_generation_payload_preserves_precomposed_prompt_when_compose_pr
     assert captured["prompt_text"] == prompt
     assert captured["library_prompt_id"] is None
     assert captured["preserve_prompt_text"] is True
+
+
+def test_execute_generation_payload_preserves_frontend_template_prompt_when_preserve_flag_enabled(tmp_path: Path, monkeypatch):
+    cfg = _build_runtime_for_startup_checks(tmp_path)
+    cfg = replace(cfg, openrouter_api_key="test-key")
+    monkeypatch.setattr(qr.config, "get_config", lambda *_args, **_kwargs: cfg)
+
+    captured: dict[str, Any] = {}
+
+    def _fake_generate_single_book(**kwargs):  # type: ignore[no-untyped-def]
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr(qr.image_generator, "generate_single_book", _fake_generate_single_book)
+    monkeypatch.setattr(qr, "_serialize_generation_results", lambda **_kwargs: [])
+    monkeypatch.setattr(qr.cover_compositor, "composite_all_variants", lambda **_kwargs: None)
+    monkeypatch.setattr(qr, "_record_generation_costs", lambda **_kwargs: None)
+    monkeypatch.setattr(qr.state_db_store, "append_generation_records", lambda **_kwargs: 0)
+    monkeypatch.setattr(qr.state_db_store, "export_history_payload", lambda **_kwargs: {"items": []})
+    monkeypatch.setattr(qr, "_build_review_data_payload", lambda *_args, **_kwargs: {"books": []})
+    monkeypatch.setattr(qr, "_invalidate_cache", lambda *_args, **_kwargs: 1)
+    monkeypatch.setattr(
+        qr,
+        "_book_row_for_number",
+        lambda **_kwargs: {
+            "number": 11,
+            "title": "Romeo and Juliet",
+            "author": "William Shakespeare",
+            "enrichment": {
+                "protagonist": "Juliet Capulet — a young woman with long, flowing dark hair, dressed in a delicate white gown",
+                "iconic_scenes": ["Juliet Capulet stands on a moonlit balcony in Verona while Romeo watches from the garden below"],
+                "emotional_tone": "romantic longing and danger",
+                "era": "Renaissance Verona",
+            },
+        },
+    )
+
+    prompt = (
+        "Book cover illustration only — no text. "
+        "This illustration MUST depict the following specific scene: "
+        "Juliet Capulet stands on a moonlit balcony in Verona while Romeo watches from the garden below. "
+        "Mood: romantic longing and danger. Era reference: Renaissance Verona."
+    )
+
+    qr._execute_generation_payload(
+        {
+            "catalog": "classics",
+            "book": 11,
+            "models": ["openrouter/google/gemini-3-pro-image-preview"],
+            "variants": 1,
+            "variant": 1,
+            "prompt": prompt,
+            "prompt_source": "template",
+            "compose_prompt": False,
+            "preserve_prompt_text": True,
+            "provider": "all",
+            "cover_source": "drive",
+            "dry_run": True,
+        }
+    )
+
+    assert captured["prompt_text"] == prompt
+    assert "The main character shown is" not in captured["prompt_text"]
+    assert "long, flowing dark hair" not in captured["prompt_text"]
 
 
 def test_execute_generation_payload_trusts_resolved_frontend_prompt_without_preserve_flag(tmp_path: Path, monkeypatch):

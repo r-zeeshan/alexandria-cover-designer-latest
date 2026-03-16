@@ -1922,7 +1922,7 @@ def _serialize_generation_results(
                 "variant": row.variant,
                 "model": row.model,
                 "provider": row.provider,
-                "prompt": row.prompt,
+                "prompt": row.effective_prompt or row.prompt,
                 "effective_prompt": row.effective_prompt,
                 "image_path": image_rel,
                 "raw_art_path": persisted_raw_path,
@@ -2477,7 +2477,7 @@ def _execute_generation_payload(
             base_prompt_for_composer = (
                 default_prompt
                 or (
-                    f"Cinematic full-bleed narrative scene for {book_row.get('title', f'Book {book}')}, "
+                    f"Cinematic narrative scene for {book_row.get('title', f'Book {book}')}, "
                     "single dominant focal subject, vivid painterly color, no text, no logos, no borders or frames"
                 )
             )
@@ -2493,16 +2493,15 @@ def _execute_generation_payload(
             prompt = str(composed_prompt_payload.get("prompt", base_prompt_for_composer)).strip()
 
     needs_backend_scene_anchor = (
-        prompt_source != "custom"
-        or not raw_request_prompt
+        not raw_request_prompt
         or content_relevance.is_generic_text(str(prompt or "")[:320])
         or content_relevance.prompt_contains_unresolved_placeholders(prompt)
     )
-    if book_row is not None and (not precomposed_prompt or needs_backend_scene_anchor):
+    if book_row is not None and not precomposed_prompt:
         prompt = _ensure_prompt_book_context(
             prompt=prompt,
             book=book_row,
-            require_motif=needs_backend_scene_anchor,
+            require_motif=(prompt_source != "custom") or needs_backend_scene_anchor,
             variant_index=max(0, requested_variant - 1),
             scene_override=scene_description,
         )
@@ -4559,7 +4558,7 @@ def write_iterate_books_data(*, runtime: config.Config | None = None, prompts_pa
             base_prompt=str(
                 default_prompt
                 or (
-                    f'Cinematic full-bleed narrative scene for "{title}" by {author}, '
+                    f'Cinematic narrative scene for "{title}" by {author}, '
                     "single dominant focal subject, scene artwork only, no text, no logos, no borders or frames."
                 )
             ),
@@ -4701,7 +4700,7 @@ def write_iterate_data(*, runtime: config.Config | None = None, prompts_path: Pa
             base_prompt=str(
                 default_prompt
                 or (
-                    f'Cinematic full-bleed narrative scene for "{title}" by {author}, '
+                    f'Cinematic narrative scene for "{title}" by {author}, '
                     "single dominant focal subject, scene artwork only, no text, no logos, no borders or frames."
                 )
             ),
@@ -5531,11 +5530,11 @@ def _ensure_prompt_book_context(
         anchor_parts = [
             f"CRITICAL SCENE REQUIREMENT — the illustration must specifically depict: {scene_anchor.rstrip(' .!?')}."
         ]
-        if protagonist and protagonist.lower() not in scene_anchor.lower():
-            anchor_parts.append(f"The main character shown is {protagonist}.")
+        if protagonist and not content_relevance.scene_mentions_character(scene_anchor, protagonist):
+            anchor_parts.append(f"Depicted prominently: {protagonist}.")
         constrained = f"{' '.join(anchor_parts)} {constrained}".strip()
-    elif protagonist and protagonist.lower() not in constrained.lower():
-        constrained = f"The main character shown is {protagonist}. {constrained}".strip()
+    elif protagonist and not content_relevance.scene_mentions_character(constrained, protagonist):
+        constrained = f"Depicted prominently: {protagonist}. {constrained}".strip()
     words = constrained.split()
     if len(words) > 92:
         constrained = " ".join(words[:92]).rstrip(",")
@@ -5621,7 +5620,8 @@ def _specific_era_text(value: Any) -> str:
 
 def _specific_protagonist(enrichment: dict[str, Any], book: dict[str, Any] | None = None) -> str:
     fallback = book.get("protagonist", "") if isinstance(book, dict) else ""
-    return _specific_enrichment_text(enrichment.get("protagonist", "") or fallback, min_length=6)
+    protagonist = _specific_enrichment_text(enrichment.get("protagonist", "") or fallback, min_length=6)
+    return content_relevance.extract_character_name(protagonist)
 
 
 def _filtered_enrichment_scenes(enrichment: dict[str, Any]) -> list[str]:
@@ -5636,12 +5636,12 @@ def _motif_scene_for_book(book: dict[str, Any]) -> str:
         return ""
 
 
-def _append_protagonist_to_scene(scene: str, protagonist: str, *, lead_in: str = "The main character is") -> str:
+def _append_protagonist_to_scene(scene: str, protagonist: str, *, lead_in: str = "Depicted prominently:") -> str:
     base_scene = _clean_enrichment_text(scene)
-    hero = _specific_enrichment_text(protagonist, min_length=6)
+    hero = content_relevance.extract_character_name(_specific_enrichment_text(protagonist, min_length=6))
     if not base_scene or not hero:
         return base_scene
-    if hero.lower() in base_scene.lower():
+    if content_relevance.scene_mentions_character(base_scene, hero):
         return base_scene
     return f"{base_scene.rstrip(' .!?')}. {lead_in} {hero}"
 
@@ -10303,7 +10303,7 @@ def serve_review_webapp(
                                 prompt
                                 or default_prompt
                                 or (
-                                    f"Cinematic full-bleed narrative scene for {book_row.get('title', f'Book {book}')}, "
+                                    f"Cinematic narrative scene for {book_row.get('title', f'Book {book}')}, "
                                     "single dominant focal subject, vivid painterly color, no text, no logos, no borders or frames"
                                 )
                             ),
@@ -12146,7 +12146,7 @@ def serve_review_webapp(
                                 prompt
                                 or default_prompt
                                 or (
-                                    f"Cinematic full-bleed narrative scene for {book_row.get('title', f'Book {book}')}, "
+                                    f"Cinematic narrative scene for {book_row.get('title', f'Book {book}')}, "
                                     "single dominant focal subject, vivid painterly color, no text, no logos, no borders or frames"
                                 )
                             )
