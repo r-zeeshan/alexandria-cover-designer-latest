@@ -1327,6 +1327,16 @@ def test_artifact_retry_prompt_uses_original_text_and_caps_total_length():
     assert len(ig._apply_rendering_prefix(retry_prompt_1)) <= ig.MODEL_PROMPT_CHAR_LIMIT
 
 
+def test_apply_rendering_prefix_appends_short_rendering_suffix():
+    prompt = "Book cover illustration only — no text. Scene: Ishmael on the Pequod at sunset."
+    effective = ig._apply_rendering_prefix(prompt)
+
+    assert effective.startswith(prompt)
+    assert not effective.startswith("IMPORTANT RENDERING")
+    assert effective.endswith(ig.ALEXANDRIA_RENDERING_PREFIX.strip())
+    assert "Render as hand-crafted traditional artwork" in effective[-140:]
+
+
 def test_retry_failures_and_plan_helpers(tmp_path: Path, monkeypatch):
     runtime = _Runtime(tmp_path)
     monkeypatch.setattr(ig.config, "get_config", lambda: runtime)

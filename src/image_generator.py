@@ -170,10 +170,8 @@ ALEXANDRIA_NEGATIVE_PROMPT = (
     "no cartoonish style, no anime influence, no blurry, no white backgrounds."
 )
 ALEXANDRIA_RENDERING_PREFIX = (
-    "IMPORTANT RENDERING STYLE: This image MUST look like HAND-CRAFTED traditional artwork "
-    "— NOT digital art, NOT AI-generated, NOT 3D rendered, NOT photographic. "
-    "Visible brushwork or pen strokes throughout. The texture of a REAL physical artwork "
-    "by a skilled human artist. Follow the style instructions in the prompt.\n\n"
+    "Render as hand-crafted traditional artwork with visible brushwork throughout. "
+    "Not digital art, not AI-generated."
 )
 _PROMPT_REMOVAL_PATTERNS: tuple[str, ...] = (
     r"(?<!no )\bcircular\s+medallion(?:\s+illustration)?\b",
@@ -391,7 +389,9 @@ def _truncate_scene_description(prompt: str, max_chars: int) -> str:
 def _fit_prompt_to_model_limit(prompt: str, *, suffix: str = "") -> str:
     base = " ".join(str(prompt or "").split()).strip()
     retry_suffix = " ".join(str(suffix or "").split()).strip()
-    max_body_chars = max(1, MODEL_PROMPT_CHAR_LIMIT - len(ALEXANDRIA_RENDERING_PREFIX))
+    rendering_suffix = " ".join(ALEXANDRIA_RENDERING_PREFIX.split()).strip()
+    separator_budget = 1 if rendering_suffix else 0
+    max_body_chars = max(1, MODEL_PROMPT_CHAR_LIMIT - len(rendering_suffix) - separator_budget)
     if retry_suffix:
         reserved = len(retry_suffix) + (1 if base else 0)
         allowed_for_base = max(0, max_body_chars - reserved)
@@ -419,7 +419,13 @@ def _guardrailed_prompt(prompt: str) -> str:
 
 
 def _apply_rendering_prefix(prompt: str) -> str:
-    return f"{ALEXANDRIA_RENDERING_PREFIX}{str(prompt or '')}"
+    base = " ".join(str(prompt or "").split()).strip()
+    rendering_suffix = " ".join(ALEXANDRIA_RENDERING_PREFIX.split()).strip()
+    if not base:
+        return rendering_suffix
+    if not rendering_suffix:
+        return base
+    return f"{base} {rendering_suffix}"
 
 
 def _prompt_reference_tokens(value: str) -> list[str]:
