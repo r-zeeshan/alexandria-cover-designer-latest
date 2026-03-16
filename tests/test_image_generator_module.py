@@ -199,6 +199,10 @@ def test_negative_prompt_merge_and_nano_alias_resolution(tmp_path: Path, monkeyp
     assert "custom negative" in merged
     assert ig.ALEXANDRIA_NEGATIVE_PROMPT in merged
     assert "No text, no letters, no words" in merged
+    assert "no clean vector lines" in merged.lower()
+    assert "no airbrushed surfaces" in merged.lower()
+    assert "no seamless blending" in merged.lower()
+    assert "no uniform color fills" in merged.lower()
     assert "No circular vignette, no medallion composition" not in merged
     assert ig._resolve_provider_model_name("openrouter", "nano-banana-pro") == "google/gemini-3-pro-image-preview"
     assert ig._resolve_provider_model_name("openrouter", "nano-banana-2") == "google/gemini-2.5-flash-image"
@@ -403,6 +407,11 @@ def test_openrouter_modalities_and_429_retry(tmp_path: Path, monkeypatch):
     assert image.size == (48, 48)
     assert len(calls) == 2
     assert calls[-1]["json"]["modalities"] == ["image", "text"]
+    system_prompt = calls[-1]["json"]["messages"][0]["content"]
+    assert "visible individual brushstrokes or pen strokes" in system_prompt
+    assert "paper or canvas grain texture" in system_prompt
+    assert "slight color variations within painted areas" in system_prompt
+    assert "natural edge irregularities where colors meet" in system_prompt
 
     calls.clear()
     flux = ig.OpenRouterProvider(model="flux-2-pro", api_key="k", runtime=runtime)
@@ -1334,7 +1343,7 @@ def test_apply_rendering_prefix_appends_short_rendering_suffix():
     assert effective.startswith(prompt)
     assert not effective.startswith("IMPORTANT RENDERING")
     assert effective.endswith(ig.ALEXANDRIA_RENDERING_PREFIX.strip())
-    assert "Render as hand-crafted traditional artwork" in effective[-140:]
+    assert "Rendered with visible hand-applied texture" in effective[-160:]
 
 
 def test_retry_failures_and_plan_helpers(tmp_path: Path, monkeypatch):
