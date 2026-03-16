@@ -30,59 +30,96 @@ SUPPORTED_REUSABLE_PLACEHOLDERS: tuple[str, ...] = (
     "{ERA}",
 )
 
-ALEXANDRIA_SYSTEM_NEGATIVE_PROMPT = (
-    "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, "
-    "no labels, no watermarks, no signatures, no inscriptions of any kind. No modern elements, no photography, "
-    "no 3D rendering, no digital art aesthetic, no gradients on background, no neon colours, no sans-serif fonts, "
-    "no minimalist design, no stock photo look, no cartoonish style, no anime influence, no spelling mistakes, "
-    "no blurry illustration, no off-centre composition, no white or light backgrounds. "
-    "No dividers."
-)
-
 ALEXANDRIA_BASE_NEGATIVE_PROMPT = (
-    "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, "
-    "photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, "
-    "vector art, anime, cartoon, blurry, stock photo"
+    "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, "
+    "no labels, no watermarks, no signatures, no inscriptions of any kind. "
+    "No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, "
+    "no airbrushed surfaces, no seamless blending, no uniform color fills, "
+    "no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, "
+    "no AI-generated sheen, no perfectly smooth skin, no stock photo look, "
+    "no photorealistic rendering, no neon colours, "
+    "no cartoonish style, no anime influence, no blurry, no white backgrounds."
 )
 
-ALEXANDRIA_PAINTERLY_TEXTURE_CLAUSE = (
-    "Every stroke must show the physical texture of hand-applied paint."
+ALEXANDRIA_SYSTEM_NEGATIVE_PROMPT = ALEXANDRIA_BASE_NEGATIVE_PROMPT
+
+ALEXANDRIA_ORGANIC_QUALITY_CLAUSE = (
+    "Slightly irregular linework, color bleeds at edges."
 )
 
-ALEXANDRIA_WILDCARD_TEXTURE_CLAUSE = (
-    "Rendered with the physical texture of traditional handmade artwork."
-)
+ALEXANDRIA_WILDCARD_TEXTURE_CLAUSES: dict[str, str] = {
+    "alexandria-wildcard-edo-meets-alexandria": "Dry-brush ink drag with rough paper tooth.",
+    "alexandria-wildcard-pre-raphaelite-garden": "Poster gouache with uneven screenprint grain.",
+    "alexandria-wildcard-illuminated-manuscript": "Gold leaf flecks over vellum, pigment edges irregular.",
+    "alexandria-wildcard-celestial-cartography": "Copperplate hatchwork pressed into warm parchment grain.",
+    "alexandria-wildcard-temple-of-knowledge": "Dusty fresco pigments over porous stone texture.",
+    "alexandria-wildcard-venetian-renaissance": "Warm glaze layers over gesso, fine panel grain visible.",
+    "alexandria-wildcard-dutch-golden-age": "Transparent oil glazes with linen weave in shadow.",
+    "alexandria-wildcard-impressionist-plein-air": "Broken color dabs, each brushmark catching light.",
+    "alexandria-wildcard-academic-neoclassical": "Fine sable brush lines over matte gesso, edges imperfect.",
+    "alexandria-wildcard-baroque-dramatic": "Heavy oil impasto and glazing ridges around highlights.",
+    "alexandria-wildcard-art-nouveau-poster": "Inked outlines with gouache fill, paper tooth showing.",
+    "alexandria-wildcard-vintage-pulp-cover": "Thick gouache passes with visible dry-brush streaks.",
+    "alexandria-wildcard-woodcut-relief": "Carved wood grain printing through ink, fiber texture visible.",
+    "alexandria-wildcard-art-deco-glamour": "Metallic gouache over board with hand-painted edge wobble.",
+    "alexandria-wildcard-soviet-constructivist": "Matte poster paint with bristled edges and stencil drag.",
+    "alexandria-wildcard-ukiyo-e-woodblock": "Woodblock ink impression with registration marks and paper grain.",
+    "alexandria-wildcard-persian-miniature": "Burnished paper with gold leaf flecks and tiny brush hairs.",
+    "alexandria-wildcard-chinese-ink-wash": "Ink pooling and feathering on absorbent rice paper.",
+    "alexandria-wildcard-ottoman-illumination": "Mineral pigments on vellum with gold leaf speckle.",
+    "alexandria-wildcard-film-noir-shadows": "Brush-applied India ink with visible brush-hair marks.",
+    "alexandria-wildcard-pre-raphaelite-dream": "Jewel-like pigment on smooth gesso, fine brushwork visible.",
+    "alexandria-wildcard-twilight-symbolism": "Velvety pastel haze with chalk dust on toned paper.",
+    "alexandria-wildcard-northern-renaissance": "Egg tempera layers with panel grain under glazes.",
+    "alexandria-wildcard-william-morris-textile": "Block-printed pigment with cloth grain and ink buildup.",
+    "alexandria-wildcard-klimt-gold-leaf": "Gold leaf flakes over painted ground, brush seams visible.",
+    "alexandria-wildcard-celtic-knotwork": "Opaque gouache on vellum with slight ink bleed.",
+    "alexandria-wildcard-botanical-plate": "Fine watercolor washes with dry-brush detail on vellum.",
+    "alexandria-wildcard-antique-map": "Sepia washes over parchment grain, etched lines biting through.",
+    "alexandria-wildcard-maritime-chart": "Salt-stiff paper grain and engraved lines through blue washes.",
+    "alexandria-wildcard-naturalist-field-drawing": "Pencil tooth and watercolor blooms on field-journal paper.",
+    "alexandria-wildcard-painterly-soft": "Wet-on-wet gouache blooms with soft dry-brush drag.",
+    "alexandria-wildcard-painterly-detailed": "Layered glaze ridges and tiny sable marks in every detail.",
+}
+
+
+def _append_organic_quality(*parts: str) -> str:
+    tokens = [str(part).strip() for part in parts if str(part or "").strip()]
+    organic = ALEXANDRIA_ORGANIC_QUALITY_CLAUSE.strip()
+    if organic and organic not in tokens:
+        tokens.append(organic)
+    return " ".join(tokens).strip()
 
 ALEXANDRIA_BASE_PROMPT_TEMPLATES: dict[str, str] = {
     "alexandria-base-classical-devotion": (
         "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Rich oil painting, "
         "hyper-detailed botanical precision. Deep midnight navy and burnished gold. Thick impasto on "
         "gilded elements, fine detail on flora. Sacred, warm candlelight glow. Mood: {MOOD}. Era: {ERA}. "
-        "Visible brushwork on canvas throughout."
+        f"{_append_organic_quality('Visible brushwork on canvas throughout.')}"
     ),
     "alexandria-base-philosophical-gravitas": (
         "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Dramatic chiaroscuro. "
         "Strong light carves figures from shadow. Raw umber and burnt sienna dominate, gold ochre warms "
         "the light, charcoal grey deepens shadow. Heavy Rembrandt-era texture. Mood: {MOOD}. Era: {ERA}. "
-        "Thick impasto paint texture on every surface."
+        f"{_append_organic_quality('Thick impasto paint texture on every surface.')}"
     ),
     "alexandria-base-gothic-atmosphere": (
         "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Dark atmospheric "
         "painting, expressionist energy. Loose aggressive brushwork with palette knife marks. Moonlit "
         "indigo and deep crimson with silvered edge highlights. Gothic tension, foreboding atmosphere. "
-        "Mood: {MOOD}. Era: {ERA}. Ink-wash texture with visible paper grain."
+        f"Mood: {{MOOD}}. Era: {{ERA}}. {_append_organic_quality('Ink-wash texture with visible paper grain.')}"
     ),
     "alexandria-base-romantic-realism": (
         "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Warm romantic landscape, "
         "19th-century Romanticism. Soft luminous brushwork, watercolor washes over oil. Golden-hour amber "
         "and warm sienna, soft sky blue, deep forest green. Sweeping atmospheric perspective. Mood: "
-        "{MOOD}. Era: {ERA}. Oil paint texture with visible canvas weave."
+        f"{{MOOD}}. Era: {{ERA}}. {_append_organic_quality('Oil paint texture with visible canvas weave.')}"
     ),
     "alexandria-base-esoteric-mysticism": (
         "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Visionary painting with "
         "luminous depth. Translucent glazes create inner glow. Cosmic indigo and celestial gold, deep "
         "amethyst, ethereal silver-white. Mystical symbols emerge from luminous mist. Mood: {MOOD}. "
-        "Era: {ERA}. Hand-painted texture with pigment granulation."
+        f"Era: {{ERA}}. {_append_organic_quality('Hand-painted texture with pigment granulation.')}"
     ),
 }
 
@@ -92,9 +129,13 @@ def _base_prompt_template(prompt_id: str) -> str:
 
 
 def _wildcard_texture_clause(prompt_id: str) -> str:
-    if "painterly" in str(prompt_id or ""):
-        return ALEXANDRIA_PAINTERLY_TEXTURE_CLAUSE
-    return ALEXANDRIA_WILDCARD_TEXTURE_CLAUSE
+    prompt_key = str(prompt_id or "").strip()
+    return _append_organic_quality(
+        ALEXANDRIA_WILDCARD_TEXTURE_CLAUSES.get(
+            prompt_key,
+            "Hand-applied traditional media texture with visible surface variation.",
+        )
+    )
 
 
 def _scene_first_prompt(
@@ -657,7 +698,7 @@ ALEXANDRIA_PROMPT_CATALOG: tuple[dict[str, object], ...] = (
             "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Soft gouache and oil "
             "painting. Visible blended brushwork, soft edges, warm transitions, no hard lines. Muted earthy "
             "palette with gentle light. Dreamy atmospheric quality of vintage illustrated books. Mood: "
-            "{MOOD}. Era: {ERA}. Every stroke must show the physical texture of hand-applied paint."
+            f"{{MOOD}}. Era: {{ERA}}. {_wildcard_texture_clause('alexandria-wildcard-painterly-soft')}"
         ),
         "style_section": (
             "RENDERING TECHNIQUE: HAND-PAINTED illustration in gouache and oil painting style. MANDATORY "
@@ -687,7 +728,7 @@ ALEXANDRIA_PROMPT_CATALOG: tuple[dict[str, object], ...] = (
             "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Hyper-detailed "
             "hand-painted illustration. Meticulous brushwork on every fabric fold, architectural detail, and "
             "texture. Rich saturated colors, dense visual information across every inch. Museum-quality "
-            "precision. Mood: {MOOD}. Era: {ERA}. Every stroke must show the physical texture of hand-applied paint."
+            f"precision. Mood: {{MOOD}}. Era: {{ERA}}. {_wildcard_texture_clause('alexandria-wildcard-painterly-detailed')}"
         ),
         "style_section": (
             "RENDERING TECHNIQUE: HAND-PAINTED hyper-detailed digital painting with meticulously controlled "

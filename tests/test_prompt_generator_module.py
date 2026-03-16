@@ -284,8 +284,10 @@ def test_build_diversified_prompt_applies_scene_only_constraints():
     assert "moby dick" in prompt
     assert "herman melville" in prompt
     assert "sevastopol / dramatic conflict" in prompt
+    assert "scene:" in prompt[:120]
     assert "no text" in prompt
     assert pg.REQUIRED_PHRASE_COMPOSITION in prompt
+    assert pg.ORGANIC_QUALITY_CLAUSE.lower() in prompt
 
 
 def test_build_diversified_prompt_accepts_named_book_arguments_and_includes_title_anchor():
@@ -297,7 +299,7 @@ def test_build_diversified_prompt_accepts_named_book_arguments_and_includes_titl
     ).lower()
     assert "illustration for 'moby dick; or, the whale'" in prompt
     assert "herman melville" in prompt
-    assert "primary narrative anchor" in prompt
+    assert "scene:" in prompt
     assert "whale" in prompt
 
 
@@ -321,3 +323,4 @@ def test_diversify_prompt_strips_ornamental_style_instructions(monkeypatch):
     assert "arabesque" not in diversified
     assert pg.REQUIRED_PHRASE_TEXT in diversified
     assert pg.REQUIRED_PHRASE_COMPOSITION in diversified
+    assert pg.ORGANIC_QUALITY_CLAUSE.lower() in diversified

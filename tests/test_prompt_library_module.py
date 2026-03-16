@@ -208,7 +208,8 @@ def test_seeded_alexandria_base_prompts_use_prompt65_templates(tmp_path: Path, m
         assert "Scene: {SCENE}." in prompt.prompt_template
         assert "Mood: {MOOD}." in prompt.prompt_template
         assert "Era: {ERA}." in prompt.prompt_template
-        assert len(prompt.prompt_template) < 350
+        assert len(prompt.prompt_template) < 430
+        assert "Slightly irregular linework, color bleeds at edges." in prompt.prompt_template
         assert any(
             token in prompt.prompt_template
             for token in (
@@ -221,11 +222,11 @@ def test_seeded_alexandria_base_prompts_use_prompt65_templates(tmp_path: Path, m
         )
         assert "This circular medallion illustration" not in prompt.prompt_template
         assert "Circular vignette composition with soft edges." not in prompt.prompt_template
-        assert (
-            "text, letters, words, numbers, titles, typography, watermarks, signatures, 3D rendering, CGI, "
-            "photography, digital art sheen, smooth digital gradients, plastic surfaces, AI-generated look, "
-            "vector art, anime, cartoon, blurry, stock photo"
-        ) in prompt.negative_prompt
+        assert "no clean vector lines" in prompt.negative_prompt.lower()
+        assert "no airbrushed surfaces" in prompt.negative_prompt.lower()
+        assert "no seamless blending" in prompt.negative_prompt.lower()
+        assert "no uniform color fills" in prompt.negative_prompt.lower()
+        assert prompt.negative_prompt == pl.ALEXANDRIA_BASE_NEGATIVE_PROMPT
 
     assert "STYLE: Rich oil painting, hyper-detailed botanical precision." in prompts["alexandria-base-classical-devotion"].prompt_template
     assert "STYLE: Dramatic chiaroscuro." in prompts["alexandria-base-philosophical-gravitas"].prompt_template
@@ -259,11 +260,14 @@ def test_seeded_painterly_wildcards_use_prompt65_templates(tmp_path: Path, monke
         assert "Scene: {SCENE}." in prompt.prompt_template
         assert "Mood: {MOOD}." in prompt.prompt_template
         assert "Era: {ERA}." in prompt.prompt_template
-        assert len(prompt.prompt_template) < 400
-        assert "Every stroke must show the physical texture of hand-applied paint." in prompt.prompt_template
+        assert len(prompt.prompt_template) < 430
+        assert "Slightly irregular linework, color bleeds at edges." in prompt.prompt_template
+        assert "Every stroke must show the physical texture of hand-applied paint." not in prompt.prompt_template
 
     assert "STYLE: Soft gouache and oil painting." in prompts["alexandria-wildcard-painterly-soft"].prompt_template
     assert "STYLE: Hyper-detailed hand-painted illustration." in prompts["alexandria-wildcard-painterly-detailed"].prompt_template
+    assert "Wet-on-wet gouache blooms with soft dry-brush drag." in prompts["alexandria-wildcard-painterly-soft"].prompt_template
+    assert "Layered glaze ridges and tiny sable marks in every detail." in prompts["alexandria-wildcard-painterly-detailed"].prompt_template
 
 
 def test_seeded_alexandria_wildcards_use_prompt65_compact_templates(tmp_path: Path, monkeypatch):
@@ -279,16 +283,18 @@ def test_seeded_alexandria_wildcards_use_prompt65_compact_templates(tmp_path: Pa
     ]
 
     assert len(wildcard_prompts) == 32
+    tails = []
     for prompt in wildcard_prompts:
         assert prompt.prompt_template.startswith("Book cover illustration — no text, no lettering.")
         assert "Scene: {SCENE}." in prompt.prompt_template
         assert "Mood: {MOOD}." in prompt.prompt_template
         assert "Era: {ERA}." in prompt.prompt_template
-        assert len(prompt.prompt_template) < 400, prompt.id
-        if "painterly" in prompt.id:
-            assert "Every stroke must show the physical texture of hand-applied paint." in prompt.prompt_template
-        else:
-            assert "Rendered with the physical texture of traditional handmade artwork." in prompt.prompt_template
+        assert len(prompt.prompt_template) < 430, prompt.id
+        assert "Slightly irregular linework, color bleeds at edges." in prompt.prompt_template
+        assert "Every stroke must show the physical texture of hand-applied paint." not in prompt.prompt_template
+        assert "Rendered with the physical texture of traditional handmade artwork." not in prompt.prompt_template
+        tails.append(prompt.prompt_template.split("Era: {ERA}. ", 1)[-1].strip())
+    assert len(set(tails)) == len(wildcard_prompts)
 
 
 def test_build_prompt_best_prompts_add_anchor(tmp_path: Path, monkeypatch):

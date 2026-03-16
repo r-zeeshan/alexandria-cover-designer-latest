@@ -122,6 +122,31 @@ STYLE_POOL: list[dict[str, str]] = [
     {"id": "romantic-sublime", "label": "Romantic Sublime", "modifier": "Paint in the awe-inspiring style of Turner, John Martin, and Frederic Edwin Church. VAST landscapes that dwarf human figures — towering mountains, raging seas, volcanic skies. Palette: molten gold and amber sunsets, storm-purple clouds, electric white lightning, deep ocean teal, misty lavender distances. The sky takes up two-thirds of the composition and is the real subject. Light breaks through clouds in god-rays. The feeling is of standing at the edge of creation — sublime terror and beauty combined. Thick, energetic brushwork in the sky, finer detail in the landscape below."},
 ]
 
+STYLE_TEXTURE_CLAUSES: dict[str, str] = {
+    "sevastopol-conflict": "Thick impasto ridges and canvas weave visible.",
+    "cossack-epic": "Loaded brush drags across rough linen canvas.",
+    "golden-atmosphere": "Thin glazes over textured ground, canvas tooth visible.",
+    "venetian-renaissance": "Egg tempera on wood panel, fine crosshatching visible.",
+    "dutch-golden-age": "Layered oil glazes with visible turpentine wash edges.",
+    "dark-romantic-v2": "Heavy glazing layers with cracked varnish texture.",
+    "pre-raphaelite-v2": "Jewel-like pigment on smooth gesso, fine brushwork visible.",
+    "art-nouveau-v2": "Inked outlines with gouache fill, paper texture showing.",
+    "ukiyo-e-v2": "Woodblock ink impression with registration marks and paper grain.",
+    "noir-v2": "Brush-applied India ink with visible brush-hair marks.",
+    "botanical-v2": "Fine watercolor washes with dry-brush detail on vellum.",
+    "stained-glass-v2": "Thick gouache strokes on rough watercolor paper.",
+    "impressionist-v2": "Broken color dabs, each brushstroke individually visible.",
+    "expressionist-v2": "Thick paint ridges cast shadows, palette knife marks visible.",
+    "baroque-v2": "Wet oil glazes over gesso, highlight ridges catching light.",
+    "watercolour-v2": "Wet-on-wet bleeds with salt-crystal blooms on cotton rag paper.",
+    "symbolist-v2": "Ink pooling and feathering on absorbent rice paper.",
+    "persian-miniature": "Gold leaf over burnished paper, tiny brush hairs still visible.",
+    "russian-realist-v2": "Opaque oil scrubbed into coarse canvas, underpainting peeking through.",
+    "romantic-sublime": "Stormy scumbles and dragged bristles over rough primed canvas.",
+}
+
+ORGANIC_QUALITY_CLAUSE = "Slightly irregular linework, color bleeds at edges."
+
 FIXED_VARIANT_STYLE_IDS: list[str] = [
     "pre-raphaelite-v2",
     "baroque-v2",
@@ -169,6 +194,14 @@ def _style_rows_from_ids(style_ids: list[str]) -> list[dict[str, str]]:
         if isinstance(row, dict):
             rows.append(row)
     return rows
+
+
+def _style_modifier_text(style_payload: dict[str, str]) -> str:
+    modifier = str(style_payload.get("modifier", "")).strip()
+    style_id = str(style_payload.get("id", "")).strip()
+    texture_clause = str(STYLE_TEXTURE_CLAUSES.get(style_id, "")).strip()
+    parts = [part for part in (texture_clause, ORGANIC_QUALITY_CLAUSE, modifier) if part]
+    return " ".join(parts).strip()
 
 
 def select_diverse_styles(count: int, *, seed_token: str = "") -> list[dict[str, str]]:
@@ -262,10 +295,9 @@ def build_diversified_prompt(
         style_payload = selected[0] if selected else {}
 
     label = str(style_payload.get("label", "Classical Illustration")).strip() or "Classical Illustration"
-    modifier = str(style_payload.get("modifier", "")).strip()
-    style_modifier = (
-        modifier
-        or "Classical illustration using ruby red, emerald green, cobalt blue, amber gold, and ivory highlights."
+    style_modifier = _style_modifier_text(style_payload) or (
+        "Classical illustration using ruby red, emerald green, cobalt blue, amber gold, and ivory highlights. "
+        f"{ORGANIC_QUALITY_CLAUSE}"
     )
     motif = _motif_for_book(
         {
@@ -285,28 +317,16 @@ def build_diversified_prompt(
         if token
     ) or "book-specific narrative details"
     motif_symbols = _limit_words(motif_symbols, max_words=14)
-    canvas_directive = (
-        "Compose the scene to stay compatible with the circular medallion crop while keeping a centered focal subject."
-    )
     base = " ".join(
         [
-            f"Illustration for '{resolved_title}' by {resolved_author}.",
+            f"Book cover illustration for '{resolved_title}' by {resolved_author}.",
+            f"Scene: {scene_anchor}.",
+            f"{REQUIRED_PHRASE_COMPOSITION}.",
             f"Style direction: {label}.",
-            f"Primary narrative anchor: {scene_anchor}.",
-            f"Support with subject-specific motifs: {motif_symbols}.",
-            f'Create a breathtaking, richly colored illustration for the classic book "{resolved_title}" by {resolved_author}.',
-            "Identify the single most iconic, dramatic, and visually striking scene from this specific story — the moment readers remember most vividly.",
-            "Keep the painted scene free of embedded ornamental overlays.",
-            "Depict that scene as a luminous narrative illustration for a luxury leather-bound edition.",
-            "Adapt all motifs, costumes, architecture, and symbols strictly to this specific book; avoid cross-book visual clichés.",
-            "Fill the entire rectangular composition with rich detail and vivid color — no empty space, no plain backgrounds.",
-            "The artwork must feel like a museum-quality painting that captures the emotional heart of the story.",
             style_modifier,
-            "CRITICAL COMPOSITION RULES: Keep one dominant focal subject with layered narrative detail.",
-            "NO text, NO letters, NO words anywhere in the image.",
-            "The scene must be COLORFUL and DETAILED — avoid monochrome, avoid sparse compositions.",
-            "Keep one dominant focal subject, layered depth, dense detail.",
-            canvas_directive,
+            f"Support with subject-specific motifs: {motif_symbols}.",
+            "Adapt costumes, architecture, and symbols strictly to this specific book.",
+            "Layered narrative depth with one dominant focal subject.",
         ]
     )
     return _ensure_prompt_constraints(base)
@@ -418,43 +438,44 @@ def _remove_conflicting_directions(prompt: str) -> str:
     return text.strip(" ,")
 
 
-def _prepend_missing_runtime_constraints(prompt: str) -> str:
+def _missing_runtime_constraints(prompt: str) -> list[str]:
     low = str(prompt or "").lower()
     missing: list[str] = []
     if REQUIRED_PHRASE_COMPOSITION and REQUIRED_PHRASE_COMPOSITION not in low:
         missing.append(REQUIRED_PHRASE_COMPOSITION)
-    if "no text" not in low:
+    if REQUIRED_PHRASE_TEXT and REQUIRED_PHRASE_TEXT not in low:
         missing.append(REQUIRED_PHRASE_TEXT)
     if REQUIRED_PHRASE_VIVID and REQUIRED_PHRASE_VIVID not in low:
         missing.append(REQUIRED_PHRASE_VIVID)
     if REQUIRED_PHRASE_NO_EMPTY and REQUIRED_PHRASE_NO_EMPTY not in low:
         missing.append(REQUIRED_PHRASE_NO_EMPTY)
+    if ORGANIC_QUALITY_CLAUSE and ORGANIC_QUALITY_CLAUSE.lower() not in low:
+        missing.append(ORGANIC_QUALITY_CLAUSE)
+    return missing
+
+
+def _prepend_missing_runtime_constraints(prompt: str, *, max_words: int = 92) -> str:
+    base = str(prompt or "").strip(" ,")
+    missing = _missing_runtime_constraints(base)
     if not missing:
-        return str(prompt or "").strip(" ,")
-    return f"{', '.join(missing)}, {prompt}".strip(" ,")
+        return base
+    suffix = ", ".join(missing).strip(" ,")
+    if not suffix:
+        return base
+    base_words = base.split()
+    suffix_words = suffix.split()
+    allowance = max(0, int(max_words) - len(suffix_words) - (1 if base_words else 0))
+    if len(base_words) > allowance:
+        base = " ".join(base_words[:allowance]).rstrip(",")
+    return f"{base}, {suffix}".strip(" ,") if base else suffix
 
 
 def _ensure_prompt_constraints(prompt: str) -> str:
     prompt = _remove_conflicting_directions(prompt)
     prompt = re.sub(r"\s+", " ", prompt).strip().rstrip(",")
-    low = prompt.lower()
-    required_prefix: list[str] = []
-    if REQUIRED_PHRASE_COMPOSITION not in low:
-        required_prefix.append(REQUIRED_PHRASE_COMPOSITION)
-    if REQUIRED_PHRASE_TEXT not in low:
-        required_prefix.append(REQUIRED_PHRASE_TEXT)
-    if REQUIRED_PHRASE_VIVID not in low:
-        required_prefix.append(REQUIRED_PHRASE_VIVID)
-    if REQUIRED_PHRASE_NO_EMPTY not in low:
-        required_prefix.append(REQUIRED_PHRASE_NO_EMPTY)
-    if required_prefix:
-        prompt = f"{', '.join(required_prefix)}, {prompt}".strip(" ,")
 
     while _word_count(prompt) < 44:
         prompt += ", warm cinematic atmosphere, bold color contrast, intricate period detail"
-
-    if _word_count(prompt) > 92:
-        prompt = " ".join(prompt.split()[:92]).rstrip(",")
 
     # Cleanup artifacts introduced when forbidden tokens are stripped from "no ..." directives.
     prompt = re.sub(r"\bno\s*,\s*no\b", "no", prompt, flags=re.IGNORECASE)
@@ -464,7 +485,7 @@ def _ensure_prompt_constraints(prompt: str) -> str:
     prompt = re.sub(r",\s*,+", ", ", prompt)
     prompt = re.sub(r"\s+,", ",", prompt)
     prompt = re.sub(r"\s+", " ", prompt)
-    prompt = _prepend_missing_runtime_constraints(prompt)
+    prompt = _prepend_missing_runtime_constraints(prompt, max_words=92)
     if _word_count(prompt) > 92:
         prompt = " ".join(prompt.split()[:92]).rstrip(",")
     return prompt.strip(" ,")
@@ -489,7 +510,7 @@ def diversify_prompt(base_prompt: str, variant_index: int) -> str:
     label = str(style.get("label", "")).strip()
     if not modifier:
         return _ensure_prompt_constraints(text)
-    sanitized_modifier = _remove_conflicting_directions(modifier)
+    sanitized_modifier = _remove_conflicting_directions(_style_modifier_text(style))
     sanitized_modifier = re.sub(r"\s+", " ", sanitized_modifier).strip(" ,")
     if not sanitized_modifier:
         return _ensure_prompt_constraints(text)
