@@ -18,6 +18,7 @@ __pycache__/
 *.egg-info/
 venv/
 .venv/
+.pytest_cache/
 
 # OS
 .DS_Store
@@ -29,6 +30,15 @@ data/generation_history.json
 data/generation_failures.json
 tmp/
 logs/
+output/
+qa_output/
+Output Covers/raw_art/
+Output Covers/saved_composites/
+config/catalog_cache/
+config/*.generated.*
+Codex Prompts/
+.playwright-cli/
+exports/
 
 # Codex development status (ephemeral)
 .codex-status/
@@ -42,3 +52,6 @@ qa_output/**/*.lock
 
 # Large binary files
 *.ai
+
+# Node
+node_modules/
