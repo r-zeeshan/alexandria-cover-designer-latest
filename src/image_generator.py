@@ -120,8 +120,9 @@ STRICT_SCENE_GUARDRAIL = (
     "no inscriptions, no calligraphy."
 )
 NO_ORNAMENT_GUARDRAIL = (
-    "No internal border, no decorative ring, no plaque, no banner, no cartouche, no filigree, "
-    "no ornamental flourishes."
+    "No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, "
+    "no wreath, no floral surround, no sunburst, no radial rays, no plaque, no banner, "
+    "no cartouche, no filigree, no ornamental flourishes."
 )
 VIVID_COLOR_GUARDRAIL = (
     "Vivid painterly palette with strong contrast and luminous highlights."
@@ -168,8 +169,10 @@ _ENRICHED_BOOK_LOOKUP_CACHE: dict[str, Any] = {"path": "", "mtime": -1.0, "looku
 _ENRICHED_BOOK_LOOKUP_LOCK = threading.Lock()
 ALEXANDRIA_NEGATIVE_PROMPT = (
     "No text, no letters, no words, no numbers, no titles, no typography, no watermarks. "
-    "No internal border, no decorative ring, no plaque, no banner, no cartouche, no filigree, "
-    "no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. "
+    "No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, "
+    "no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, "
+    "no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, "
+    "no title-page layout. "
     "No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, "
     "no airbrushed surfaces, no seamless blending, no uniform color fills, "
     "no pixel-perfect edges, no smooth digital gradients, no plastic surfaces, "
@@ -185,7 +188,8 @@ ALEXANDRIA_RENDERING_PREFIX = (
 ALEXANDRIA_SYSTEM_PROMPT = (
     "Generate artwork only. No text, letters, words, or typography of any kind. "
     "Keep the entire subject and action inside an implied centered circle with quiet outer corners; do not draw the circle itself. "
-    "Return a single image with no borders, frames, plaques, banners, or internal ornaments."
+    "Return a single image with no borders, frames, plaques, banners, visible circle outlines, wreaths, floral surrounds, "
+    "sunbursts, radial rays, or internal ornaments."
 )
 MEDIUM_OPENERS = {
     "oil": "Oil paint on stretched linen canvas, visible impasto brushwork throughout —",
@@ -273,6 +277,9 @@ _PROMPT_REMOVAL_PATTERNS: tuple[str, ...] = (
     r"(?<!no )\bcircular\s+vignette(?:\s+composition)?\b",
     r"(?<!no )\bcircular\s+(?:frame|border|ring)\b",
     r"(?<!no )\bgold\s+circular\s+border\b",
+    r"(?<!no )\bvisible\s+circle\s+outline\b",
+    r"(?<!no )\bhalo\s+ring\b",
+    r"(?<!no )\bmedallion\s+edge\b",
     r"\btypography(?:[- ]led)?\b",
     r"\btext[- ]safe\b",
     r"\btitle[- ]safe\b",
@@ -286,6 +293,10 @@ _PROMPT_REMOVAL_PATTERNS: tuple[str, ...] = (
     r"(?<!no )\btracery\b",
     r"(?<!no )\bflourish(?:es)?\b",
     r"(?<!no )\bbotanical ornament\b",
+    r"(?<!no )\bwreath(?:\s+(?:border|frame|surround))?\b",
+    r"(?<!no )\bfloral\s+(?:frame|border|surround)\b",
+    r"(?<!no )\bsunburst\b",
+    r"(?<!no )\bradial\s+rays\b",
     r"(?<!no )\bornamental arches?\b",
     r"\bmarginalia(?:\s+patterns?)?\b",
     r"(?<!no )\bgeometric\s+borders?\b",
@@ -301,6 +312,8 @@ _PROMPT_REMOVAL_PATTERNS: tuple[str, ...] = (
     r"\bin\s+margins\b",
     r"\bcopperplate\s+script\b",
     r"\bmedallion(?:\s+zone|\s+opening|\s+window)?\b",
+    r"\bno\s+empty\s+space\b",
+    r"\bno\s+plain\s+backgrounds?\b",
     r"\bgilt ornament language\b",
 )
 

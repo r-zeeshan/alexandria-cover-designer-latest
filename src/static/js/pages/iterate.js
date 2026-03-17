@@ -33,7 +33,7 @@ const VARIANT_COMPOSITION_DIRECTIVES = [
 ];
 const CENTRAL_SAFE_AREA_DIRECTIVE = 'Keep all important figures, faces, hands, props, and horizon lines fully contained inside an implied centered circle in the middle of the image.';
 const QUIET_CORNER_DIRECTIVE = 'Leave the outer corners as quiet background only. No cut-off subject at the edges.';
-const NO_INTERNAL_FRAME_DIRECTIVE = 'Do not draw any internal border, ring, plaque, banner, decorative ornament, or lettering.';
+const NO_INTERNAL_FRAME_DIRECTIVE = 'Do not draw any visible circle outline, border, ring, halo, medallion edge, wreath, floral surround, sunburst, radial rays, plaque, banner, decorative ornament, or lettering.';
 const PREFERRED_DEFAULT_MODELS = [
   'openrouter/google/gemini-3-pro-image-preview',
   'nano-banana-pro',
@@ -101,6 +101,9 @@ const PROMPT_CONFLICT_REMOVALS = [
   /(?<!no )\bcircular\s+medallion(?:\s+illustration)?\b/gi,
   /(?<!no )\bcircular\s+vignette(?:\s+composition)?\b/gi,
   /(?<!no )\bcircular\s+(?:frame|border|ring)\b/gi,
+  /(?<!no )\bvisible\s+circle\s+outline\b/gi,
+  /(?<!no )\bhalo\s+ring\b/gi,
+  /(?<!no )\bmedallion\s+edge\b/gi,
   /\btypography(?:[- ]led)?\b/gi,
   /\btext[- ]safe\b/gi,
   /\btitle[- ]safe\b/gi,
@@ -114,6 +117,10 @@ const PROMPT_CONFLICT_REMOVALS = [
   /(?<!no )\btracery\b/gi,
   /(?<!no )\bflourish(?:es)?\b/gi,
   /(?<!no )\bbotanical ornament\b/gi,
+  /(?<!no )\bwreath(?:\s+(?:border|frame|surround))?\b/gi,
+  /(?<!no )\bfloral\s+(?:frame|border|surround)\b/gi,
+  /(?<!no )\bsunburst\b/gi,
+  /(?<!no )\bradial\s+rays\b/gi,
   /(?<!no )\bornamental arches?\b/gi,
   /\bmarginalia(?:\s+patterns?)?\b/gi,
   /(?<!no )\bgeometric\s+borders?\b/gi,
@@ -129,6 +136,8 @@ const PROMPT_CONFLICT_REMOVALS = [
   /\bin\s+margins\b/gi,
   /\bcopperplate\s+script\b/gi,
   /\bmedallion(?:\s+zone|\s+opening|\s+window)?\b/gi,
+  /\bno\s+empty\s+space\b/gi,
+  /\bno\s+plain\s+backgrounds?\b/gi,
   /\bgilt ornament language\b/gi,
 ];
 const ALEXANDRIA_BASE_PROMPT_IDS = {

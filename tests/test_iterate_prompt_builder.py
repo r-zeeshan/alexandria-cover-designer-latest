@@ -340,7 +340,7 @@ def test_iterate_prompt_builder_adds_variant_specific_composition_directives():
     assert "Keep all important figures, faces, hands, props, and horizon lines fully contained inside an implied centered circle" in variant_one["prompt"]
     assert "Keep all important figures, faces, hands, props, and horizon lines fully contained inside an implied centered circle" in variant_two["prompt"]
     assert "Leave the outer corners as quiet background only." in variant_one["prompt"]
-    assert "Do not draw any internal border, ring, plaque, banner, decorative ornament, or lettering." in variant_one["prompt"]
+    assert "Do not draw any visible circle outline, border, ring, halo, medallion edge, wreath, floral surround, sunburst, radial rays, plaque, banner, decorative ornament, or lettering." in variant_one["prompt"]
     assert "one centered primary subject" in variant_one["prompt"]
     assert "mid-distance narrative staging" in variant_two["prompt"]
     assert variant_one["prompt"] != variant_two["prompt"]
@@ -359,7 +359,8 @@ def test_iterate_prompt_builder_strips_border_and_label_directions_from_prompt_t
                 "prompt_template": (
                     "Book cover illustration — no text, no lettering. Scene: {SCENE}. "
                     "STYLE: botanical precision with Latin labels in copperplate script, interlaced knotwork framing the scene, "
-                    "intricate geometric borders, ribbon banner, and circular vignette composition. Mood: {MOOD}. Era: {ERA}."
+                    "intricate geometric borders, ribbon banner, circular vignette composition, visible circle outline, "
+                    "floral surround, sunburst, radial rays, and no empty space. Mood: {MOOD}. Era: {ERA}."
                 ),
             },
             "promptId": "alexandria-wildcard-botanical-plate",
@@ -380,7 +381,12 @@ def test_iterate_prompt_builder_strips_border_and_label_directions_from_prompt_t
     assert "geometric borders" not in lowered
     assert "ribbon banner" not in lowered
     assert "circular vignette composition" not in lowered
+    assert "no empty space" not in lowered
     assert "centered focal composition inside an implied circle" in lowered
+    assert "do not draw any visible circle outline" in lowered
+    assert "floral surround" in lowered
+    assert "sunburst" in lowered
+    assert "radial rays" in lowered
 
 
 def test_iterate_ui_defaults_use_ten_variants_and_auto_rotate_label():

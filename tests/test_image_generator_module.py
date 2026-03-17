@@ -204,6 +204,10 @@ def test_negative_prompt_merge_and_nano_alias_resolution(tmp_path: Path, monkeyp
     assert "no seamless blending" in merged.lower()
     assert "no uniform color fills" in merged.lower()
     assert "no decorative ring" in merged.lower()
+    assert "no visible circle outline" in merged.lower()
+    assert "no wreath" in merged.lower()
+    assert "no floral frame" in merged.lower()
+    assert "no sunburst" in merged.lower()
     assert "no plaque" in merged.lower()
     assert "no banner" in merged.lower()
     assert "no plastic surfaces" in merged.lower()
@@ -289,16 +293,24 @@ def test_download_postprocess_and_blank_detection(monkeypatch):
 
 
 def test_guardrailed_prompt_strips_text_and_frame_directions():
-    raw = "Typography-led circular vignette composition with circular medallion illustration, ribbon banner and title text"
+    raw = (
+        "Typography-led circular vignette composition with circular medallion illustration, ribbon banner, "
+        "visible circle outline, floral surround, sunburst, radial rays, no empty space, and title text"
+    )
     guarded = ig._guardrailed_prompt(raw).lower()
     assert "typography-led" not in guarded
     assert "circular vignette composition" not in guarded
     assert "circular medallion illustration" not in guarded
     assert "ribbon banner" not in guarded
+    assert "no empty space" not in guarded
     assert "mandatory output rules" not in guarded
     assert "centered focal composition inside an implied circle" in guarded
     assert "no text" in guarded
     assert "no internal border" in guarded
+    assert "no visible circle outline" in guarded
+    assert "no floral surround" in guarded
+    assert "no sunburst" in guarded
+    assert "no radial rays" in guarded
     assert "vivid painterly palette" in guarded
 
 
@@ -433,6 +445,8 @@ def test_openrouter_modalities_and_429_retry(tmp_path: Path, monkeypatch):
     assert "No text, letters, words, or typography" in system_prompt
     assert "no borders, frames" in system_prompt
     assert "implied centered circle" in system_prompt
+    assert "visible circle outlines" in system_prompt
+    assert "sunbursts" in system_prompt
 
     calls.clear()
     flux = ig.OpenRouterProvider(model="flux-2-pro", api_key="k", runtime=runtime)
