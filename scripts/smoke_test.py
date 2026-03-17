@@ -17,7 +17,23 @@ import requests
 
 
 PROD_URL = "https://web-production-900a7.up.railway.app"
-REQUIRED_NEGATIVE_TERMS = ["vector", "airbrushed", "seamless", "uniform color"]
+REQUIRED_NEGATIVE_TERMS = [
+    "vector",
+    "airbrushed",
+    "seamless",
+    "uniform color",
+    "visible circle outline",
+    "wreath",
+    "sunburst",
+]
+BANNED_CATALOG_STYLE_FRAGMENTS = [
+    "gold outlines",
+    "decorative elegance",
+    "framing the scene",
+    "spiralling decorative accents",
+    "intricate marginalia patterns",
+    "intricate geometric borders",
+]
 BANNED_PROMPT_FRAGMENTS = [
     "circular vignette illustration",
     "mandatory output rules",
@@ -83,6 +99,18 @@ def check_prompt_catalog(base_url: str, catalog: str, *, min_entries: int = 5) -
     prompts = _load_prompt_rows(payload)
     if len(prompts) < min_entries:
         return False, f"Prompt catalog too small: {len(prompts)} entries (need >= {min_entries})"
+    for prompt in prompts:
+        prompt_id = str(prompt.get("id", "")).strip()
+        if not prompt_id.startswith("alexandria-"):
+            continue
+        template = str(prompt.get("prompt_template", "")).lower()
+        negative_prompt = str(prompt.get("negative_prompt", "")).lower()
+        for banned in BANNED_CATALOG_STYLE_FRAGMENTS:
+            if banned in template:
+                return False, f"{prompt_id}: prompt template contains banned style fragment '{banned}'"
+        for term in REQUIRED_NEGATIVE_TERMS:
+            if term not in negative_prompt:
+                return False, f"{prompt_id}: prompt catalog negative_prompt missing '{term}'"
     return True, f"Prompt catalog: {len(prompts)} entries"
 
 

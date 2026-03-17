@@ -28,7 +28,21 @@ def test_smoke_script_checks_catalog_and_recent_jobs(monkeypatch):
 
     def _fake_get(url, timeout=15):  # type: ignore[no-untyped-def]
         if "/api/prompts" in url:
-            return _Response({"prompts": [{"id": "p1"}, {"id": "p2"}, {"id": "p3"}, {"id": "p4"}, {"id": "p5"}]})
+            return _Response(
+                {
+                    "prompts": [
+                        {
+                            "id": "alexandria-wildcard-art-nouveau-poster",
+                            "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Art Nouveau illustration with graceful figure styling.",
+                            "negative_prompt": "no vector art, no airbrushed surfaces, no seamless blending, no uniform color fills, no visible circle outline, no wreath, no sunburst",
+                        },
+                        {"id": "p2"},
+                        {"id": "p3"},
+                        {"id": "p4"},
+                        {"id": "p5"},
+                    ]
+                }
+            )
         if "/api/jobs" in url:
             return _Response(
                 {
@@ -45,7 +59,7 @@ def test_smoke_script_checks_catalog_and_recent_jobs(monkeypatch):
                                             "Scene: Emma at Hartfield. STYLE: Romantic Realism. "
                                             "Surface shows natural material texture: visible brushstrokes, pigment variation, paper grain."
                                         ),
-                                        "negative_prompt": "no vector art, no airbrushed surfaces, no seamless blending, no uniform color fills",
+                                        "negative_prompt": "no vector art, no airbrushed surfaces, no seamless blending, no uniform color fills, no visible circle outline, no wreath, no sunburst",
                                     }
                                 ]
                             },
@@ -105,3 +119,42 @@ def test_smoke_script_reports_missing_negative_prompt_terms(monkeypatch):
     assert jobs_ok is False
     assert any("negative_prompt missing 'airbrushed'" in message for message in messages)
     assert any("prompt does not start with a medium opener" in message for message in messages)
+
+
+def test_smoke_script_reports_banned_catalog_style_fragments(monkeypatch):
+    smoke = _load_smoke_module()
+
+    class _Response:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self._payload
+
+    def _fake_get(url, timeout=15):  # type: ignore[no-untyped-def]
+        if "/api/prompts" in url:
+            return _Response(
+                {
+                    "prompts": [
+                        {
+                            "id": "alexandria-wildcard-art-nouveau-poster",
+                            "prompt_template": "STYLE: Art Nouveau illustration with gold outlines and decorative elegance.",
+                            "negative_prompt": "no vector art, no airbrushed surfaces, no seamless blending, no uniform color fills, no visible circle outline, no wreath, no sunburst",
+                        },
+                        {"id": "p2"},
+                        {"id": "p3"},
+                        {"id": "p4"},
+                        {"id": "p5"},
+                    ]
+                }
+            )
+        return _Response({"jobs": []})
+
+    monkeypatch.setattr(smoke.requests, "get", _fake_get)
+
+    ok, message = smoke.check_prompt_catalog("https://example.test", "classics")
+    assert ok is False
+    assert "gold outlines" in message

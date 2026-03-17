@@ -295,7 +295,8 @@ def test_download_postprocess_and_blank_detection(monkeypatch):
 def test_guardrailed_prompt_strips_text_and_frame_directions():
     raw = (
         "Typography-led circular vignette composition with circular medallion illustration, ribbon banner, "
-        "visible circle outline, floral surround, sunburst, radial rays, no empty space, and title text"
+        "visible circle outline, floral surround, sunburst, radial rays, gold outlines, "
+        "Mucha-inspired decorative elegance, nature-integrated composition, no empty space, and title text"
     )
     guarded = ig._guardrailed_prompt(raw).lower()
     assert "typography-led" not in guarded
@@ -311,6 +312,10 @@ def test_guardrailed_prompt_strips_text_and_frame_directions():
     assert "no floral surround" in guarded
     assert "no sunburst" in guarded
     assert "no radial rays" in guarded
+    assert "gold outlines" not in guarded
+    assert "decorative elegance" not in guarded
+    assert "nature-integrated composition" not in guarded
+    assert "style only through" in guarded
     assert "vivid painterly palette" in guarded
 
 

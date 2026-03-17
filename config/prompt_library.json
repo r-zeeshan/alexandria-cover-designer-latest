@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "updated_at": "2026-03-17T12:12:39.683241+00:00",
+  "updated_at": "2026-03-17T23:44:38.150192+00:00",
   "style_anchors": [
     {
       "name": "allegorical_symbolic",
@@ -124,7 +124,7 @@
       "name": "BASE 5 — Esoteric Mysticism",
       "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Visionary painting with luminous depth. Translucent glazes create inner glow. Cosmic indigo and celestial gold, deep amethyst, ethereal silver-white. Mystical symbols emerge from luminous mist. Mood: {MOOD}. Era: {ERA}. Hand-painted texture with pigment granulation. Slightly irregular linework, color bleeds at edges.",
       "style_anchors": [],
-      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
       "source_model": "openrouter/google/gemini-3-pro-image-preview",
       "quality_score": 1.0,
@@ -144,14 +144,14 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-16T20:58:23.844723+00:00"
+      "updated_at": "2026-03-17T23:44:38.150078+00:00"
     },
     {
       "id": "alexandria-base-romantic-realism",
       "name": "BASE 4 — Romantic Realism",
       "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Warm romantic landscape, 19th-century Romanticism. Soft luminous brushwork, watercolor washes over oil. Golden-hour amber and warm sienna, soft sky blue, deep forest green. Sweeping atmospheric perspective. Mood: {MOOD}. Era: {ERA}. Oil paint texture with visible canvas weave. Slightly irregular linework, color bleeds at edges.",
       "style_anchors": [],
-      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
       "source_model": "openrouter/google/gemini-3-pro-image-preview",
       "quality_score": 1.0,
@@ -171,14 +171,14 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-16T20:58:23.844721+00:00"
+      "updated_at": "2026-03-17T23:44:38.150075+00:00"
     },
     {
       "id": "alexandria-base-gothic-atmosphere",
       "name": "BASE 3 — Gothic Atmosphere",
       "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Dark atmospheric painting, expressionist energy. Loose aggressive brushwork with palette knife marks. Moonlit indigo and deep crimson with silvered edge highlights. Gothic tension, foreboding atmosphere. Mood: {MOOD}. Era: {ERA}. Ink-wash texture with visible paper grain. Slightly irregular linework, color bleeds at edges.",
       "style_anchors": [],
-      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
       "source_model": "openrouter/google/gemini-3-pro-image-preview",
       "quality_score": 1.0,
@@ -198,14 +198,14 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-16T20:58:23.844718+00:00"
+      "updated_at": "2026-03-17T23:44:38.150072+00:00"
     },
     {
       "id": "alexandria-base-philosophical-gravitas",
       "name": "BASE 2 — Philosophical Gravitas",
       "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Dramatic chiaroscuro. Strong light carves figures from shadow. Raw umber and burnt sienna dominate, gold ochre warms the light, charcoal grey deepens shadow. Heavy Rembrandt-era texture. Mood: {MOOD}. Era: {ERA}. Thick impasto paint texture on every surface. Slightly irregular linework, color bleeds at edges.",
       "style_anchors": [],
-      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
       "source_model": "openrouter/google/gemini-3-pro-image-preview",
       "quality_score": 1.0,
@@ -225,14 +225,14 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-16T20:58:23.844714+00:00"
+      "updated_at": "2026-03-17T23:44:38.150068+00:00"
     },
     {
       "id": "alexandria-base-classical-devotion",
       "name": "BASE 1 — Classical Devotion",
       "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Rich oil painting, hyper-detailed botanical precision. Deep midnight navy and burnished gold. Thick impasto on gilded elements, fine detail on flora. Sacred, warm candlelight glow. Mood: {MOOD}. Era: {ERA}. Visible brushwork on canvas throughout. Slightly irregular linework, color bleeds at edges.",
       "style_anchors": [],
-      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
       "source_model": "openrouter/google/gemini-3-pro-image-preview",
       "quality_score": 1.0,
@@ -252,14 +252,14 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-16T20:58:23.844708+00:00"
+      "updated_at": "2026-03-17T23:44:38.150057+00:00"
     },
     {
       "id": "alexandria-wildcard-vintage-travel-poster",
       "name": "Vintage Travel Poster",
       "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: bold 1930s vintage travel poster — flat unblended colour blocks with clean outlines, layered depth planes, burgundy navy cream and forest green palette, geometric confidence. Mood: {MOOD}. Era: {ERA}. Poster gouache with uneven screenprint grain. Slightly irregular linework, color bleeds at edges.",
       "style_anchors": [],
-      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
       "source_model": "openrouter/google/gemini-3-pro-image-preview",
       "quality_score": 1.0,
@@ -279,7 +279,7 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-17T12:12:08.419932+00:00"
+      "updated_at": "2026-03-17T23:44:38.150086+00:00"
     },
     {
       "id": "alexandria-wildcard-painterly-soft",
@@ -292,7 +292,7 @@
         "brushwork",
         "atmospheric"
       ],
-      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
       "source_model": "openrouter/google/gemini-3-pro-image-preview",
       "quality_score": 1.0,
@@ -312,7 +312,7 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-16T20:58:23.844795+00:00"
+      "updated_at": "2026-03-17T23:44:38.150182+00:00"
     },
     {
       "id": "alexandria-wildcard-painterly-detailed",
@@ -325,7 +325,7 @@
         "maximalist",
         "golden-hour"
       ],
-      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
       "source_model": "openrouter/google/gemini-3-pro-image-preview",
       "quality_score": 1.0,
@@ -345,14 +345,14 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-16T20:58:23.844797+00:00"
+      "updated_at": "2026-03-17T23:44:38.150184+00:00"
     },
     {
       "id": "alexandria-wildcard-naturalist-field-drawing",
       "name": "Naturalist Field Drawing",
       "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Victorian naturalist field drawing — precise pencil and watercolour, expedition-journal authenticity, warm sepia and olive green palette, scientific curiosity with artistic sensitivity, Audubon-inspired detail. Mood: {MOOD}. Era: {ERA}. Pencil tooth and watercolor blooms on field-journal paper. Slightly irregular linework, color bleeds at edges.",
       "style_anchors": [],
-      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
       "source_model": "openrouter/google/gemini-3-pro-image-preview",
       "quality_score": 1.0,
@@ -371,14 +371,14 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-16T20:58:23.844793+00:00"
+      "updated_at": "2026-03-17T23:44:38.150179+00:00"
     },
     {
       "id": "alexandria-wildcard-maritime-chart",
       "name": "Maritime Chart",
       "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: naval maritime illustration — dramatic seascape composition, storm-grey and deep ocean-blue palette, copper-engraving linework, billowing sails and rigging detail, Turner-inspired atmospheric light on waves. Mood: {MOOD}. Era: {ERA}. Salt-stiff paper grain and engraved lines through blue washes. Slightly irregular linework, color bleeds at edges.",
       "style_anchors": [],
-      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
       "source_model": "openrouter/google/gemini-3-pro-image-preview",
       "quality_score": 1.0,
@@ -397,14 +397,14 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-16T20:58:23.844790+00:00"
+      "updated_at": "2026-03-17T23:44:38.150176+00:00"
     },
     {
       "id": "alexandria-wildcard-antique-map",
       "name": "Antique Map",
-      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: antique cartographic illustration — aged parchment texture, hand-engraved linework, sepia and faded indigo palette, compass rose elements, sea monsters and ships in margins, Age-of-Exploration wonder. Mood: {MOOD}. Era: {ERA}. Sepia washes over parchment grain, etched lines biting through. Slightly irregular linework, color bleeds at edges.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: antique cartographic illustration — aged parchment texture, hand-engraved linework, sepia and faded indigo palette, chart instruments inside the scene, voyage-era wonder. Mood: {MOOD}. Era: {ERA}. Sepia washes over parchment grain, etched lines biting through. Slightly irregular linework, color bleeds at edges.",
       "style_anchors": [],
-      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
       "source_model": "openrouter/google/gemini-3-pro-image-preview",
       "quality_score": 1.0,
@@ -423,14 +423,14 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-16T20:58:23.844788+00:00"
+      "updated_at": "2026-03-17T23:44:38.150173+00:00"
     },
     {
       "id": "alexandria-wildcard-botanical-plate",
       "name": "Botanical Plate",
       "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: 18th-century botanical illustration — precise scientific observation, delicate hand-tinted watercolour washes on cream paper, naturalist field-drawing accuracy, muted sage and rose palette, Redouté-inspired elegance. Mood: {MOOD}. Era: {ERA}. Fine watercolor washes with dry-brush detail on vellum. Slightly irregular linework, color bleeds at edges.",
       "style_anchors": [],
-      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
       "source_model": "openrouter/google/gemini-3-pro-image-preview",
       "quality_score": 1.0,
@@ -449,14 +449,14 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-16T20:58:23.844786+00:00"
+      "updated_at": "2026-03-17T23:44:38.150168+00:00"
     },
     {
       "id": "alexandria-wildcard-celtic-knotwork",
       "name": "Celtic Knotwork",
-      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Celtic illuminated manuscript — interlaced knotwork framing the scene, Book of Kells-inspired zoomorphic details, deep forest green and burnished gold palette, spiralling decorative accents, insular art precision. Mood: {MOOD}. Era: {ERA}. Opaque gouache on vellum with slight ink bleed. Slightly irregular linework, color bleeds at edges.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Celtic illuminated manuscript — knotwork motifs inside textiles and carved objects, Book of Kells zoomorphic detail, deep forest green and burnished gold palette, insular manuscript precision. Mood: {MOOD}. Era: {ERA}. Opaque gouache on vellum with slight ink bleed. Slightly irregular linework, color bleeds at edges.",
       "style_anchors": [],
-      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
       "source_model": "openrouter/google/gemini-3-pro-image-preview",
       "quality_score": 1.0,
@@ -475,14 +475,14 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-16T20:58:23.844783+00:00"
+      "updated_at": "2026-03-17T23:44:38.150165+00:00"
     },
     {
       "id": "alexandria-wildcard-klimt-gold-leaf",
       "name": "Klimt Gold Leaf",
-      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Gustav Klimt decorative — lavish gold leaf mosaic patterns integrated with realistic figures, Byzantine-inspired geometric abstraction, warm ochre and deep emerald palette, sensuous flowing forms. Mood: {MOOD}. Era: {ERA}. Gold leaf flakes over painted ground, brush seams visible. Slightly irregular linework, color bleeds at edges.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Gustav Klimt decorative — lavish gold mosaic textures limited to garments, walls, and objects behind the figures, Byzantine-inspired geometric abstraction, warm ochre and deep emerald palette, sensuous flowing forms. Mood: {MOOD}. Era: {ERA}. Gold leaf flakes over painted ground, brush seams visible. Slightly irregular linework, color bleeds at edges.",
       "style_anchors": [],
-      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
       "source_model": "openrouter/google/gemini-3-pro-image-preview",
       "quality_score": 1.0,
@@ -501,14 +501,14 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-16T20:58:23.844781+00:00"
+      "updated_at": "2026-03-17T23:44:38.150163+00:00"
     },
     {
       "id": "alexandria-wildcard-william-morris-textile",
       "name": "William Morris Textile",
-      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: William Morris Arts and Crafts — intertwining vines and birds framing the scene, muted sage green and indigo palette, hand-printed woodblock texture, medieval-inspired naturalism, Kelmscott Press decorative richness. Mood: {MOOD}. Era: {ERA}. Block-printed pigment with cloth grain and ink buildup. Slightly irregular linework, color bleeds at edges.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: William Morris Arts and Crafts — vine and bird motifs inside fabrics and wallpaper, muted sage green and indigo palette, hand-printed woodblock texture, medieval naturalism. Mood: {MOOD}. Era: {ERA}. Block-printed pigment with cloth grain and ink buildup. Slightly irregular linework, color bleeds at edges.",
       "style_anchors": [],
-      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
       "source_model": "openrouter/google/gemini-3-pro-image-preview",
       "quality_score": 1.0,
@@ -527,14 +527,14 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-16T20:58:23.844779+00:00"
+      "updated_at": "2026-03-17T23:44:38.150160+00:00"
     },
     {
       "id": "alexandria-wildcard-northern-renaissance",
       "name": "Northern Renaissance",
       "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Northern Renaissance oil painting — Van Eyck meticulous detail, cool silvery light through leaded glass windows, rich textile patterns, precise botanical accuracy, intimate domestic scale with symbolic objects. Mood: {MOOD}. Era: {ERA}. Egg tempera layers with panel grain under glazes. Slightly irregular linework, color bleeds at edges.",
       "style_anchors": [],
-      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
       "source_model": "openrouter/google/gemini-3-pro-image-preview",
       "quality_score": 1.0,
@@ -553,14 +553,14 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-16T20:58:23.844776+00:00"
+      "updated_at": "2026-03-17T23:44:38.150158+00:00"
     },
     {
       "id": "alexandria-wildcard-twilight-symbolism",
       "name": "Twilight Symbolism",
       "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Symbolist painting — dreamlike twilight atmosphere, deep purple and midnight blue palette with phosphorescent accents, enigmatic figure poses, Redon-inspired otherworldly luminescence, mythology blended with nature. Mood: {MOOD}. Era: {ERA}. Velvety pastel haze with chalk dust on toned paper. Slightly irregular linework, color bleeds at edges.",
       "style_anchors": [],
-      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
       "source_model": "openrouter/google/gemini-3-pro-image-preview",
       "quality_score": 1.0,
@@ -579,14 +579,14 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-16T20:58:23.844774+00:00"
+      "updated_at": "2026-03-17T23:44:38.150152+00:00"
     },
     {
       "id": "alexandria-wildcard-pre-raphaelite-dream",
       "name": "Pre-Raphaelite Dream",
       "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Pre-Raphaelite painting — jewel-bright saturated colours, hyper-detailed botanical elements, flowing auburn hair and medieval-inspired drapery, Waterhouse-like romantic atmosphere. Mood: {MOOD}. Era: {ERA}. Jewel-like pigment on smooth gesso, fine brushwork visible. Slightly irregular linework, color bleeds at edges.",
       "style_anchors": [],
-      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
       "source_model": "openrouter/google/gemini-3-pro-image-preview",
       "quality_score": 1.0,
@@ -605,14 +605,14 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-16T20:58:23.844772+00:00"
+      "updated_at": "2026-03-17T23:44:38.150150+00:00"
     },
     {
       "id": "alexandria-wildcard-film-noir-shadows",
       "name": "Film Noir Shadows",
       "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: film noir cinematic — high-contrast black and white with selective warm amber highlights, venetian blind shadow patterns, rain-slicked surfaces, cigarette-smoke atmosphere, dramatic low-angle perspective. Mood: {MOOD}. Era: {ERA}. Brush-applied India ink with visible brush-hair marks. Slightly irregular linework, color bleeds at edges.",
       "style_anchors": [],
-      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
       "source_model": "openrouter/google/gemini-3-pro-image-preview",
       "quality_score": 1.0,
@@ -631,14 +631,14 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-16T20:58:23.844770+00:00"
+      "updated_at": "2026-03-17T23:44:38.150148+00:00"
     },
     {
       "id": "alexandria-wildcard-ottoman-illumination",
       "name": "Ottoman Illumination",
-      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Ottoman illuminated manuscript — turquoise and coral palette with gold filigree, tulip and carnation motifs, flat decorative perspective, intricate geometric borders, courtly mineral-pigment elegance. Mood: {MOOD}. Era: {ERA}. Mineral pigments on vellum with gold leaf speckle. Slightly irregular linework, color bleeds at edges.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Ottoman illuminated manuscript — turquoise and coral palette, restrained gold detail inside garments and architecture, tulip and carnation motifs, miniature-painting depth, courtly mineral pigments. Mood: {MOOD}. Era: {ERA}. Mineral pigments on vellum with gold leaf speckle. Slightly irregular linework, color bleeds at edges.",
       "style_anchors": [],
-      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
       "source_model": "openrouter/google/gemini-3-pro-image-preview",
       "quality_score": 1.0,
@@ -657,14 +657,14 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-16T20:58:23.844767+00:00"
+      "updated_at": "2026-03-17T23:44:38.150145+00:00"
     },
     {
       "id": "alexandria-wildcard-chinese-ink-wash",
       "name": "Chinese Ink Wash",
       "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Chinese ink wash painting — misty mountain atmosphere, graded ink tones from deep black to pale grey, negative space as a compositional element, bamboo-brush spontaneity, Song dynasty landscape grandeur. Mood: {MOOD}. Era: {ERA}. Ink pooling and feathering on absorbent rice paper. Slightly irregular linework, color bleeds at edges.",
       "style_anchors": [],
-      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
       "source_model": "openrouter/google/gemini-3-pro-image-preview",
       "quality_score": 1.0,
@@ -683,14 +683,14 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-16T20:58:23.844765+00:00"
+      "updated_at": "2026-03-17T23:44:38.150142+00:00"
     },
     {
       "id": "alexandria-wildcard-persian-miniature",
       "name": "Persian Miniature",
       "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Persian miniature painting — bird's-eye multi-level perspective, jewel-bright lapis lazuli and emerald palette, intricate floral details, gold leaf accents, delicate figure rendering with expressive faces. Mood: {MOOD}. Era: {ERA}. Burnished paper with gold leaf flecks and tiny brush hairs. Slightly irregular linework, color bleeds at edges.",
       "style_anchors": [],
-      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
       "source_model": "openrouter/google/gemini-3-pro-image-preview",
       "quality_score": 1.0,
@@ -709,14 +709,14 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-16T20:58:23.844763+00:00"
+      "updated_at": "2026-03-17T23:44:38.150138+00:00"
     },
     {
       "id": "alexandria-wildcard-ukiyo-e-woodblock",
       "name": "Ukiyo-e Woodblock",
       "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Japanese ukiyo-e woodblock print — flat colour planes with precise black outlines, asymmetric composition, indigo and vermilion palette, stylized wave and cloud motifs, Hokusai-inspired naturalistic detail. Mood: {MOOD}. Era: {ERA}. Woodblock ink impression with registration marks and paper grain. Slightly irregular linework, color bleeds at edges.",
       "style_anchors": [],
-      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
       "source_model": "openrouter/google/gemini-3-pro-image-preview",
       "quality_score": 1.0,
@@ -735,14 +735,14 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-16T20:58:23.844761+00:00"
+      "updated_at": "2026-03-17T23:44:38.150135+00:00"
     },
     {
       "id": "alexandria-wildcard-soviet-constructivist",
       "name": "Soviet Constructivist",
       "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Soviet Constructivist poster — bold angular composition, red black cream and steel grey palette, photomontage-inspired layering, diagonal dynamic energy, heroic monumental scale. Mood: {MOOD}. Era: {ERA}. Matte poster paint with bristled edges and stencil drag. Slightly irregular linework, color bleeds at edges.",
       "style_anchors": [],
-      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
       "source_model": "openrouter/google/gemini-3-pro-image-preview",
       "quality_score": 1.0,
@@ -761,14 +761,14 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-16T20:58:23.844758+00:00"
+      "updated_at": "2026-03-17T23:44:38.150132+00:00"
     },
     {
       "id": "alexandria-wildcard-art-deco-glamour",
       "name": "Art Deco Glamour",
       "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Art Deco glamour illustration — geometric symmetry, sleek metallic gold and silver accents, jade green and midnight black palette, elongated elegant figures, Chrysler Building-era luxury and angular precision. Mood: {MOOD}. Era: {ERA}. Metallic gouache over board with hand-painted edge wobble. Slightly irregular linework, color bleeds at edges.",
       "style_anchors": [],
-      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
       "source_model": "openrouter/google/gemini-3-pro-image-preview",
       "quality_score": 1.0,
@@ -787,14 +787,14 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-16T20:58:23.844756+00:00"
+      "updated_at": "2026-03-17T23:44:38.150130+00:00"
     },
     {
       "id": "alexandria-wildcard-woodcut-relief",
       "name": "Woodcut Relief Print",
       "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: hand-carved woodcut relief print — bold black lines on warm cream, hatched shadow textures, simplified dramatic forms, limited two-tone palette, Dürer-inspired precision with folk art warmth. Mood: {MOOD}. Era: {ERA}. Carved wood grain printing through ink, fiber texture visible. Slightly irregular linework, color bleeds at edges.",
       "style_anchors": [],
-      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
       "source_model": "openrouter/google/gemini-3-pro-image-preview",
       "quality_score": 1.0,
@@ -813,14 +813,14 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-16T20:58:23.844754+00:00"
+      "updated_at": "2026-03-17T23:44:38.150127+00:00"
     },
     {
       "id": "alexandria-wildcard-vintage-pulp-cover",
       "name": "Vintage Pulp Cover",
       "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: 1940s vintage pulp illustration — saturated primary colours, high-contrast dramatic lighting, bold expressive faces, painterly gouache texture, action-forward composition with dynamic diagonals. Mood: {MOOD}. Era: {ERA}. Thick gouache passes with visible dry-brush streaks. Slightly irregular linework, color bleeds at edges.",
       "style_anchors": [],
-      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
       "source_model": "openrouter/google/gemini-3-pro-image-preview",
       "quality_score": 1.0,
@@ -839,14 +839,14 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-16T20:58:23.844752+00:00"
+      "updated_at": "2026-03-17T23:44:38.150125+00:00"
     },
     {
       "id": "alexandria-wildcard-art-nouveau-poster",
       "name": "Art Nouveau Poster",
-      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Art Nouveau illustration — sinuous organic linework, flowing hair and fabric, jewel-tone flat colours with gold outlines, Mucha-inspired decorative elegance, nature-integrated composition. Mood: {MOOD}. Era: {ERA}. Inked outlines with gouache fill, paper tooth showing. Slightly irregular linework, color bleeds at edges.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Art Nouveau illustration — sinuous linework, graceful figures, jewel-tone gouache, restrained antique-gold accents inside clothing and architecture, botanical motifs kept inside the scene. Mood: {MOOD}. Era: {ERA}. Inked outlines with gouache fill, paper tooth showing. Slightly irregular linework, color bleeds at edges.",
       "style_anchors": [],
-      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
       "source_model": "openrouter/google/gemini-3-pro-image-preview",
       "quality_score": 1.0,
@@ -865,14 +865,14 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-16T20:58:23.844749+00:00"
+      "updated_at": "2026-03-17T23:44:38.150118+00:00"
     },
     {
       "id": "alexandria-wildcard-baroque-dramatic",
       "name": "Baroque Dramatic",
       "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Baroque dramatic painting — Caravaggio-intense spotlighting, deep blacks with explosive warm highlights, theatrical gesture and expression, swirling drapery, rich crimson and gold against darkness. Mood: {MOOD}. Era: {ERA}. Heavy oil impasto and glazing ridges around highlights. Slightly irregular linework, color bleeds at edges.",
       "style_anchors": [],
-      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
       "source_model": "openrouter/google/gemini-3-pro-image-preview",
       "quality_score": 1.0,
@@ -891,14 +891,14 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-16T20:58:23.844747+00:00"
+      "updated_at": "2026-03-17T23:44:38.150116+00:00"
     },
     {
       "id": "alexandria-wildcard-academic-neoclassical",
       "name": "Academic Neoclassical",
-      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Academic Neoclassical painting — idealized proportions, marble-smooth surfaces, heroic poses, cool grey-blue and warm sandstone palette, classical architectural framing, David-like precision and grandeur. Mood: {MOOD}. Era: {ERA}. Fine sable brush lines over matte gesso, edges imperfect. Slightly irregular linework, color bleeds at edges.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Academic Neoclassical painting — idealized proportions, marble-smooth surfaces, heroic poses, cool grey-blue and warm sandstone palette, classical architecture rising behind the subject, David-like precision and grandeur. Mood: {MOOD}. Era: {ERA}. Fine sable brush lines over matte gesso, edges imperfect. Slightly irregular linework, color bleeds at edges.",
       "style_anchors": [],
-      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
       "source_model": "openrouter/google/gemini-3-pro-image-preview",
       "quality_score": 1.0,
@@ -917,14 +917,14 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-16T20:58:23.844745+00:00"
+      "updated_at": "2026-03-17T23:44:38.150113+00:00"
     },
     {
       "id": "alexandria-wildcard-impressionist-plein-air",
       "name": "Impressionist Plein Air",
       "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: French Impressionist plein air — visible brushstrokes, dappled natural sunlight, soft focus atmospheric depth, luminous pastel and sky-blue palette, Monet-like light on water and foliage. Mood: {MOOD}. Era: {ERA}. Broken color dabs, each brushmark catching light. Slightly irregular linework, color bleeds at edges.",
       "style_anchors": [],
-      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
       "source_model": "openrouter/google/gemini-3-pro-image-preview",
       "quality_score": 1.0,
@@ -943,14 +943,14 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-16T20:58:23.844743+00:00"
+      "updated_at": "2026-03-17T23:44:38.150111+00:00"
     },
     {
       "id": "alexandria-wildcard-dutch-golden-age",
       "name": "Dutch Golden Age",
       "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Dutch Golden Age painting — Rembrandt-like chiaroscuro, intimate domestic lighting, meticulous fabric texture, warm amber and deep brown palette, candlelit atmosphere with selective highlights. Mood: {MOOD}. Era: {ERA}. Transparent oil glazes with linen weave in shadow. Slightly irregular linework, color bleeds at edges.",
       "style_anchors": [],
-      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
       "source_model": "openrouter/google/gemini-3-pro-image-preview",
       "quality_score": 1.0,
@@ -969,14 +969,14 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-16T20:58:23.844740+00:00"
+      "updated_at": "2026-03-17T23:44:38.150108+00:00"
     },
     {
       "id": "alexandria-wildcard-venetian-renaissance",
       "name": "Venetian Renaissance",
       "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Venetian Renaissance oil painting — Titian-warm glazes, luminous skin tones, rich velvet and brocade fabrics, atmospheric sfumato backgrounds, deep jewel-tone crimson sapphire and gold palette. Mood: {MOOD}. Era: {ERA}. Warm glaze layers over gesso, fine panel grain visible. Slightly irregular linework, color bleeds at edges.",
       "style_anchors": [],
-      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
       "source_model": "openrouter/google/gemini-3-pro-image-preview",
       "quality_score": 1.0,
@@ -995,14 +995,14 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-16T20:58:23.844738+00:00"
+      "updated_at": "2026-03-17T23:44:38.150100+00:00"
     },
     {
       "id": "alexandria-wildcard-temple-of-knowledge",
       "name": "WILDCARD 5 — Temple of Knowledge",
-      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: monumental architectural illustration — classical columns, dramatic perspective, warm lamplight on stone, scrolls and books as decorative elements, sepia and amber palette with selective gold highlights. Mood: {MOOD}. Era: {ERA}. Dusty fresco pigments over porous stone texture. Slightly irregular linework, color bleeds at edges.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: monumental architectural illustration — classical columns, dramatic perspective, warm lamplight on stone, scrolls and books naturally present in the environment, sepia and amber palette with selective gold highlights. Mood: {MOOD}. Era: {ERA}. Dusty fresco pigments over porous stone texture. Slightly irregular linework, color bleeds at edges.",
       "style_anchors": [],
-      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
       "source_model": "openrouter/google/gemini-3-pro-image-preview",
       "quality_score": 1.0,
@@ -1021,14 +1021,14 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-16T20:58:23.844736+00:00"
+      "updated_at": "2026-03-17T23:44:38.150098+00:00"
     },
     {
       "id": "alexandria-wildcard-celestial-cartography",
       "name": "WILDCARD 4 — Celestial Cartography",
       "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: scientific cartographic illustration — compass roses, parchment tones, precise linework, sepia and aged-gold palette, navigational chart aesthetics, hand-drawn map detail. Mood: {MOOD}. Era: {ERA}. Copperplate hatchwork pressed into warm parchment grain. Slightly irregular linework, color bleeds at edges.",
       "style_anchors": [],
-      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
       "source_model": "openrouter/google/gemini-3-pro-image-preview",
       "quality_score": 1.0,
@@ -1047,14 +1047,14 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-16T20:58:23.844733+00:00"
+      "updated_at": "2026-03-17T23:44:38.150095+00:00"
     },
     {
       "id": "alexandria-wildcard-illuminated-manuscript",
       "name": "WILDCARD 3 — Illuminated Manuscript",
-      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: medieval illuminated manuscript — gold leaf accents, ultramarine blue and vermilion, intricate marginalia patterns, flat perspective with symbolic scale, rich decorative detail. Mood: {MOOD}. Era: {ERA}. Gold leaf flecks over vellum, pigment edges irregular. Slightly irregular linework, color bleeds at edges.",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: medieval illuminated manuscript — gold leaf accents, ultramarine blue and vermilion, illuminated patterning within garments, objects, and architecture, flat perspective with symbolic scale, richly patterned scene detail. Mood: {MOOD}. Era: {ERA}. Gold leaf flecks over vellum, pigment edges irregular. Slightly irregular linework, color bleeds at edges.",
       "style_anchors": [],
-      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
       "source_model": "openrouter/google/gemini-3-pro-image-preview",
       "quality_score": 1.0,
@@ -1073,14 +1073,14 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-16T20:58:23.844731+00:00"
+      "updated_at": "2026-03-17T23:44:38.150092+00:00"
     },
     {
       "id": "alexandria-wildcard-pre-raphaelite-garden",
       "name": "WILDCARD 2 — Pre-Raphaelite Garden",
       "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: lush Pre-Raphaelite garden painting — rose gardens, jewel-rich foliage, flowing drapery, Waterhouse tenderness, warm evening light. Mood: {MOOD}. Era: {ERA}. Layered watercolor glazes over gesso, petals brushed by hand. Slightly irregular linework, color bleeds at edges.",
       "style_anchors": [],
-      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
       "source_model": "openrouter/google/gemini-3-pro-image-preview",
       "quality_score": 1.0,
@@ -1100,14 +1100,14 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-17T12:12:39.683202+00:00"
+      "updated_at": "2026-03-17T23:44:38.150083+00:00"
     },
     {
       "id": "alexandria-wildcard-edo-meets-alexandria",
       "name": "WILDCARD 1 — Dramatic Graphic Novel",
       "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: dramatic graphic novel engraving — bold parallel crosshatching, heavy black outlines, expressive faces in close-up, deep black with warm amber and burnt orange highlights, swirling dramatic sky. Mood: {MOOD}. Era: {ERA}. Dry-brush ink drag with rough paper tooth. Slightly irregular linework, color bleeds at edges.",
       "style_anchors": [],
-      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
       "source_model": "openrouter/google/gemini-3-pro-image-preview",
       "quality_score": 1.0,
@@ -1127,7 +1127,7 @@
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-16T20:58:23.844726+00:00"
+      "updated_at": "2026-03-17T23:44:38.150081+00:00"
     },
     {
       "id": "3cb72b01-44c2-48bf-8aaf-c1d5f9923822",

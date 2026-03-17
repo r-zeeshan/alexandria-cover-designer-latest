@@ -33,6 +33,7 @@ const VARIANT_COMPOSITION_DIRECTIVES = [
 ];
 const CENTRAL_SAFE_AREA_DIRECTIVE = 'Keep all important figures, faces, hands, props, and horizon lines fully contained inside an implied centered circle in the middle of the image.';
 const QUIET_CORNER_DIRECTIVE = 'Leave the outer corners as quiet background only. No cut-off subject at the edges.';
+const SCENE_ONLY_STYLE_DIRECTIVE = 'Express style only through brushwork, palette, costume, props, and environmental details inside the scene. Never create a border, emblem, halo, wreath, sunburst, radiating backdrop, or floating ornament.';
 const NO_INTERNAL_FRAME_DIRECTIVE = 'Do not draw any visible circle outline, border, ring, halo, medallion edge, wreath, floral surround, sunburst, radial rays, plaque, banner, decorative ornament, or lettering.';
 const PREFERRED_DEFAULT_MODELS = [
   'openrouter/google/gemini-3-pro-image-preview',
@@ -90,11 +91,19 @@ const PROMPT_CONFLICT_REPLACEMENTS = [
   [/\bcircular vignette composition\b/gi, 'centered focal composition inside an implied circle'],
   [/\bcircular medallion-ready composition\b/gi, 'centered focal composition inside an implied circle'],
   [/\blatin labels?\s+in\s+copperplate\s+script\b/gi, 'scientific precision and careful linework'],
-  [/\bintertwining vines and birds framing the scene\b/gi, 'intertwining vine and bird motifs woven into fabrics and background details'],
-  [/\binterlaced knotwork framing the scene\b/gi, 'interlaced knotwork motifs woven into textiles and carved details'],
-  [/\bintricate geometric borders\b/gi, 'intricate geometric patterning in textiles and architecture'],
-  [/\bintricate marginalia patterns\b/gi, 'intricate manuscript patterning within fabrics and objects'],
+  [/\bintertwining vines and birds framing the scene\b/gi, 'intertwining vine and bird motifs woven into fabrics, wallpaper, and garden details inside the scene'],
+  [/\binterlaced knotwork framing the scene\b/gi, 'interlaced knotwork motifs worked into textiles, stone carving, and metalwork inside the scene'],
+  [/\bintricate geometric borders\b/gi, 'intricate geometric patterning in textiles, ceramics, and architecture'],
+  [/\bintricate marginalia patterns\b/gi, 'illuminated patterning within garments, objects, and architecture'],
   [/\bsea monsters and ships in margins\b/gi, 'ships and sea-creature motifs worked into the distant waters and sky'],
+  [/\bgold outlines\b/gi, 'restrained antique-gold accents on garments, objects, and architecture'],
+  [/\bmucha-inspired decorative elegance\b/gi, 'Mucha-inspired graceful figure styling'],
+  [/\bnature-integrated composition\b/gi, 'botanical motifs embedded within clothing, foliage, and architecture inside the scene'],
+  [/\bspiralling decorative accents\b/gi, 'spiralling motif details within textiles, carved surfaces, and props'],
+  [/\bgeometric sunburst and zigzag patterns in backgrounds\b/gi, 'geometric zigzag rhythm within costumes, architecture, and props'],
+  [/\bcompass rose elements\b/gi, 'navigational instruments and chart motifs within the scene'],
+  [/\bgold filigree\b/gi, 'restrained gold detailing on garments, ceramics, and architecture'],
+  [/\bclassical architectural framing\b/gi, 'classical architecture rising behind the subject'],
   [/\bscrolls and books as decorative elements\b/gi, 'scrolls and books naturally present in the environment'],
 ];
 const PROMPT_CONFLICT_REMOVALS = [
@@ -121,6 +130,9 @@ const PROMPT_CONFLICT_REMOVALS = [
   /(?<!no )\bfloral\s+(?:frame|border|surround)\b/gi,
   /(?<!no )\bsunburst\b/gi,
   /(?<!no )\bradial\s+rays\b/gi,
+  /\bdecorative\s+elegance\b/gi,
+  /\bdecorative\s+richness\b/gi,
+  /\bdecorative\s+accents?\b/gi,
   /(?<!no )\bornamental arches?\b/gi,
   /\bmarginalia(?:\s+patterns?)?\b/gi,
   /(?<!no )\bgeometric\s+borders?\b/gi,
@@ -1218,7 +1230,7 @@ function resolvePrompt(templateObj, book, customPrompt, sceneVal, moodVal, eraVa
 function variantCompositionDirective(variantNumber) {
   const index = Math.max(0, (Number(variantNumber || 1) - 1)) % VARIANT_COMPOSITION_DIRECTIVES.length;
   const directive = VARIANT_COMPOSITION_DIRECTIVES[index] || VARIANT_COMPOSITION_DIRECTIVES[0];
-  return `${directive} ${CENTRAL_SAFE_AREA_DIRECTIVE} ${QUIET_CORNER_DIRECTIVE} ${NO_INTERNAL_FRAME_DIRECTIVE}`.trim();
+  return `${directive} ${CENTRAL_SAFE_AREA_DIRECTIVE} ${QUIET_CORNER_DIRECTIVE} ${SCENE_ONLY_STYLE_DIRECTIVE} ${NO_INTERNAL_FRAME_DIRECTIVE}`.trim();
 }
 
 function appendVariantCompositionDirective(promptText, variantNumber) {

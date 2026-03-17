@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import uuid
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -33,6 +34,10 @@ SUPPORTED_REUSABLE_PLACEHOLDERS: tuple[str, ...] = (
 ALEXANDRIA_BASE_NEGATIVE_PROMPT = (
     "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, "
     "no labels, no watermarks, no signatures, no inscriptions of any kind. "
+    "No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, "
+    "no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, "
+    "no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, "
+    "no title-page layout. "
     "No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, "
     "no airbrushed surfaces, no seamless blending, no uniform color fills, "
     "no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, "
@@ -91,6 +96,98 @@ def _append_organic_quality(*parts: str) -> str:
         tokens.append(organic)
     return " ".join(tokens).strip()
 
+
+_SCENE_ONLY_STYLE_REPLACEMENTS: tuple[tuple[str, str], ...] = (
+    (
+        r"\bintertwining vines and birds framing the scene\b",
+        "intertwining vine and bird motifs woven into fabrics, wallpaper, and garden details inside the scene",
+    ),
+    (
+        r"\binterlaced knotwork framing the scene\b",
+        "interlaced knotwork motifs worked into textiles, stone carving, and metalwork inside the scene",
+    ),
+    (
+        r"\bintricate geometric borders\b",
+        "intricate geometric patterning in textiles, ceramics, and architecture",
+    ),
+    (
+        r"\bintricate marginalia patterns\b",
+        "illuminated patterning within garments, objects, and architecture",
+    ),
+    (
+        r"\bgold leaf mosaic patterns integrated with realistic figures\b",
+        "gold mosaic textures limited to garments, walls, and objects behind the figures",
+    ),
+    (
+        r"\bgold outlines\b",
+        "restrained antique-gold accents on garments, objects, and architecture",
+    ),
+    (
+        r"\bmucha-inspired decorative elegance\b",
+        "Mucha-inspired graceful figure styling",
+    ),
+    (
+        r"\bnature-integrated composition\b",
+        "botanical motifs embedded within clothing, foliage, and architecture inside the scene",
+    ),
+    (
+        r"\bspiralling decorative accents\b",
+        "spiralling motif details within textiles, carved surfaces, and props",
+    ),
+    (
+        r"\bscrolls and books as decorative elements\b",
+        "scrolls and books naturally present in the environment",
+    ),
+    (
+        r"\bcompass rose elements\b",
+        "navigational instruments and chart motifs within the scene",
+    ),
+    (
+        r"\bsea monsters and ships in margins\b",
+        "ships and sea-creature motifs worked into the distant waters and sky",
+    ),
+    (
+        r"\bflat decorative perspective\b",
+        "layered miniature-like spatial stacking",
+    ),
+    (
+        r"\bgold filigree\b",
+        "restrained gold detailing on garments, ceramics, and architecture",
+    ),
+    (
+        r"\bclassical architectural framing\b",
+        "classical architecture rising behind the subject",
+    ),
+    (
+        r"\bgeometric sunburst and zigzag patterns in backgrounds\b",
+        "geometric zigzag rhythm within costumes, architecture, and props",
+    ),
+    (
+        r"\brich decorative detail\b",
+        "richly patterned scene detail",
+    ),
+)
+
+_SCENE_ONLY_STYLE_REMOVALS: tuple[str, ...] = (
+    r"\bdecorative\s+elegance\b",
+    r"\bdecorative\s+richness\b",
+    r"\bdecorative\s+accents?\b",
+)
+
+
+def _normalize_scene_only_style_text(text: str) -> str:
+    token = " ".join(str(text or "").split()).strip()
+    if not token:
+        return ""
+    for pattern, replacement in _SCENE_ONLY_STYLE_REPLACEMENTS:
+        token = re.sub(pattern, replacement, token, flags=re.IGNORECASE)
+    for pattern in _SCENE_ONLY_STYLE_REMOVALS:
+        token = re.sub(pattern, " ", token, flags=re.IGNORECASE)
+    token = re.sub(r"\s+", " ", token)
+    token = re.sub(r"\s+,", ",", token)
+    token = re.sub(r",\s*,+", ", ", token)
+    return token.strip(" ,.;:")
+
 ALEXANDRIA_BASE_PROMPT_TEMPLATES: dict[str, str] = {
     "alexandria-base-classical-devotion": (
         "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Rich oil painting, "
@@ -148,7 +245,9 @@ def _scene_first_prompt(
     texture_clause: str = "",
 ) -> str:
     del style_section, full_canvas
-    rendered_section = f"{style_label} — {style_description}".strip(" —")
+    rendered_label = _normalize_scene_only_style_text(style_label)
+    rendered_description = _normalize_scene_only_style_text(style_description)
+    rendered_section = f"{rendered_label} — {rendered_description}".strip(" —")
     prompt = (
         "Book cover illustration — no text, no lettering. "
         f"Scene: {{SCENE}}. STYLE: {rendered_section}. Mood: {{MOOD}}. Era: {{ERA}}."
@@ -413,8 +512,8 @@ ALEXANDRIA_PROMPT_CATALOG: tuple[dict[str, object], ...] = (
         "name": "Art Nouveau Poster",
         "style_label": "Art Nouveau illustration",
         "style_description": (
-            "sinuous organic linework, flowing hair and fabric, jewel-tone flat colours with gold outlines, "
-            "Mucha-inspired decorative elegance, nature-integrated composition"
+            "sinuous linework, graceful figures, jewel-tone gouache, restrained antique-gold accents inside "
+            "clothing and architecture, botanical motifs kept inside the scene"
         ),
         "notes": "Alexandria wildcard prompt. Art Nouveau elegance with flowing decorative rhythm.",
         "tags": ["alexandria", "wildcard", "art-nouveau-poster", "illustration", "graphic"],
@@ -537,8 +636,8 @@ ALEXANDRIA_PROMPT_CATALOG: tuple[dict[str, object], ...] = (
         "name": "Ottoman Illumination",
         "style_label": "Ottoman illuminated manuscript",
         "style_description": (
-            "turquoise and coral palette with gold filigree, tulip and carnation motifs, flat decorative "
-            "perspective, intricate geometric borders, courtly mineral-pigment elegance"
+            "turquoise and coral palette, restrained gold detail inside garments and architecture, tulip and "
+            "carnation motifs, miniature-painting depth, courtly mineral pigments"
         ),
         "notes": "Alexandria wildcard prompt. Ottoman courtly illumination with vibrant mineral ornament.",
         "tags": ["alexandria", "wildcard", "ottoman-illumination", "eastern", "cross-cultural"],
@@ -619,8 +718,8 @@ ALEXANDRIA_PROMPT_CATALOG: tuple[dict[str, object], ...] = (
         "name": "William Morris Textile",
         "style_label": "William Morris Arts and Crafts",
         "style_description": (
-            "intertwining vines and birds framing the scene, muted sage green and indigo palette, hand-printed "
-            "woodblock texture, medieval-inspired naturalism, Kelmscott Press decorative richness"
+            "vine and bird motifs inside fabrics and wallpaper, muted sage green and indigo palette, hand-printed "
+            "woodblock texture, medieval naturalism"
         ),
         "notes": "Alexandria wildcard prompt. Arts and Crafts ornament with hand-printed texture.",
         "tags": ["alexandria", "wildcard", "william-morris-textile", "decorative", "ornamental"],
@@ -643,8 +742,8 @@ ALEXANDRIA_PROMPT_CATALOG: tuple[dict[str, object], ...] = (
         "name": "Celtic Knotwork",
         "style_label": "Celtic illuminated manuscript",
         "style_description": (
-            "interlaced knotwork framing the scene, Book of Kells-inspired zoomorphic details, deep forest green "
-            "and burnished gold palette, spiralling decorative accents, insular art precision"
+            "knotwork motifs inside textiles and carved objects, Book of Kells zoomorphic detail, deep forest "
+            "green and burnished gold palette, insular manuscript precision"
         ),
         "notes": "Alexandria wildcard prompt. Celtic manuscript knotwork with mythic illuminated precision.",
         "tags": ["alexandria", "wildcard", "celtic-knotwork", "decorative", "ornamental"],
@@ -667,8 +766,8 @@ ALEXANDRIA_PROMPT_CATALOG: tuple[dict[str, object], ...] = (
         "name": "Antique Map",
         "style_label": "antique cartographic illustration",
         "style_description": (
-            "aged parchment texture, hand-engraved linework, sepia and faded indigo palette, compass rose "
-            "elements, sea monsters and ships in margins, Age-of-Exploration wonder"
+            "aged parchment texture, hand-engraved linework, sepia and faded indigo palette, chart instruments "
+            "inside the scene, voyage-era wonder"
         ),
         "notes": "Alexandria wildcard prompt. Antique map wonder with engraved exploratory drama.",
         "tags": ["alexandria", "wildcard", "antique-map", "cartographic", "scientific"],

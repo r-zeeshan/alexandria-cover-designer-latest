@@ -226,6 +226,9 @@ def test_seeded_alexandria_base_prompts_use_prompt65_templates(tmp_path: Path, m
         assert "no airbrushed surfaces" in prompt.negative_prompt.lower()
         assert "no seamless blending" in prompt.negative_prompt.lower()
         assert "no uniform color fills" in prompt.negative_prompt.lower()
+        assert "no visible circle outline" in prompt.negative_prompt.lower()
+        assert "no wreath" in prompt.negative_prompt.lower()
+        assert "no sunburst" in prompt.negative_prompt.lower()
         assert prompt.negative_prompt == pl.ALEXANDRIA_BASE_NEGATIVE_PROMPT
 
     assert "STYLE: Rich oil painting, hyper-detailed botanical precision." in prompts["alexandria-base-classical-devotion"].prompt_template
@@ -300,6 +303,17 @@ def test_seeded_alexandria_wildcards_use_prompt65_compact_templates(tmp_path: Pa
     assert "lush Pre-Raphaelite garden painting" in prompt_by_id["alexandria-wildcard-pre-raphaelite-garden"].prompt_template
     assert prompt_by_id["alexandria-wildcard-vintage-travel-poster"].name == "Vintage Travel Poster"
     assert "bold 1930s vintage travel poster" in prompt_by_id["alexandria-wildcard-vintage-travel-poster"].prompt_template
+    art_nouveau = prompt_by_id["alexandria-wildcard-art-nouveau-poster"].prompt_template.lower()
+    celtic = prompt_by_id["alexandria-wildcard-celtic-knotwork"].prompt_template.lower()
+    morris = prompt_by_id["alexandria-wildcard-william-morris-textile"].prompt_template.lower()
+    illuminated = prompt_by_id["alexandria-wildcard-illuminated-manuscript"].prompt_template.lower()
+    assert "gold outlines" not in art_nouveau
+    assert "decorative elegance" not in art_nouveau
+    assert "nature-integrated composition" not in art_nouveau
+    assert "framing the scene" not in celtic
+    assert "spiralling decorative accents" not in celtic
+    assert "framing the scene" not in morris
+    assert "marginalia patterns" not in illuminated
 
 
 def test_build_prompt_best_prompts_add_anchor(tmp_path: Path, monkeypatch):

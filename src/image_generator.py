@@ -124,11 +124,17 @@ NO_ORNAMENT_GUARDRAIL = (
     "no wreath, no floral surround, no sunburst, no radial rays, no plaque, no banner, "
     "no cartouche, no filigree, no ornamental flourishes."
 )
+SCENE_ONLY_STYLE_GUARDRAIL = (
+    "Express style only through brushwork, palette, costume, props, and environmental details inside the scene, "
+    "never as a border, emblem, halo, wreath, sunburst, radiating backdrop, or floating ornament."
+)
 VIVID_COLOR_GUARDRAIL = (
     "Vivid painterly palette with strong contrast and luminous highlights."
 )
 GENERATION_GUARDRAIL = " ".join(
-    part for part in (STRICT_SCENE_GUARDRAIL, NO_ORNAMENT_GUARDRAIL, VIVID_COLOR_GUARDRAIL) if part
+    part
+    for part in (STRICT_SCENE_GUARDRAIL, NO_ORNAMENT_GUARDRAIL, SCENE_ONLY_STYLE_GUARDRAIL, VIVID_COLOR_GUARDRAIL)
+    if part
 )
 GENERIC_SCENE_PATTERN = re.compile(
     r'A pivotal dramatic moment from the literary work\s+"[^"]*"'
@@ -188,6 +194,7 @@ ALEXANDRIA_RENDERING_PREFIX = (
 ALEXANDRIA_SYSTEM_PROMPT = (
     "Generate artwork only. No text, letters, words, or typography of any kind. "
     "Keep the entire subject and action inside an implied centered circle with quiet outer corners; do not draw the circle itself. "
+    "Express style only through brushwork, palette, costume, props, and environmental details inside the scene. "
     "Return a single image with no borders, frames, plaques, banners, visible circle outlines, wreaths, floral surrounds, "
     "sunbursts, radial rays, or internal ornaments."
 )
@@ -249,23 +256,55 @@ _PROMPT_REPLACEMENTS: tuple[tuple[str, str], ...] = (
     (r"\blatin labels?\s+in\s+copperplate\s+script\b", "scientific precision and careful linework"),
     (
         r"\bintertwining vines and birds framing the scene\b",
-        "intertwining vine and bird motifs woven into fabrics and background details",
+        "intertwining vine and bird motifs woven into fabrics, wallpaper, and garden details inside the scene",
     ),
     (
         r"\binterlaced knotwork framing the scene\b",
-        "interlaced knotwork motifs woven into textiles and carved details",
+        "interlaced knotwork motifs worked into textiles, stone carving, and metalwork inside the scene",
     ),
     (
         r"\bintricate geometric borders\b",
-        "intricate geometric patterning in textiles and architecture",
+        "intricate geometric patterning in textiles, ceramics, and architecture",
     ),
     (
         r"\bintricate marginalia patterns\b",
-        "intricate manuscript patterning within fabrics and objects",
+        "illuminated patterning within garments, objects, and architecture",
     ),
     (
         r"\bsea monsters and ships in margins\b",
         "ships and sea-creature motifs worked into the distant waters and sky",
+    ),
+    (
+        r"\bgold outlines\b",
+        "restrained antique-gold accents on garments, objects, and architecture",
+    ),
+    (
+        r"\bmucha-inspired decorative elegance\b",
+        "Mucha-inspired graceful figure styling",
+    ),
+    (
+        r"\bnature-integrated composition\b",
+        "botanical motifs embedded within clothing, foliage, and architecture inside the scene",
+    ),
+    (
+        r"\bspiralling decorative accents\b",
+        "spiralling motif details within textiles, carved surfaces, and props",
+    ),
+    (
+        r"\bgeometric sunburst and zigzag patterns in backgrounds\b",
+        "geometric zigzag rhythm within costumes, architecture, and props",
+    ),
+    (
+        r"\bcompass rose elements\b",
+        "navigational instruments and chart motifs within the scene",
+    ),
+    (
+        r"\bgold filigree\b",
+        "restrained gold detailing on garments, ceramics, and architecture",
+    ),
+    (
+        r"\bclassical architectural framing\b",
+        "classical architecture rising behind the subject",
     ),
     (
         r"\bscrolls and books as decorative elements\b",
@@ -297,6 +336,9 @@ _PROMPT_REMOVAL_PATTERNS: tuple[str, ...] = (
     r"(?<!no )\bfloral\s+(?:frame|border|surround)\b",
     r"(?<!no )\bsunburst\b",
     r"(?<!no )\bradial\s+rays\b",
+    r"\bdecorative\s+elegance\b",
+    r"\bdecorative\s+richness\b",
+    r"\bdecorative\s+accents?\b",
     r"(?<!no )\bornamental arches?\b",
     r"\bmarginalia(?:\s+patterns?)?\b",
     r"(?<!no )\bgeometric\s+borders?\b",
@@ -555,6 +597,8 @@ def _guardrailed_prompt(prompt: str) -> str:
         for marker in ("no internal border", "no decorative ring", "no plaque", "no banner", "no ornament")
     ):
         prefixes.append(NO_ORNAMENT_GUARDRAIL)
+    if "express style only through" not in lowered and "style only through" not in lowered:
+        prefixes.append(SCENE_ONLY_STYLE_GUARDRAIL)
     if "vivid painterly palette" not in lowered and "vivid, high-saturation painterly palette" not in lowered:
         prefixes.append(VIVID_COLOR_GUARDRAIL)
     text = " ".join(part for part in [*prefixes, base] if part).strip()
