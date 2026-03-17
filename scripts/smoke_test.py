@@ -25,6 +25,17 @@ BANNED_PROMPT_FRAGMENTS = [
     "no circular frame",
     "full rectangular canvas",
 ]
+MEDIUM_STARTS = [
+    "Oil paint",
+    "Transparent watercolour",
+    "Gouache and ink",
+    "Pen and ink",
+    "Soft pastel",
+    "Hand-cut woodblock",
+    "Stone lithograph",
+    "Egg tempera",
+    "Hand-painted illustration",
+]
 MAX_PROMPT_LENGTH = 1050
 
 
@@ -102,8 +113,12 @@ def check_recent_jobs(
         for banned in BANNED_PROMPT_FRAGMENTS:
             if banned in prompt.lower():
                 failures.append(f"{token}: prompt contains banned fragment '{banned}'")
-        if "not digital art" not in prompt.lower():
-            failures.append(f"{token}: rendering suffix missing from prompt")
+        if not any(prompt.startswith(prefix) for prefix in MEDIUM_STARTS):
+            failures.append(f"{token}: prompt does not start with a medium opener")
+        if "important rendering style" in prompt.lower():
+            failures.append(f"{token}: old rendering prefix still present")
+        if "visible brushstrokes" not in prompt.lower() and "pigment variation" not in prompt.lower():
+            failures.append(f"{token}: texture closer missing from prompt")
 
         if not negative_prompt:
             failures.append(f"{token}: negative_prompt is empty")

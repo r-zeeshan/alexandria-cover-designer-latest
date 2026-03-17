@@ -40,7 +40,11 @@ def test_smoke_script_checks_catalog_and_recent_jobs(monkeypatch):
                             "result": {
                                 "results": [
                                     {
-                                        "prompt": "Scene: Emma at Hartfield. STYLE: Romantic Realism. Not digital art.",
+                                        "prompt": (
+                                            "Oil paint on stretched linen canvas, visible impasto brushwork throughout — "
+                                            "Scene: Emma at Hartfield. STYLE: Romantic Realism. "
+                                            "Surface shows natural material texture: visible brushstrokes, pigment variation, paper grain."
+                                        ),
                                         "negative_prompt": "no vector art, no airbrushed surfaces, no seamless blending, no uniform color fills",
                                     }
                                 ]
@@ -100,4 +104,4 @@ def test_smoke_script_reports_missing_negative_prompt_terms(monkeypatch):
     jobs_ok, messages = smoke.check_recent_jobs("https://example.test", "classics")
     assert jobs_ok is False
     assert any("negative_prompt missing 'airbrushed'" in message for message in messages)
-    assert any("rendering suffix missing from prompt" in message for message in messages)
+    assert any("prompt does not start with a medium opener" in message for message in messages)

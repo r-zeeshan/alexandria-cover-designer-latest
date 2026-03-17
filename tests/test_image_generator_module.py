@@ -412,11 +412,8 @@ def test_openrouter_modalities_and_429_retry(tmp_path: Path, monkeypatch):
     assert calls[-1]["json"]["modalities"] == ["image", "text"]
     system_prompt = calls[-1]["json"]["messages"][0]["content"]
     assert system_prompt == ig.ALEXANDRIA_SYSTEM_PROMPT
-    assert "visible individual brushstrokes or pen strokes" in system_prompt
-    assert "paper or canvas grain texture" in system_prompt
-    assert "slight color variations within painted areas" in system_prompt
-    assert "natural edge irregularities where colors meet" in system_prompt
-    assert "scan of a REAL physical artwork." in system_prompt
+    assert "No text, letters, words, or typography" in system_prompt
+    assert "no borders or frames" in system_prompt
 
     calls.clear()
     flux = ig.OpenRouterProvider(model="flux-2-pro", api_key="k", runtime=runtime)
@@ -458,31 +455,62 @@ def test_provider_payloads_include_negative_prompt_and_system_prompt(tmp_path: P
     monkeypatch.setattr(ig.requests, "post", _fake_post)
     monkeypatch.setattr(ig.requests, "get", _fake_get)
 
-    assert ig.OpenAIProvider(model="gpt-image-1", api_key="k", runtime=runtime).generate("p", "n", 64, 64).size == (48, 48)
-    assert ig.OpenRouterProvider(model="flux-2-pro", api_key="k", runtime=runtime).generate("p", "n", 64, 64).size == (48, 48)
-    assert ig.FalProvider(model="fal/flux-pro", api_key="k", runtime=runtime).generate("p", "n", 64, 64).size == (48, 48)
-    assert ig.ReplicateProvider(model="version", api_key="k", runtime=runtime).generate("p", "n", 64, 64).size == (48, 48)
-    assert ig.GoogleCloudProvider(model="imagen-4", api_key="k", runtime=runtime).generate("p", "n", 64, 64).size == (48, 48)
+    assert (
+        ig.OpenAIProvider(model="gpt-image-1", api_key="k", runtime=runtime).generate(
+            "p", "n", 64, 64, style_id="alexandria-base-romantic-realism"
+        ).size
+        == (48, 48)
+    )
+    assert (
+        ig.OpenRouterProvider(model="flux-2-pro", api_key="k", runtime=runtime).generate(
+            "p", "n", 64, 64, style_id="alexandria-wildcard-vintage-travel-poster"
+        ).size
+        == (48, 48)
+    )
+    assert (
+        ig.FalProvider(model="fal/flux-pro", api_key="k", runtime=runtime).generate(
+            "p", "n", 64, 64, style_id="alexandria-wildcard-persian-miniature"
+        ).size
+        == (48, 48)
+    )
+    assert (
+        ig.ReplicateProvider(model="version", api_key="k", runtime=runtime).generate(
+            "p", "n", 64, 64, style_id="alexandria-wildcard-maritime-chart"
+        ).size
+        == (48, 48)
+    )
+    assert (
+        ig.GoogleCloudProvider(model="imagen-4", api_key="k", runtime=runtime).generate(
+            "p", "n", 64, 64, style_id="alexandria-wildcard-ukiyo-e"
+        ).size
+        == (48, 48)
+    )
 
     openai_payload = next(call["json"] for call in post_calls if "api.openai.com" in str(call["url"]))
-    assert ig.ALEXANDRIA_SYSTEM_PROMPT in str(openai_payload["prompt"])
-    assert "Avoid: n" in str(openai_payload["prompt"])
+    assert str(openai_payload["prompt"]).startswith("Oil paint on stretched linen canvas")
+    assert ig.PHYSICAL_TEXTURE_CLOSER in str(openai_payload["prompt"])
+    assert ig.PROVIDER_DIGITAL_AVOIDANCE_LINE in str(openai_payload["prompt"])
+    assert ig.ALEXANDRIA_SYSTEM_PROMPT not in str(openai_payload["prompt"])
+    assert "IMPORTANT RENDERING STYLE" not in str(openai_payload["prompt"])
 
     openrouter_payload = next(call["json"] for call in post_calls if "openrouter.ai" in str(call["url"]))
     assert openrouter_payload["messages"][0]["content"] == ig.ALEXANDRIA_SYSTEM_PROMPT
-    assert "Avoid: n" in str(openrouter_payload["messages"][1]["content"])
+    assert str(openrouter_payload["messages"][1]["content"]).startswith("Stone lithograph on heavy rag paper")
+    assert ig.PHYSICAL_TEXTURE_CLOSER in str(openrouter_payload["messages"][1]["content"])
+    assert ig.PROVIDER_DIGITAL_AVOIDANCE_LINE in str(openrouter_payload["messages"][1]["content"])
 
     fal_payload = next(call["json"] for call in post_calls if "fal.run" in str(call["url"]))
     assert fal_payload["negative_prompt"] == "n"
-    assert ig.ALEXANDRIA_SYSTEM_PROMPT in str(fal_payload["prompt"])
+    assert str(fal_payload["prompt"]).startswith("Gouache and ink on textured watercolour paper")
 
     replicate_payload = next(call["json"] for call in post_calls if "replicate.com/v1/predictions" in str(call["url"]))
     assert replicate_payload["input"]["negative_prompt"] == "n"
-    assert ig.ALEXANDRIA_SYSTEM_PROMPT in str(replicate_payload["input"]["prompt"])
+    assert str(replicate_payload["input"]["prompt"]).startswith("Pen and ink with watercolour wash")
 
     google_payload = next(call["json"] for call in post_calls if "generativelanguage.googleapis.com" in str(call["url"]))
     assert google_payload["system_instruction"]["parts"][0]["text"] == ig.ALEXANDRIA_SYSTEM_PROMPT
-    assert "Avoid: n" in str(google_payload["contents"][0]["parts"][0]["text"])
+    assert str(google_payload["contents"][0]["parts"][0]["text"]).startswith("Hand-cut woodblock print on Japanese washi paper")
+    assert ig.PROVIDER_DIGITAL_AVOIDANCE_LINE in str(google_payload["contents"][0]["parts"][0]["text"])
 
 
 def test_provider_key_and_error_paths():
@@ -595,6 +623,27 @@ def test_generate_image_prefixed_model_respects_equivalent_provider_override(tmp
     assert output
     assert captured["provider"] == "google"
     assert captured["model"] == "gemini-3-pro-image-preview"
+
+
+def test_compose_provider_prompt_text_is_medium_first_and_capped():
+    prompt = (
+        "Book cover illustration only — no text. Scene: "
+        + ("A crowded regency ballroom with Emma watching the room in candlelight. " * 30)
+    )
+    composed = ig._compose_provider_prompt_text(
+        prompt,
+        negative_prompt="neg",
+        seed=7,
+        width=1536,
+        height=1024,
+        style_id="alexandria-wildcard-vintage-travel-poster",
+    )
+
+    assert composed.startswith("Stone lithograph on heavy rag paper")
+    assert ig.PHYSICAL_TEXTURE_CLOSER in composed
+    assert ig.PROVIDER_DIGITAL_AVOIDANCE_LINE in composed
+    assert "IMPORTANT RENDERING STYLE" not in composed
+    assert len(composed) <= ig.MODEL_PROMPT_CHAR_LIMIT
 
 
 def test_generate_image_skips_hard_content_reject_for_synthetic_fallback(tmp_path: Path, monkeypatch):
@@ -1333,7 +1382,18 @@ def test_generate_one_artifact_error_retries_with_hardened_prompt(tmp_path: Path
     assert ig.ARTIFACT_RETRY_APPEND in seen_prompts[1]
     assert "Mandatory output rules" not in seen_prompts[1]
     assert "no frame" not in seen_prompts[1].lower()
-    assert len(ig._apply_rendering_prefix(seen_prompts[1])) <= ig.MODEL_PROMPT_CHAR_LIMIT
+    assert (
+        len(
+            ig._compose_provider_prompt_text(
+                seen_prompts[1],
+                negative_prompt="neg",
+                style_id="alexandria-base-romantic-realism",
+                width=1024,
+                height=1536,
+            )
+        )
+        <= ig.MODEL_PROMPT_CHAR_LIMIT
+    )
     assert ig.ARTIFACT_RETRY_APPEND in result.prompt
 
 
@@ -1399,18 +1459,27 @@ def test_artifact_retry_prompt_uses_original_text_and_caps_total_length():
     assert "no medallion ring" not in retry_prompt_1.lower()
     assert "no frame" not in retry_prompt_1.lower()
     assert "no filigree" not in retry_prompt_1.lower()
-    assert len(ig._apply_rendering_prefix(retry_prompt_1)) <= ig.MODEL_PROMPT_CHAR_LIMIT
+    assert (
+        len(
+            ig._compose_provider_prompt_text(
+                retry_prompt_1,
+                negative_prompt="neg",
+                style_id="alexandria-base-romantic-realism",
+                width=1024,
+                height=1536,
+            )
+        )
+        <= ig.MODEL_PROMPT_CHAR_LIMIT
+    )
 
 
-def test_apply_rendering_prefix_appends_short_rendering_suffix():
+def test_apply_rendering_prefix_is_noop_deprecated():
     prompt = "Book cover illustration only — no text. Scene: Ishmael on the Pequod at sunset."
     effective = ig._apply_rendering_prefix(prompt)
 
-    assert effective.startswith(prompt)
-    assert not effective.startswith("IMPORTANT RENDERING")
-    assert effective.endswith(ig.ALEXANDRIA_RENDERING_PREFIX.strip())
-    assert "vintage hand-painted book plate" in effective[-200:]
-    assert "gouache and ink on textured paper" in effective[-200:]
+    assert effective == prompt
+    assert "IMPORTANT RENDERING" not in effective
+    assert "vintage hand-painted book plate" not in effective
 
 
 def test_retry_failures_and_plan_helpers(tmp_path: Path, monkeypatch):

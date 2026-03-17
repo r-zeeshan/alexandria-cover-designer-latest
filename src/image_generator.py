@@ -170,19 +170,67 @@ ALEXANDRIA_NEGATIVE_PROMPT = (
     "no neon colours, no cartoonish style, no anime, no blurry, no white backgrounds."
 )
 ALEXANDRIA_RENDERING_PREFIX = (
+    # DEPRECATED — medium-first assembly in _compose_provider_prompt_text() replaces this.
     "Illustrated as a vintage hand-painted book plate — "
     "gouache and ink on textured paper, visible brushstrokes "
     "and pen lines throughout. Not digital art. "
 )
 ALEXANDRIA_SYSTEM_PROMPT = (
-    "You are generating artwork that looks like a physical painting or illustration "
-    "made by hand on real paper or canvas. The output MUST have: "
-    "visible individual brushstrokes or pen strokes, paper or canvas grain texture, "
-    "slight color variations within painted areas (not uniform fills), "
-    "natural edge irregularities where colors meet. "
-    "It must look like a scan of a REAL physical artwork. "
-    "Return ONLY the artwork. No text, no letters, no typography of any kind."
+    "Generate artwork only. No text, letters, words, or typography of any kind. "
+    "Return a single image with no borders or frames around it."
 )
+MEDIUM_OPENERS = {
+    "oil": "Oil paint on stretched linen canvas, visible impasto brushwork throughout —",
+    "watercolor": "Transparent watercolour on cold-pressed Arches paper, pigment granulation visible —",
+    "gouache": "Gouache and ink on textured watercolour paper, opaque layers with visible brush marks —",
+    "ink": "Pen and ink with watercolour wash on cream laid paper, cross-hatching and ink pooling visible —",
+    "pastel": "Soft pastel on toned paper, chalk dust and finger-blending marks visible —",
+    "woodcut": "Hand-cut woodblock print on Japanese washi paper, carved line marks and ink impression visible —",
+    "lithograph": "Stone lithograph on heavy rag paper, tonal crayon marks and printing grain visible —",
+    "egg_tempera": "Egg tempera on gessoed wood panel, fine crosshatched brushstrokes and luminous layering —",
+    "default": "Hand-painted illustration on textured paper, real brushstrokes and pigment variation visible —",
+}
+STYLE_TO_MEDIUM = {
+    "classical-devotion": "oil",
+    "romantic-realism": "oil",
+    "esoteric-mysticism": "egg_tempera",
+    "gothic-atmosphere": "ink",
+    "philosophical-gravitas": "oil",
+    "painterly-soft": "watercolor",
+    "painterly-detailed": "gouache",
+    "art-nouveau": "ink",
+    "ukiyo-e": "woodcut",
+    "stained-glass": "gouache",
+    "film-noir": "ink",
+    "botanical": "watercolor",
+    "illuminated-manuscript": "egg_tempera",
+    "vintage-travel-poster": "lithograph",
+    "soviet-constructivism": "lithograph",
+    "persian-miniature": "gouache",
+    "art-deco": "gouache",
+    "expressionist": "oil",
+    "surrealist": "oil",
+    "folk-art": "gouache",
+    "maritime-chart": "ink",
+    "celestial-map": "ink",
+    "scientific-illustration": "ink",
+    "fresco": "egg_tempera",
+    "mosaic": "egg_tempera",
+    "tapestry": "pastel",
+    "silhouette": "ink",
+    "propaganda-poster": "lithograph",
+    "children-book": "watercolor",
+    "comic-book": "ink",
+    "fantasy-map": "ink",
+    "romantic-landscape": "oil",
+    "gothic-horror": "ink",
+    "mythological": "oil",
+    "steampunk": "ink",
+}
+PHYSICAL_TEXTURE_CLOSER = (
+    "Surface shows natural material texture: visible brushstrokes, pigment variation, paper grain."
+)
+PROVIDER_DIGITAL_AVOIDANCE_LINE = "Do not render as digital art, vector, CGI, or 3D."
 _PROMPT_REMOVAL_PATTERNS: tuple[str, ...] = (
     r"(?<!no )\bcircular\s+medallion(?:\s+illustration)?\b",
     r"(?<!no )\bcircular\s+(?:frame|border|ring)\b",
@@ -399,9 +447,7 @@ def _truncate_scene_description(prompt: str, max_chars: int) -> str:
 def _fit_prompt_to_model_limit(prompt: str, *, suffix: str = "") -> str:
     base = " ".join(str(prompt or "").split()).strip()
     retry_suffix = " ".join(str(suffix or "").split()).strip()
-    rendering_suffix = " ".join(ALEXANDRIA_RENDERING_PREFIX.split()).strip()
-    separator_budget = 1 if rendering_suffix else 0
-    max_body_chars = max(1, MODEL_PROMPT_CHAR_LIMIT - len(rendering_suffix) - separator_budget)
+    max_body_chars = MODEL_PROMPT_CHAR_LIMIT
     if retry_suffix:
         reserved = len(retry_suffix) + (1 if base else 0)
         allowed_for_base = max(0, max_body_chars - reserved)
@@ -429,13 +475,9 @@ def _guardrailed_prompt(prompt: str) -> str:
 
 
 def _apply_rendering_prefix(prompt: str) -> str:
-    base = " ".join(str(prompt or "").split()).strip()
-    rendering_suffix = " ".join(ALEXANDRIA_RENDERING_PREFIX.split()).strip()
-    if not base:
-        return rendering_suffix
-    if not rendering_suffix:
-        return base
-    return f"{base} {rendering_suffix}"
+    # Deprecated compatibility shim; prompt mutation now happens only in
+    # _compose_provider_prompt_text().
+    return _fit_prompt_to_model_limit(_sanitize_prompt_text(prompt))
 
 
 def _prompt_reference_tokens(value: str) -> list[str]:
@@ -937,7 +979,15 @@ class BaseProvider:
         self.timeout = timeout
         self.runtime = runtime
 
-    def generate(self, prompt: str, negative_prompt: str, width: int, height: int, seed: int | None = None) -> Image.Image:
+    def generate(
+        self,
+        prompt: str,
+        negative_prompt: str,
+        width: int,
+        height: int,
+        seed: int | None = None,
+        style_id: str = "",
+    ) -> Image.Image:
         raise NotImplementedError
 
     def _assert_outbound_url(self, url: str) -> None:
@@ -958,6 +1008,20 @@ def _seeded_prompt_text(prompt: str, seed: int | None = None) -> str:
     return f"{prompt}\nVariation seed: {seed}" if seed is not None else prompt
 
 
+def _normalize_style_id(style_id: str) -> str:
+    token = str(style_id or "").strip().lower().replace("_", "-")
+    for prefix in (
+        "alexandria-base-",
+        "alexandria-wildcard-",
+        "base-",
+        "wildcard-",
+    ):
+        if token.startswith(prefix):
+            token = token[len(prefix):]
+            break
+    return token
+
+
 def _compose_provider_prompt_text(
     prompt: str,
     *,
@@ -967,20 +1031,46 @@ def _compose_provider_prompt_text(
     include_variant_notice: bool = False,
     width: int | None = None,
     height: int | None = None,
+    style_id: str = "",
 ) -> str:
-    parts: list[str] = []
-    if include_variant_notice:
-        parts.append("Create a distinctly different artistic interpretation than prior variants.")
-    seeded_prompt = _seeded_prompt_text(prompt, seed)
-    if seeded_prompt:
-        parts.append(seeded_prompt)
-    if include_system_prompt:
-        parts.append(f"Rendering requirements: {ALEXANDRIA_SYSTEM_PROMPT}")
-    if negative_prompt:
-        parts.append(f"Avoid: {negative_prompt}")
+    del include_system_prompt
+    del include_variant_notice
+
+    normalized_style_id = _normalize_style_id(style_id)
+    medium_key = STYLE_TO_MEDIUM.get(
+        normalized_style_id,
+        STYLE_TO_MEDIUM.get(str(style_id or "").strip().lower(), "default"),
+    )
+    opener = MEDIUM_OPENERS.get(medium_key, MEDIUM_OPENERS["default"])
+    prompt_body = _seeded_prompt_text(_fit_prompt_to_model_limit(_sanitize_prompt_text(prompt)), seed)
+    tail_parts: list[str] = [PHYSICAL_TEXTURE_CLOSER]
+    if str(negative_prompt or "").strip():
+        tail_parts.append(PROVIDER_DIGITAL_AVOIDANCE_LINE)
     if width and height:
-        parts.append(f"Target size: {width}x{height}.")
-    return "\n".join(str(part).strip() for part in parts if str(part).strip()).strip()
+        tail_parts.append(f"Target size: {width}x{height}.")
+
+    if prompt_body:
+        baseline = "\n".join([opener, *tail_parts]).strip()
+        available_for_body = MODEL_PROMPT_CHAR_LIMIT - len(baseline) - 1
+        prompt_body = _ellipsis_trim(prompt_body, max(0, available_for_body))
+
+    parts = [opener]
+    if prompt_body:
+        parts.append(prompt_body)
+    parts.extend(tail_parts)
+    assembled = "\n".join(str(part).strip() for part in parts if str(part).strip()).strip()
+    if len(assembled) <= MODEL_PROMPT_CHAR_LIMIT:
+        return assembled
+
+    overflow = len(assembled) - MODEL_PROMPT_CHAR_LIMIT
+    if prompt_body and overflow > 0:
+        prompt_body = _ellipsis_trim(prompt_body, max(0, len(prompt_body) - overflow))
+        parts = [opener]
+        if prompt_body:
+            parts.append(prompt_body)
+        parts.extend(tail_parts)
+        assembled = "\n".join(str(part).strip() for part in parts if str(part).strip()).strip()
+    return _ellipsis_trim(assembled, MODEL_PROMPT_CHAR_LIMIT)
 
 
 class SyntheticProvider(BaseProvider):
@@ -988,9 +1078,18 @@ class SyntheticProvider(BaseProvider):
 
     name = "synthetic"
 
-    def generate(self, prompt: str, negative_prompt: str, width: int, height: int, seed: int | None = None) -> Image.Image:
+    def generate(
+        self,
+        prompt: str,
+        negative_prompt: str,
+        width: int,
+        height: int,
+        seed: int | None = None,
+        style_id: str = "",
+    ) -> Image.Image:
         del negative_prompt
         del seed
+        del style_id
         prompt_lower = prompt.lower()
         image = Image.new("RGB", (width, height), (26, 39, 68))
         draw = ImageDraw.Draw(image, "RGBA")
@@ -1127,7 +1226,15 @@ class OpenAIProvider(BaseProvider):
 
     name = "openai"
 
-    def generate(self, prompt: str, negative_prompt: str, width: int, height: int, seed: int | None = None) -> Image.Image:
+    def generate(
+        self,
+        prompt: str,
+        negative_prompt: str,
+        width: int,
+        height: int,
+        seed: int | None = None,
+        style_id: str = "",
+    ) -> Image.Image:
         if not self.api_key:
             raise GenerationError("Missing OPENAI_API_KEY")
 
@@ -1140,6 +1247,7 @@ class OpenAIProvider(BaseProvider):
                 negative_prompt=negative_prompt,
                 seed=seed,
                 include_system_prompt=True,
+                style_id=style_id,
             ),
             "size": f"{width}x{height}",
         }
@@ -1181,7 +1289,15 @@ class OpenRouterProvider(BaseProvider):
 
     name = "openrouter"
 
-    def generate(self, prompt: str, negative_prompt: str, width: int, height: int, seed: int | None = None) -> Image.Image:
+    def generate(
+        self,
+        prompt: str,
+        negative_prompt: str,
+        width: int,
+        height: int,
+        seed: int | None = None,
+        style_id: str = "",
+    ) -> Image.Image:
         if not self.api_key:
             raise GenerationError("Missing OPENROUTER_API_KEY")
 
@@ -1206,6 +1322,7 @@ class OpenRouterProvider(BaseProvider):
                         include_variant_notice=True,
                         width=width,
                         height=height,
+                        style_id=style_id,
                     ),
                 }
             ],
@@ -1335,7 +1452,15 @@ class FalProvider(BaseProvider):
 
     name = "fal"
 
-    def generate(self, prompt: str, negative_prompt: str, width: int, height: int, seed: int | None = None) -> Image.Image:
+    def generate(
+        self,
+        prompt: str,
+        negative_prompt: str,
+        width: int,
+        height: int,
+        seed: int | None = None,
+        style_id: str = "",
+    ) -> Image.Image:
         if not self.api_key:
             raise GenerationError("Missing FAL_API_KEY")
 
@@ -1347,6 +1472,7 @@ class FalProvider(BaseProvider):
                 prompt,
                 seed=seed,
                 include_system_prompt=True,
+                style_id=style_id,
             ),
             "negative_prompt": negative_prompt,
             "image_size": {"width": width, "height": height},
@@ -1392,7 +1518,15 @@ class ReplicateProvider(BaseProvider):
 
     name = "replicate"
 
-    def generate(self, prompt: str, negative_prompt: str, width: int, height: int, seed: int | None = None) -> Image.Image:
+    def generate(
+        self,
+        prompt: str,
+        negative_prompt: str,
+        width: int,
+        height: int,
+        seed: int | None = None,
+        style_id: str = "",
+    ) -> Image.Image:
         if not self.api_key:
             raise GenerationError("Missing REPLICATE_API_TOKEN")
 
@@ -1403,6 +1537,7 @@ class ReplicateProvider(BaseProvider):
                 prompt,
                 seed=seed,
                 include_system_prompt=True,
+                style_id=style_id,
             ),
             "negative_prompt": negative_prompt,
             "width": width,
@@ -1479,7 +1614,15 @@ class GoogleCloudProvider(BaseProvider):
 
     name = "google"
 
-    def generate(self, prompt: str, negative_prompt: str, width: int, height: int, seed: int | None = None) -> Image.Image:
+    def generate(
+        self,
+        prompt: str,
+        negative_prompt: str,
+        width: int,
+        height: int,
+        seed: int | None = None,
+        style_id: str = "",
+    ) -> Image.Image:
         if not self.api_key:
             raise GenerationError("Missing GOOGLE_API_KEY")
 
@@ -1491,6 +1634,9 @@ class GoogleCloudProvider(BaseProvider):
             negative_prompt=negative_prompt,
             seed=seed,
             include_variant_notice=True,
+            width=width,
+            height=height,
+            style_id=style_id,
         )
         payload = {
             "system_instruction": {"parts": [{"text": ALEXANDRIA_SYSTEM_PROMPT}]},
@@ -1847,7 +1993,8 @@ def generate_image(
     runtime = config.get_config()
 
     negative_prompt = _merge_negative_prompt(negative_prompt)
-    prompt = _apply_rendering_prefix(prompt)
+    prompt = _fit_prompt_to_model_limit(_sanitize_prompt_text(prompt))
+    style_id = str(params.get("library_prompt_id") or params.get("style_id") or "").strip()
     requested_provider = str(params.get("provider", "") or "").strip().lower()
     model_prefix = _model_provider_prefix(runtime, model)
     provider_candidates = _model_provider_chain(
@@ -1894,6 +2041,7 @@ def generate_image(
             width=width,
             height=height,
             seed=seed,
+            style_id=style_id,
         )
         _record_provider_request(provider, success=True)
         _CIRCUIT_BREAKER.record_success(provider)
@@ -1958,6 +2106,7 @@ def generate_all_models(
     provider_override: str | None = None,
     cancel_checker: Callable[[str, int], bool] | None = None,
     preserve_prompt_text: bool = False,
+    style_id: str = "",
 ) -> list[GenerationResult]:
     """Fire ALL models concurrently for the same prompt."""
     runtime = config.get_config()
@@ -2124,6 +2273,7 @@ def generate_all_models(
                     resume=resume,
                     seed=seed,
                     preserve_prompt_text=preserve_prompt_text,
+                    style_id=style_id,
                 ): (model, variant)
                 for model, variant, image_path, provider, variant_prompt, seed in tasks
             }
@@ -2411,6 +2561,7 @@ def generate_single_book(
         provider_override=provider_override,
         cancel_checker=cancel_checker,
         preserve_prompt_text=preserve_prompt_text,
+        style_id=str(library_prompt_id or "").strip(),
     )
 
 
@@ -2545,6 +2696,7 @@ def generate_batch(
                 provider=chosen_provider,
                 output_path=image_path,
                 resume=resume,
+                style_id=str(variant_entry.get("library_prompt_id") or variant_entry.get("style_id") or "").strip(),
             )
             results.append(result)
             if not result.success:
@@ -2571,12 +2723,21 @@ def _generate_one(
     resume: bool,
     seed: int | None = None,
     preserve_prompt_text: bool = False,
+    style_id: str = "",
 ) -> GenerationResult:
     runtime = config.get_config()
     catalog_id = getattr(runtime, "catalog_id", None)
     original_prompt = str(prompt)
     working_prompt = _fit_prompt_to_model_limit(original_prompt)
-    last_effective_prompt = _apply_rendering_prefix(working_prompt)
+    effective_negative_prompt = _merge_negative_prompt(negative_prompt)
+    last_effective_prompt = _compose_provider_prompt_text(
+        working_prompt,
+        negative_prompt=effective_negative_prompt,
+        seed=seed,
+        width=runtime.image_width,
+        height=runtime.image_height,
+        style_id=style_id,
+    )
 
     def _result_prompt(current_prompt: str) -> str:
         if preserve_prompt_text:
@@ -2616,7 +2777,7 @@ def _generate_one(
             provider=provider,
             skipped=True,
             attempts=0,
-            negative_prompt=negative_prompt,
+            negative_prompt=effective_negative_prompt,
         )
 
     start = time.perf_counter()
@@ -2657,10 +2818,17 @@ def _generate_one(
 
         attempt += 1
         try:
-            last_effective_prompt = _apply_rendering_prefix(working_prompt)
+            last_effective_prompt = _compose_provider_prompt_text(
+                working_prompt,
+                negative_prompt=effective_negative_prompt,
+                seed=seed,
+                width=runtime.image_width,
+                height=runtime.image_height,
+                style_id=style_id,
+            )
             image_bytes = generate_image(
                 prompt=working_prompt,
-                negative_prompt=negative_prompt,
+                negative_prompt=effective_negative_prompt,
                 model=model,
                 params={
                     "provider": active_provider,
@@ -2668,6 +2836,7 @@ def _generate_one(
                     "height": runtime.image_height,
                     "request_delay": _provider_request_delay(runtime, active_provider),
                     "allow_synthetic_fallback": not runtime.has_any_api_key(),
+                    "library_prompt_id": style_id,
                 },
                 seed=seed,
             )
@@ -2720,7 +2889,7 @@ def _generate_one(
                 similar_to_book=similar_to_book,
                 distinctiveness_score=distinctiveness_score,
                 effective_prompt=last_effective_prompt,
-                negative_prompt=negative_prompt,
+                negative_prompt=effective_negative_prompt,
             )
         except RetryableGenerationError as exc:
             last_error = str(exc)
@@ -2889,7 +3058,7 @@ def _generate_one(
         attempts=attempt,
         failure_meta=last_failure_meta,
         effective_prompt=last_effective_prompt,
-        negative_prompt=negative_prompt,
+        negative_prompt=effective_negative_prompt,
     )
 
 
