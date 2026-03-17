@@ -227,6 +227,7 @@ def test_iterate_prompt_builder_keeps_library_prompt_precomposed():
         }
     )
 
+    assert result["prompt"].startswith('Scene from "A Room with a View": ')
     assert "Create a breathtaking legacy prompt." not in result["prompt"]
     assert "Lucy Honeychurch on a Florentine terrace" in result["prompt"]
     assert "Edwardian Italy" in result["prompt"]
@@ -255,12 +256,38 @@ def test_iterate_prompt_builder_keeps_legacy_style_diversifier_for_default_auto(
         }
     )
 
-    assert result["prompt"].startswith("Create a breathtaking legacy prompt.")
+    assert result["prompt"].startswith('Scene from "A Room with a View": ')
+    assert "Create a breathtaking legacy prompt." in result["prompt"]
     assert 'This illustration MUST depict a scene from "A Room with a View" by E. M. Forster.' in result["prompt"]
     assert result["styleLabel"] == "Romantic Sublime"
     assert result["styleId"] == "romantic-sublime"
     assert result["preservePromptText"] is False
     assert result["libraryPromptId"] == ""
+
+
+def test_iterate_prompt_builder_does_not_duplicate_title_anchor_when_title_is_already_first():
+    result = _run_iterate_prompt_builder(
+        {
+            "book": {
+                "title": "Emma",
+                "author": "Jane Austen",
+            },
+            "templateObj": {
+                "id": "alexandria-base-romantic-realism",
+                "name": "BASE 4 Romantic Realism",
+                "prompt_template": 'Scene from "{title}": Book cover illustration only - no text. Scene: {SCENE}.',
+            },
+            "promptId": "alexandria-base-romantic-realism",
+            "customPrompt": 'Scene from "{title}": Book cover illustration only - no text. Scene: {SCENE}.',
+            "sceneVal": "Emma Woodhouse in Hartfield",
+            "moodVal": "witty",
+            "eraVal": "Regency England",
+            "style": {"id": "romantic-sublime", "label": "Romantic Sublime"},
+        }
+    )
+
+    assert result["prompt"].startswith('Scene from "Emma":')
+    assert result["prompt"].count('Scene from "Emma":') == 1
 
 
 def test_iterate_ui_defaults_use_ten_variants_and_auto_rotate_label():
@@ -358,6 +385,57 @@ def test_validate_prompt_before_generation_allows_depicted_prominently_scene_tex
 
     assert validation["ok"] is True
     assert "Prompt still contains generic content in the first 320 characters." not in validation["errors"]
+
+
+def test_validate_prompt_before_generation_warns_when_title_is_missing_from_first_hundred_chars():
+    book = {
+        "title": "Emma",
+        "author": "Jane Austen",
+        "enrichment": {
+            "protagonist": "Emma Woodhouse",
+            "iconic_scenes": [
+                "Emma Woodhouse in Hartfield's drawing room."
+            ],
+        },
+    }
+    prompt = (
+        "Book cover illustration only - no text. "
+        "Painted with fine brushwork and layered composition for a literary classic. "
+        "Focus on a poised heroine in a domestic interior from Regency England."
+    )
+
+    validation = _run_iterate_hook(
+        function_name="validatePromptBeforeGeneration",
+        payload={"prompt": prompt, "book": book},
+    )
+
+    assert validation["ok"] is True
+    assert any('Book title "Emma" not found in first 100 chars' in warning for warning in validation["warnings"])
+
+
+def test_validate_prompt_before_generation_accepts_title_anchor_in_first_hundred_chars():
+    book = {
+        "title": "Emma",
+        "author": "Jane Austen",
+        "enrichment": {
+            "protagonist": "Emma Woodhouse",
+            "iconic_scenes": [
+                "Emma Woodhouse in Hartfield's drawing room."
+            ],
+        },
+    }
+    prompt = (
+        'Scene from "Emma": Book cover illustration only - no text. '
+        "Emma Woodhouse in Hartfield's drawing room."
+    )
+
+    validation = _run_iterate_hook(
+        function_name="validatePromptBeforeGeneration",
+        payload={"prompt": prompt, "book": book},
+    )
+
+    assert validation["ok"] is True
+    assert not any('Book title "Emma" not found in first 100 chars' in warning for warning in validation["warnings"])
 
 
 def test_iterate_generation_jobs_expand_variants_across_multiple_models():
@@ -567,6 +645,14 @@ def test_iterate_expanded_scene_pool_reaches_ten_unique_scenes_for_sparse_books(
     assert len(result) == 10
     assert len(set(result)) == 10
     assert all("wind-beaten island observatory" in scene.lower() for scene in result[1:])
+    assert all(
+        generic not in " ".join(result).lower()
+        for generic in ["at dawn", "at dusk", "under stormlight", "by candlelight", "in solemn stillness"]
+    )
+    assert all(
+        ("island voyage" in scene.lower()) or ("wind-beaten island observatory" in scene.lower())
+        for scene in result
+    )
 
 
 def test_iterate_wildcard_rotation_changes_across_days():

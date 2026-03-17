@@ -917,110 +917,136 @@ function _splitSpecificFragments(value) {
     .filter(Boolean);
 }
 
+function _sceneContainsBookContent(scene, { title, protagonist, characters = [], settings = [], symbols = [] }) {
+  const lower = _normalizePromptText(scene).toLowerCase();
+  if (!lower) return false;
+
+  const titleText = _normalizePromptText(title).toLowerCase();
+  const titleWords = titleText
+    .split(/\s+/)
+    .map((word) => word.replace(/^[^a-z0-9]+|[^a-z0-9]+$/gi, ''))
+    .filter((word) => word.length >= 4);
+  if ((titleText.length >= 2 && lower.includes(titleText)) || titleWords.some((word) => lower.includes(word))) {
+    return true;
+  }
+
+  const phraseSets = [protagonist, ...characters, ...settings, ...symbols];
+  return phraseSets.some((value) => {
+    const phrase = _normalizePromptText(value).toLowerCase();
+    return phrase.length >= 3 && lower.includes(phrase);
+  });
+}
+
 function buildExpandedScenePool(book, minimumCount = 1) {
   const basePool = buildScenePool(book);
   const targetCount = Math.max(1, Number(minimumCount || 1));
-  if (basePool.length >= targetCount) return basePool;
+  if (basePool.length >= targetCount) return basePool.slice(0, targetCount);
 
   const enrichment = _bookEnrichment(book);
   const context = _bookPromptContext(book);
-  const protagonist = defaultProtagonistForBook(book) || _normalizePromptText(book?.title || 'the book');
   const title = _normalizePromptText(book?.title || 'the book');
-  const settingFragments = _dedupeNonGeneric([
+  const protagonist = _extractProtagonistName(defaultProtagonistForBook(book) || title);
+  const characters = _dedupeNonGeneric(
+    [protagonist]
+      .concat(Array.isArray(enrichment.key_characters) ? enrichment.key_characters : [])
+      .map((char) => _extractProtagonistName(_normalizePromptText(char))),
+  ).filter(Boolean);
+  const settings = _dedupeNonGeneric([
     ..._splitSpecificFragments(context.setting),
     ..._splitSpecificFragments(enrichment.setting_primary),
     ..._splitSpecificFragments(enrichment.setting_details),
   ]);
-  const characterFragments = _dedupeNonGeneric(
-    (Array.isArray(enrichment.key_characters) ? enrichment.key_characters : [])
-      .map((char) => _extractProtagonistName(_normalizePromptText(char))),
-  ).filter((item) => item && item.toLowerCase() !== protagonist.toLowerCase());
-  const symbolFragments = _dedupeNonGeneric(Array.isArray(enrichment.symbolic_elements) ? enrichment.symbolic_elements : []);
-  const mood = defaultMoodForBook(book);
+  const supportingCharacters = characters.filter((item) => item.toLowerCase() !== protagonist.toLowerCase());
+  const symbols = _dedupeNonGeneric(Array.isArray(enrichment.symbolic_elements) ? enrichment.symbolic_elements : []);
+  const contentCheck = { title, protagonist, characters: supportingCharacters, settings, symbols };
   const out = [...basePool];
   const seen = new Set(out.map((item) => item.toLowerCase()));
-  const atmosphereFragments = _dedupeNonGeneric([
-    ...(Array.isArray(enrichment.tones) ? enrichment.tones : []),
-    enrichment.emotional_tone,
-    mood,
-    'at dawn',
-    'at dusk',
-    'under stormlight',
-    'by candlelight',
-    'in solemn stillness',
-    'amid rising tension',
-    'with ceremonial grandeur',
-    'with voyage-worn detail',
-    'with quiet aftermath',
-  ]);
-  const fallbackSetting = _normalizePromptText(context.setting || enrichment.setting_primary || `the world of ${title}`);
+  const fallbackSetting = _normalizePromptText(context.setting || enrichment.setting_primary || `the defining world of "${title}"`);
+  const primarySettings = settings.length ? settings : [fallbackSetting];
+  const primarySubject = protagonist || title;
+  const titleAnchor = _buildTitleAnchor(book) || `Scene from "${title}":`;
   const addScene = (value) => {
     const text = _normalizePromptText(value);
     if (!text || _isGenericContent(text)) return;
+    if (!_sceneContainsBookContent(text, contentCheck)) return;
     const key = text.toLowerCase();
     if (seen.has(key)) return;
     seen.add(key);
     out.push(text);
   };
 
-  settingFragments.forEach((setting) => {
-    addScene(`${protagonist} moving through ${setting}.`);
-  });
-  characterFragments.forEach((character, index) => {
-    const setting = settingFragments[index % Math.max(1, settingFragments.length)] || _normalizePromptText(context.setting || enrichment.setting_primary || '');
-    if (setting) {
-      addScene(`${protagonist} encountering ${character} in ${setting}.`);
-    }
-  });
-  symbolFragments.forEach((symbol, index) => {
-    const setting = settingFragments[index % Math.max(1, settingFragments.length)] || _normalizePromptText(context.setting || enrichment.setting_primary || '');
-    if (setting) {
-      addScene(`${protagonist} framed by ${symbol} in ${setting}.`);
-    }
+  primarySettings.forEach((setting) => {
+    addScene(`${primarySubject} in ${setting}`);
+    addScene(`${primarySubject} moving through ${setting}`);
+    addScene(`${primarySubject} returning to ${setting}`);
+    addScene(`${primarySubject} at the threshold of ${setting}`);
+    addScene(`${setting} with ${primarySubject}`);
+    addScene(`${titleAnchor} ${primarySubject} within ${setting}`);
+    addScene(`A defining moment from "${title}" in ${setting}`);
+    addScene(`The world of "${title}" centered on ${primarySubject} in ${setting}`);
   });
 
-  const templates = [
-    ({ setting, atmosphere }) => `${protagonist} within ${setting}, ${atmosphere}.`,
-    ({ setting, atmosphere }) => `${protagonist} returning through ${setting} with emphasis on ${title}, ${atmosphere}.`,
-    ({ setting, atmosphere }) => `${protagonist} crossing ${setting}, ${atmosphere}.`,
-    ({ setting, atmosphere }) => `${protagonist} pausing inside ${setting}, ${atmosphere}.`,
-    ({ setting, atmosphere }) => `${protagonist} emerging from ${setting}, ${atmosphere}.`,
-    ({ setting, atmosphere }) => `${protagonist} silhouetted against ${setting}, ${atmosphere}.`,
-    ({ setting, atmosphere }) => `${protagonist} at the threshold of ${setting}, ${atmosphere}.`,
-    ({ setting, atmosphere }) => `${protagonist} surveying ${setting}, ${atmosphere}.`,
-    ({ setting, atmosphere }) => `${title} distilled into ${protagonist} set before ${setting}, ${atmosphere}.`,
-    ({ setting, atmosphere }) => `${protagonist} carried through ${setting}, ${atmosphere}.`,
-  ];
-  if (characterFragments.length) {
-    templates.push(
-      ({ setting, character, atmosphere }) => `${protagonist} encountering ${character} in ${setting}, ${atmosphere}.`,
-      ({ setting, character, atmosphere }) => `${character} guiding ${protagonist} through ${setting}, ${atmosphere}.`,
-    );
+  for (const character of supportingCharacters) {
+    if (out.length >= targetCount) break;
+    for (const setting of primarySettings) {
+      if (out.length >= targetCount) break;
+      addScene(`${protagonist} and ${character} in ${setting}`);
+      addScene(`${character} meeting ${protagonist} in ${setting}`);
+      addScene(`${titleAnchor} ${character} with ${protagonist} in ${setting}`);
+    }
   }
-  if (symbolFragments.length) {
-    templates.push(
-      ({ setting, symbol, atmosphere }) => `${protagonist} framed by ${symbol} in ${setting}, ${atmosphere}.`,
-      ({ setting, symbol, atmosphere }) => `${protagonist} confronting ${symbol} in ${setting}, ${atmosphere}.`,
-    );
+
+  for (let i = 0; i < supportingCharacters.length && out.length < targetCount; i += 1) {
+    for (let j = i + 1; j < supportingCharacters.length && out.length < targetCount; j += 1) {
+      addScene(`${supportingCharacters[i]} and ${supportingCharacters[j]} facing each other`);
+      addScene(`${titleAnchor} ${supportingCharacters[i]} beside ${supportingCharacters[j]}`);
+    }
   }
-  const maxAttempts = Math.max(targetCount * templates.length * 2, 24);
-  let attempt = 0;
-  while (out.length < targetCount && attempt < maxAttempts) {
-    const setting = settingFragments[attempt % Math.max(1, settingFragments.length)] || fallbackSetting;
-    const character = characterFragments[attempt % Math.max(1, characterFragments.length)] || '';
-    const symbol = symbolFragments[attempt % Math.max(1, symbolFragments.length)] || '';
-    const atmosphere = atmosphereFragments[attempt % Math.max(1, atmosphereFragments.length)] || mood;
-    const template = templates[attempt % templates.length];
-    addScene(template({
-      setting,
-      character,
-      symbol,
-      atmosphere,
-    }));
-    attempt += 1;
+
+  for (const symbol of symbols) {
+    if (out.length >= targetCount) break;
+    for (const setting of primarySettings) {
+      if (out.length >= targetCount) break;
+      addScene(`${protagonist} with ${symbol} in ${setting}`);
+      addScene(`${titleAnchor} ${symbol} beside ${protagonist} in ${setting}`);
+    }
+  }
+
+  for (const scene of basePool) {
+    if (out.length >= targetCount) break;
+    const words = _normalizePromptText(scene).split(/\s+/);
+    if (words.length > 4) {
+      const midpoint = Math.floor(words.length / 2);
+      addScene(`${titleAnchor} ${[...words.slice(midpoint), ...words.slice(0, midpoint)].join(' ')}`);
+    }
+    for (const setting of primarySettings) {
+      if (out.length >= targetCount) break;
+      addScene(`${titleAnchor} ${scene} in ${setting}`);
+    }
   }
 
   return out.slice(0, targetCount);
+}
+
+function _buildTitleAnchor(book) {
+  const title = _normalizePromptText(book?.title || '');
+  if (!title) return '';
+  return `Scene from "${title}":`;
+}
+
+function _promptStartsWithBookContent(prompt, book) {
+  const first100 = _normalizePromptText(prompt).slice(0, 100).toLowerCase();
+  const title = _normalizePromptText(book?.title || '').toLowerCase();
+  const protagonist = _extractProtagonistName(defaultProtagonistForBook(book) || '').toLowerCase();
+  const titleWords = title
+    .split(/\s+/)
+    .map((word) => word.replace(/^[^a-z0-9]+|[^a-z0-9]+$/gi, ''))
+    .filter((word) => word.length >= 4);
+  if ((title.length >= 2 && first100.includes(title)) || titleWords.some((word) => first100.includes(word))) {
+    return true;
+  }
+  if (protagonist && protagonist.length >= 3 && first100.includes(protagonist)) return true;
+  return false;
 }
 
 function defaultSceneForBook(book) {
@@ -1126,6 +1152,17 @@ function validatePromptBeforeGeneration({ prompt, book }) {
   if (sceneFragment && scenePosition > 250) {
     warnings.push(`Scene-specific content starts too late (${scenePosition} chars).`);
   }
+  const titleText = _normalizePromptText(book?.title || '');
+  const first100 = text.slice(0, 100).toLowerCase();
+  const titleWords = titleText.toLowerCase()
+    .split(/\s+/)
+    .map((word) => word.replace(/^[^a-z0-9]+|[^a-z0-9]+$/gi, ''))
+    .filter((word) => word.length >= 4);
+  const titleInFirst100 = (titleText.length >= 2 && first100.includes(titleText.toLowerCase()))
+    || titleWords.some((word) => first100.includes(word));
+  if (titleText && !titleInFirst100) {
+    warnings.push(`Book title "${titleText}" not found in first 100 chars — content relevance at risk.`);
+  }
   if (!text.toLowerCase().includes('no text')) {
     warnings.push('Prompt is missing the anti-text guardrail.');
   }
@@ -1147,9 +1184,13 @@ function buildGenerationJobPrompt({ book, templateObj, promptId, customPrompt, s
   const customPromptOverride = promptSource === 'custom' ? customPrompt : '';
   const basePrompt = resolvePrompt(templateObj, book, customPromptOverride, sceneVal, moodVal, eraVal);
   const usesStandalonePrompt = Boolean(trimmedPromptId || trimmedCustomPrompt);
-  const prompt = usesStandalonePrompt
+  let prompt = usesStandalonePrompt
     ? basePrompt
     : `${StyleDiversifier.buildDiversifiedPrompt(book.title, book.author, style)} ${basePrompt}`.trim();
+  const titleAnchor = _buildTitleAnchor(book);
+  if (titleAnchor && !_promptStartsWithBookContent(prompt, book)) {
+    prompt = `${titleAnchor} ${prompt}`.trim();
+  }
   const templateName = String(templateObj?.name || '').trim();
   const styleLabel = usesStandalonePrompt
     ? (
