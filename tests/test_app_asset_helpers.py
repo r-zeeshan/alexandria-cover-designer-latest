@@ -130,20 +130,19 @@ def test_resolve_full_resolution_composite_source_rewrites_thumbnail_url_to_asse
     assert result == "/api/asset?path=Output%20Covers%2Fsaved_composites%2F4%2Fcover%20image.jpg"
 
 
-def test_build_retry_prompt_uses_safe_suffix_instead_of_circular_vignette_instruction():
+def test_build_retry_prompt_returns_original_prompt_for_retries():
     result = _run_app_hook(
         "buildRetryPrompt",
         ["Book cover illustration — no text, no lettering. Scene: Emma in Highbury.", 2],
     )
 
-    assert "Focus on one clear subject. No text or lettering. Vivid painterly palette." in result
-    assert "circular vignette illustration centered and fully contained" not in result
+    assert result == "Book cover illustration — no text, no lettering. Scene: Emma in Highbury."
 
 
-def test_build_retry_prompt_strips_legacy_circular_vignette_text():
+def test_build_retry_prompt_preserves_existing_prompt_text_verbatim():
     result = _run_app_hook(
         "buildRetryPrompt",
         ["Book cover illustration. IMPORTANT: This must be a circular vignette illustration centered and fully contained.", 1],
     )
 
-    assert result == "Book cover illustration."
+    assert result == "Book cover illustration. IMPORTANT: This must be a circular vignette illustration centered and fully contained."

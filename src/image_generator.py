@@ -585,6 +585,7 @@ class GenerationResult:
     distinctiveness_score: float | None = None
     failure_meta: dict[str, Any] | None = None
     effective_prompt: str | None = None
+    negative_prompt: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
@@ -953,6 +954,35 @@ class BaseProvider:
         raise GenerationError(f"Outbound URL blocked by allowlist: host={host}")
 
 
+def _seeded_prompt_text(prompt: str, seed: int | None = None) -> str:
+    return f"{prompt}\nVariation seed: {seed}" if seed is not None else prompt
+
+
+def _compose_provider_prompt_text(
+    prompt: str,
+    *,
+    negative_prompt: str = "",
+    seed: int | None = None,
+    include_system_prompt: bool = False,
+    include_variant_notice: bool = False,
+    width: int | None = None,
+    height: int | None = None,
+) -> str:
+    parts: list[str] = []
+    if include_variant_notice:
+        parts.append("Create a distinctly different artistic interpretation than prior variants.")
+    seeded_prompt = _seeded_prompt_text(prompt, seed)
+    if seeded_prompt:
+        parts.append(seeded_prompt)
+    if include_system_prompt:
+        parts.append(f"Rendering requirements: {ALEXANDRIA_SYSTEM_PROMPT}")
+    if negative_prompt:
+        parts.append(f"Avoid: {negative_prompt}")
+    if width and height:
+        parts.append(f"Target size: {width}x{height}.")
+    return "\n".join(str(part).strip() for part in parts if str(part).strip()).strip()
+
+
 class SyntheticProvider(BaseProvider):
     """Offline synthetic generator used when API keys are unavailable."""
 
@@ -1103,10 +1133,14 @@ class OpenAIProvider(BaseProvider):
 
         endpoint = "https://api.openai.com/v1/images/generations"
         self._assert_outbound_url(endpoint)
-        seeded_prompt = f"{prompt}\nVariation seed: {seed}" if seed is not None else prompt
         payload = {
             "model": self.model,
-            "prompt": f"{seeded_prompt}\nAvoid: {negative_prompt}",
+            "prompt": _compose_provider_prompt_text(
+                prompt,
+                negative_prompt=negative_prompt,
+                seed=seed,
+                include_system_prompt=True,
+            ),
             "size": f"{width}x{height}",
         }
         response = requests.post(
@@ -1153,7 +1187,6 @@ class OpenRouterProvider(BaseProvider):
 
         endpoint = "https://openrouter.ai/api/v1/chat/completions"
         self._assert_outbound_url(endpoint)
-        seeded_prompt = f"{prompt}\nVariation seed: {seed}" if seed is not None else prompt
         runtime = self.runtime or config.get_config()
         modality = runtime.get_model_modality(f"openrouter/{self.model}")
         modalities = ["image", "text"] if modality == "both" else ["image"]
@@ -1166,9 +1199,13 @@ class OpenRouterProvider(BaseProvider):
                 },
                 {
                     "role": "user",
-                    "content": (
-                        "Create a distinctly different artistic interpretation than prior variants. "
-                        f"{seeded_prompt}\nAvoid: {negative_prompt}\nTarget size: {width}x{height}."
+                    "content": _compose_provider_prompt_text(
+                        prompt,
+                        negative_prompt=negative_prompt,
+                        seed=seed,
+                        include_variant_notice=True,
+                        width=width,
+                        height=height,
                     ),
                 }
             ],
@@ -1306,7 +1343,11 @@ class FalProvider(BaseProvider):
         endpoint = f"https://fal.run/{endpoint_model}"
         self._assert_outbound_url(endpoint)
         payload: dict[str, Any] = {
-            "prompt": prompt,
+            "prompt": _compose_provider_prompt_text(
+                prompt,
+                seed=seed,
+                include_system_prompt=True,
+            ),
             "negative_prompt": negative_prompt,
             "image_size": {"width": width, "height": height},
         }
@@ -1358,7 +1399,11 @@ class ReplicateProvider(BaseProvider):
         endpoint = "https://api.replicate.com/v1/predictions"
         self._assert_outbound_url(endpoint)
         input_payload: dict[str, Any] = {
-            "prompt": prompt,
+            "prompt": _compose_provider_prompt_text(
+                prompt,
+                seed=seed,
+                include_system_prompt=True,
+            ),
             "negative_prompt": negative_prompt,
             "width": width,
             "height": height,
@@ -1441,12 +1486,14 @@ class GoogleCloudProvider(BaseProvider):
         model_name = self.model if self.model.startswith("models/") else f"models/{self.model}"
         url = f"https://generativelanguage.googleapis.com/v1beta/{model_name}:generateContent"
         self._assert_outbound_url(url)
-        prompt_text = (
-            "Create a distinctly different artistic interpretation than prior variants. "
-            f"{prompt}. Variation seed: {seed if seed is not None else 'n/a'}. "
-            f"Avoid: {negative_prompt}"
+        prompt_text = _compose_provider_prompt_text(
+            prompt,
+            negative_prompt=negative_prompt,
+            seed=seed,
+            include_variant_notice=True,
         )
         payload = {
+            "system_instruction": {"parts": [{"text": ALEXANDRIA_SYSTEM_PROMPT}]},
             "contents": [{"parts": [{"text": prompt_text}]}],
             "generationConfig": {
                 "responseModalities": ["IMAGE"],
@@ -1463,6 +1510,7 @@ class GoogleCloudProvider(BaseProvider):
         # Some models reject width/height imageConfig; retry once with modality-only config.
         if response.status_code == 400:
             fallback_payload = {
+                "system_instruction": {"parts": [{"text": ALEXANDRIA_SYSTEM_PROMPT}]},
                 "contents": [{"parts": [{"text": prompt_text}]}],
                 "generationConfig": {
                     "responseModalities": ["IMAGE"],
@@ -2049,6 +2097,7 @@ def generate_all_models(
                         provider=provider,
                         dry_run=True,
                         attempts=0,
+                        negative_prompt=effective_negative_prompt,
                     )
                 )
                 continue
@@ -2567,6 +2616,7 @@ def _generate_one(
             provider=provider,
             skipped=True,
             attempts=0,
+            negative_prompt=negative_prompt,
         )
 
     start = time.perf_counter()
@@ -2670,6 +2720,7 @@ def _generate_one(
                 similar_to_book=similar_to_book,
                 distinctiveness_score=distinctiveness_score,
                 effective_prompt=last_effective_prompt,
+                negative_prompt=negative_prompt,
             )
         except RetryableGenerationError as exc:
             last_error = str(exc)
@@ -2838,6 +2889,7 @@ def _generate_one(
         attempts=attempt,
         failure_meta=last_failure_meta,
         effective_prompt=last_effective_prompt,
+        negative_prompt=negative_prompt,
     )
 
 

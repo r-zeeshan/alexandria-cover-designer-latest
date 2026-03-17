@@ -424,6 +424,67 @@ def test_openrouter_modalities_and_429_retry(tmp_path: Path, monkeypatch):
     assert calls[-1]["json"]["modalities"] == ["image"]
 
 
+def test_provider_payloads_include_negative_prompt_and_system_prompt(tmp_path: Path, monkeypatch):
+    runtime = _Runtime(tmp_path)
+    png = _image_bytes((48, 48), gradient=True)
+    b64 = base64.b64encode(png).decode("ascii")
+    downloaded = Image.open(io.BytesIO(png))
+    post_calls: list[dict[str, object]] = []
+
+    def _fake_post(url, headers=None, json=None, timeout=None):  # type: ignore[no-untyped-def]
+        post_calls.append({"url": url, "json": json})
+        if "api.openai.com" in url:
+            return _FakeResponse(200, {"data": [{"b64_json": b64}]})
+        if "openrouter.ai" in url:
+            return _FakeResponse(
+                200,
+                {"choices": [{"message": {"content": [{"type": "output_image", "image_url": f"data:image/png;base64,{b64}"}]}}]},
+            )
+        if "fal.run" in url:
+            return _FakeResponse(200, {"images": ["https://img.example/fal.png"]})
+        if "generativelanguage.googleapis.com" in url:
+            return _FakeResponse(200, {"generatedImages": [{"image": {"imageBytes": b64}}]})
+        if "replicate.com/v1/predictions" in url:
+            return _FakeResponse(200, {"id": "pred-1"})
+        raise AssertionError(f"Unexpected POST URL: {url}")
+
+    def _fake_get(url, headers=None, timeout=None):  # type: ignore[no-untyped-def]
+        if "replicate.com/v1/predictions/pred-1" in url:
+            return _FakeResponse(200, {"status": "succeeded", "output": ["https://img.example/replicate.png"]})
+        if "img.example" in url:
+            return _FakeResponse(200, content=png)
+        raise AssertionError(f"Unexpected GET URL: {url}")
+
+    monkeypatch.setattr(ig.requests, "post", _fake_post)
+    monkeypatch.setattr(ig.requests, "get", _fake_get)
+
+    assert ig.OpenAIProvider(model="gpt-image-1", api_key="k", runtime=runtime).generate("p", "n", 64, 64).size == (48, 48)
+    assert ig.OpenRouterProvider(model="flux-2-pro", api_key="k", runtime=runtime).generate("p", "n", 64, 64).size == (48, 48)
+    assert ig.FalProvider(model="fal/flux-pro", api_key="k", runtime=runtime).generate("p", "n", 64, 64).size == (48, 48)
+    assert ig.ReplicateProvider(model="version", api_key="k", runtime=runtime).generate("p", "n", 64, 64).size == (48, 48)
+    assert ig.GoogleCloudProvider(model="imagen-4", api_key="k", runtime=runtime).generate("p", "n", 64, 64).size == (48, 48)
+
+    openai_payload = next(call["json"] for call in post_calls if "api.openai.com" in str(call["url"]))
+    assert ig.ALEXANDRIA_SYSTEM_PROMPT in str(openai_payload["prompt"])
+    assert "Avoid: n" in str(openai_payload["prompt"])
+
+    openrouter_payload = next(call["json"] for call in post_calls if "openrouter.ai" in str(call["url"]))
+    assert openrouter_payload["messages"][0]["content"] == ig.ALEXANDRIA_SYSTEM_PROMPT
+    assert "Avoid: n" in str(openrouter_payload["messages"][1]["content"])
+
+    fal_payload = next(call["json"] for call in post_calls if "fal.run" in str(call["url"]))
+    assert fal_payload["negative_prompt"] == "n"
+    assert ig.ALEXANDRIA_SYSTEM_PROMPT in str(fal_payload["prompt"])
+
+    replicate_payload = next(call["json"] for call in post_calls if "replicate.com/v1/predictions" in str(call["url"]))
+    assert replicate_payload["input"]["negative_prompt"] == "n"
+    assert ig.ALEXANDRIA_SYSTEM_PROMPT in str(replicate_payload["input"]["prompt"])
+
+    google_payload = next(call["json"] for call in post_calls if "generativelanguage.googleapis.com" in str(call["url"]))
+    assert google_payload["system_instruction"]["parts"][0]["text"] == ig.ALEXANDRIA_SYSTEM_PROMPT
+    assert "Avoid: n" in str(google_payload["contents"][0]["parts"][0]["text"])
+
+
 def test_provider_key_and_error_paths():
     with pytest.raises(ig.GenerationError):
         ig.OpenAIProvider(model="gpt-image-1", api_key="").generate("p", "n", 64, 64)

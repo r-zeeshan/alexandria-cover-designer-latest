@@ -1924,6 +1924,7 @@ def _serialize_generation_results(
                 "provider": row.provider,
                 "prompt": row.effective_prompt or row.prompt,
                 "effective_prompt": row.effective_prompt,
+                "negative_prompt": row.negative_prompt,
                 "image_path": image_rel,
                 "raw_art_path": persisted_raw_path,
                 "composited_path": persisted_composite_path or composed,

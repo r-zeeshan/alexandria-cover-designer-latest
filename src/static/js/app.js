@@ -18,21 +18,13 @@ const PAGES = {
   'api-docs': { title: 'API Docs', render: () => window.Pages['api-docs'].render() },
 };
 
-const RETRY_PROMPT_SUFFIX = 'Focus on one clear subject. No text or lettering. Vivid painterly palette.';
-
 function getPageFromHash() {
   const hashPage = location.hash.slice(1).split('?')[0];
   return hashPage || window.__INITIAL_PAGE__ || 'iterate';
 }
 
-function buildRetryPrompt(basePrompt, attemptNumber) {
-  const cleaned = String(basePrompt || '')
-    .replace(/\s*IMPORTANT:\s*This must be a circular vignette illustration centered and fully contained\.\s*/gi, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  if (Number(attemptNumber || 1) <= 1) return cleaned;
-  if (cleaned.includes(RETRY_PROMPT_SUFFIX)) return cleaned;
-  return `${cleaned} ${RETRY_PROMPT_SUFFIX}`.trim();
+function buildRetryPrompt(basePrompt) {
+  return typeof basePrompt === 'string' ? basePrompt : String(basePrompt || '');
 }
 
 async function renderPage() {
@@ -345,7 +337,7 @@ window.JobQueue = {
 
       while (attempts < this.MAX_RETRIES + 1) {
         attempts += 1;
-        const retryPrompt = buildRetryPrompt(job.prompt, attempts);
+        const retryPrompt = buildRetryPrompt(job.prompt);
         const currentBookRow = DB.dbGet('books', Number(job.book_id || 0))
           || DB.dbGetAll('books').find((row) => Number(row?.id || 0) === Number(job.book_id || 0))
           || null;

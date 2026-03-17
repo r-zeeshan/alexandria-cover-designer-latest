@@ -1922,12 +1922,14 @@ def test_serialize_generation_results_prefers_effective_prompt_for_result_prompt
         provider="openrouter",
         attempts=1,
         effective_prompt="IMPORTANT RENDERING STYLE: Effective prompt text.",
+        negative_prompt="No vector, no airbrushed surfaces.",
     )
 
     serialized = qr._serialize_generation_results(runtime=cfg, book=1, results=[result], job_id="job-effective")
 
     assert serialized[0]["prompt"] == "IMPORTANT RENDERING STYLE: Effective prompt text."
     assert serialized[0]["effective_prompt"] == "IMPORTANT RENDERING STYLE: Effective prompt text."
+    assert serialized[0]["negative_prompt"] == "No vector, no airbrushed surfaces."
 
 
 def test_hydrate_serialized_result_paths_persists_saved_composite_after_compositing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
