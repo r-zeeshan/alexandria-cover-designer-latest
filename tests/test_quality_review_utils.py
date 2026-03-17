@@ -3713,6 +3713,19 @@ def test_execute_generation_payload_forwards_preserve_prompt_text_flag(tmp_path:
     assert captured["preserve_prompt_text"] is True
 
 
+def test_batch_duplicate_retry_prompt_strengthens_variant_two():
+    prompt = qr._batch_duplicate_retry_prompt(
+        prompt='Scene from "Emma": Book cover illustration — no text.',
+        variant=2,
+        distance=0.125,
+        retry_index=1,
+    )
+
+    assert "Force a substantially different visual outcome" in prompt
+    assert "wider environmental view" in prompt
+    assert "same couple" in prompt
+
+
 def test_execute_generation_payload_drive_source_downloads_cover_before_composite(tmp_path: Path, monkeypatch):
     cfg = _build_runtime_for_startup_checks(tmp_path)
     cfg = replace(cfg, openai_api_key="test-key", gdrive_source_folder_id="source-folder-id")

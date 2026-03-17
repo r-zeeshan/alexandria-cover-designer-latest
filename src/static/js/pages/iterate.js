@@ -428,6 +428,7 @@ function buildIterateGenerationJobs({
     )
   );
   const jobs = [];
+  const batchId = uuid();
   let validationError = '';
 
   (Array.isArray(variantEntries) ? variantEntries : []).forEach((entry) => {
@@ -441,6 +442,7 @@ function buildIterateGenerationJobs({
     normalizedModels.forEach((modelId) => {
       jobs.push({
         id: uuid(),
+        batch_id: batchId,
         book_id: bookId,
         model: modelId,
         variant: Number(entry?.variant || 1),

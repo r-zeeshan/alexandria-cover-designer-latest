@@ -127,6 +127,9 @@ except ModuleNotFoundError:  # pragma: no cover
 
 logger = get_logger(__name__)
 
+BATCH_DUPLICATE_DISTANCE_THRESHOLD = 0.19
+BATCH_DUPLICATE_MAX_REROLLS = 2
+
 REVIEW_DATA_PATH = PROJECT_ROOT / "data" / "review_data.json"
 ITERATE_DATA_PATH = PROJECT_ROOT / "data" / "iterate_data.json"
 COMPARE_DATA_PATH = PROJECT_ROOT / "data" / "compare_data.json"
@@ -1044,6 +1047,13 @@ class JobWorkerPool:
                     result = executor(execution_payload, stage_callback=_publish_stage_progress)
                 else:
                     result = executor(execution_payload)
+                if batch_id:
+                    result = _reroll_near_duplicate_batch_result(
+                        runtime=config.get_config(job.catalog_id),
+                        job=job,
+                        result=result,
+                        stage_callback=_publish_stage_progress,
+                    )
                 result_rows = result.get("results", []) if isinstance(result, dict) else []
                 if isinstance(result_rows, list):
                     for row in result_rows:
@@ -2321,6 +2331,191 @@ def _clear_job_checkpoint(*, runtime: config.Config, job_id: str) -> None:
     path = _job_checkpoint_path(runtime=runtime, job_id=job_id)
     if path.exists():
         path.unlink(missing_ok=True)
+
+
+def _batch_duplicate_retry_prompt(*, prompt: str, variant: int, distance: float, retry_index: int) -> str:
+    variant_token = max(1, int(variant or 1))
+    guidance_map = {
+        1: "Use one single dominant figure only, clearly separated from the background, with generous empty space around the silhouette.",
+        2: "Use a much wider environmental view with smaller figures and a clearly different scene layout than earlier variants.",
+        3: "Use a strong diagonal or action composition with multiple depth planes and a different silhouette grouping.",
+        4: "Use a different narrative beat or symbolic framing with clearly changed camera distance and subject arrangement.",
+    }
+    guidance = guidance_map.get(
+        variant_token,
+        "Use a clearly different camera distance, silhouette grouping, and scene layout than earlier variants.",
+    )
+    merged = (
+        f"{str(prompt or '').strip()} "
+        "Force a substantially different visual outcome than the earlier completed variants in this same batch. "
+        "Do not repeat the same pose, same couple framing, same shot scale, or same subject arrangement. "
+        f"{guidance} "
+        "Keep the primary subject fully contained inside the center of the image with clear margin on all sides. "
+        f"Near-duplicate retry {max(1, int(retry_index))} for variant {variant_token} (distance={float(distance):.3f})."
+    ).strip()
+    return prompt_generator.enforce_prompt_constraints(merged)
+
+
+def _job_primary_model(job: job_store.JobRecord) -> str:
+    payload = job.payload or {}
+    models = payload.get("models")
+    if isinstance(models, list):
+        for token in models:
+            model = str(token or "").strip()
+            if model:
+                return model
+    row = _primary_job_result_row(job)
+    if isinstance(row, dict):
+        token = str(row.get("model", "") or "").strip()
+        if token:
+            return token
+    return ""
+
+
+def _nearest_completed_batch_duplicate(
+    *,
+    runtime: config.Config,
+    job: job_store.JobRecord,
+    result: dict[str, Any],
+) -> tuple[job_store.JobRecord, float] | None:
+    payload = job.payload or {}
+    batch_id = str(payload.get("batch_id", "") or "").strip()
+    if not batch_id:
+        return None
+    current_variant = max(1, _safe_int(payload.get("variant"), 1))
+    current_rows = result.get("results", []) if isinstance(result, dict) else []
+    current_row = current_rows[0] if isinstance(current_rows, list) and current_rows else {}
+    if not isinstance(current_row, dict):
+        return None
+    current_path = _resolve_durable_composite_image_path(runtime=runtime, row=current_row)
+    if current_path is None or not current_path.exists():
+        return None
+    current_model = str(current_row.get("model", "") or _job_primary_model(job)).strip()
+    if not current_model:
+        return None
+    try:
+        regions = safe_json.load_json(
+            config.cover_regions_path(catalog_id=runtime.catalog_id, config_dir=runtime.config_dir),
+            {},
+        )
+        current_hash = similarity_detector._compute_hash_for_book(  # type: ignore[attr-defined]
+            book_number=int(job.book_number or 0),
+            image_path=current_path,
+            regions=regions,
+        )
+    except Exception as exc:
+        logger.debug("Batch duplicate hash skipped for %s: %s", current_path, exc)
+        return None
+
+    siblings = job_db_store.list_jobs(
+        limit=200,
+        statuses=["completed"],
+        catalog_id=job.catalog_id,
+        book_number=int(job.book_number or 0),
+    )
+    closest: tuple[job_store.JobRecord, float] | None = None
+    for sibling in siblings:
+        if str(sibling.id) == str(job.id):
+            continue
+        sibling_payload = sibling.payload or {}
+        if str(sibling_payload.get("batch_id", "") or "").strip() != batch_id:
+            continue
+        sibling_variant = max(1, _safe_int(sibling_payload.get("variant"), 1))
+        if sibling_variant >= current_variant:
+            continue
+        sibling_model = _job_primary_model(sibling)
+        if sibling_model != current_model:
+            continue
+        sibling_path = _resolve_composite_image_path_for_job(runtime=runtime, job=sibling)
+        if sibling_path is None or not sibling_path.exists():
+            continue
+        try:
+            sibling_hash = similarity_detector._compute_hash_for_book(  # type: ignore[attr-defined]
+                book_number=int(sibling.book_number or 0),
+                image_path=sibling_path,
+                regions=regions,
+            )
+            metrics = similarity_detector._compare_hash_objects(current_hash, sibling_hash)  # type: ignore[attr-defined]
+            distance = float(metrics.get("combined_similarity", 1.0) or 1.0)
+        except Exception as exc:
+            logger.debug("Batch duplicate compare skipped for %s: %s", sibling_path, exc)
+            continue
+        if distance >= BATCH_DUPLICATE_DISTANCE_THRESHOLD:
+            continue
+        if closest is None or distance < closest[1]:
+            closest = (sibling, distance)
+    return closest
+
+
+def _reroll_near_duplicate_batch_result(
+    *,
+    runtime: config.Config,
+    job: job_store.JobRecord,
+    result: dict[str, Any],
+    stage_callback: Callable[[dict[str, Any]], None] | None = None,
+) -> dict[str, Any]:
+    payload = dict(job.payload or {})
+    batch_id = str(payload.get("batch_id", "") or "").strip()
+    if not batch_id:
+        return result
+    base_prompt = str(payload.get("prompt", "") or "").strip()
+    if not base_prompt:
+        return result
+
+    rerolls = 0
+    current = result
+    while rerolls < BATCH_DUPLICATE_MAX_REROLLS:
+        duplicate = _nearest_completed_batch_duplicate(runtime=runtime, job=job, result=current)
+        if duplicate is None:
+            return current
+        sibling, distance = duplicate
+        rerolls += 1
+        variant = max(1, _safe_int(payload.get("variant"), 1))
+        retry_prompt = _batch_duplicate_retry_prompt(
+            prompt=base_prompt,
+            variant=variant,
+            distance=distance,
+            retry_index=rerolls,
+        )
+        logger.warning(
+            "Near-duplicate async batch variant detected for book %s model %s variant %s against sibling job %s (distance %.3f); reroll %s/%s",
+            int(job.book_number or 0),
+            _job_primary_model(job),
+            variant,
+            sibling.id,
+            distance,
+            rerolls,
+            BATCH_DUPLICATE_MAX_REROLLS,
+        )
+        if stage_callback is not None:
+            try:
+                stage_callback(
+                    {
+                        "stage": "generate",
+                        "message": "Re-rolling near-duplicate variant for stronger separation...",
+                        "progress": 0.55,
+                    }
+                )
+            except Exception:
+                pass
+        payload["prompt"] = retry_prompt
+        payload["job_id"] = job.id
+        payload["batch_duplicate_retry_count"] = rerolls
+        _clear_job_checkpoint(runtime=runtime, job_id=job.id)
+        current = _execute_generation_payload(payload, stage_callback=stage_callback)
+
+    duplicate = _nearest_completed_batch_duplicate(runtime=runtime, job=job, result=current)
+    if duplicate is not None:
+        sibling, distance = duplicate
+        logger.warning(
+            "Near-duplicate async batch variant persists for book %s variant %s after %s rerolls against sibling job %s (distance %.3f)",
+            int(job.book_number or 0),
+            max(1, _safe_int(payload.get("variant"), 1)),
+            BATCH_DUPLICATE_MAX_REROLLS,
+            sibling.id,
+            distance,
+        )
+    return current
 
 
 def _cleanup_stale_checkpoints(*, runtime: config.Config, max_age_hours: int = 24) -> int:
@@ -12060,6 +12255,7 @@ def serve_review_webapp(
                 input_folder_id = str(body.get("input_folder_id", "")).strip()
                 credentials_path = str(body.get("credentials_path", "")).strip()
                 library_prompt_id = str(body.get("library_prompt_id", "")).strip()
+                batch_id = str(body.get("batch_id", "")).strip()
                 async_mode = bool(body.get("async", True))
                 worker_mode = _normalize_worker_mode(body.get("worker_mode", ACTIVE_WORKER_MODE))
                 if _is_generation_budget_blocked(runtime_req):
@@ -12237,6 +12433,7 @@ def serve_review_webapp(
                                 "prompt_source": prompt_source,
                                 "template_id": template_id,
                                 "compose_prompt": compose_prompt,
+                                **({"batch_id": batch_id} if batch_id else {}),
                                 **({"preserve_prompt_text": True} if preserve_prompt_text else {}),
                                 "variant": requested_variant,
                                 "scene_description": scene_description,

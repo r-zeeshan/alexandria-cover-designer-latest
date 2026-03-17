@@ -369,6 +369,7 @@ window.JobQueue = {
               cover_source: 'drive',
               selected_cover_id: resolvedSelectedCoverId,
               selected_cover_book_number: resolvedBookNumber,
+              batch_id: String(job.batch_id || '').trim(),
               variant: Number(job.variant || 1),
               variants: 1,
               max_attempts: 5,

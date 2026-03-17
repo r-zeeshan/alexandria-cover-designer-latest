@@ -163,6 +163,7 @@ window.OpenRouter = {
     if (options.credentials_path) payload.credentials_path = String(options.credentials_path).trim();
     if (options.provider) payload.provider = String(options.provider).trim().toLowerCase();
     if (options.idempotency_key) payload.idempotency_key = String(options.idempotency_key).trim();
+    if (options.batch_id) payload.batch_id = String(options.batch_id).trim();
     if (options.max_attempts) payload.max_attempts = Math.max(1, Number(options.max_attempts || 1));
     if (typeof options.compose_prompt === 'boolean') payload.compose_prompt = options.compose_prompt;
     if (options.preserve_prompt_text === true) payload.preserve_prompt_text = true;

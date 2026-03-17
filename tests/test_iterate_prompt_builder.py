@@ -553,6 +553,7 @@ def test_iterate_generation_jobs_expand_variants_across_multiple_models():
         "nano-banana-pro",
         "google/gemini-2.5-flash-image",
     ]
+    assert len({str(job["batch_id"]) for job in jobs}) == 1
 
 
 def test_iterate_generation_jobs_emit_batch_style_summary_log():

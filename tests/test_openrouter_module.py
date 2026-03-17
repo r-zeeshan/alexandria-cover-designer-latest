@@ -77,6 +77,7 @@ def _run_openrouter_generate(*, config_payload: dict, generate_payload: dict) ->
               variants: 1,
               prompt_source: 'custom',
               cover_source: 'drive',
+              batch_id: 'batch-123',
             }}
           );
           process.stdout.write(JSON.stringify({{ result, fetchCalls }}));
@@ -150,6 +151,7 @@ def test_openrouter_generate_keeps_async_when_worker_is_healthy():
 
     generate_call = next(call for call in result["fetchCalls"] if call["url"] == "/api/generate")
     assert generate_call["body"]["async"] is True
+    assert generate_call["body"]["batch_id"] == "batch-123"
     assert result["result"]["status"] == "completed"
     assert result["result"]["job"]["id"] == "job-1"
     assert result["result"]["result"]["composited_path"] == "tmp/composited/4/async.jpg"
