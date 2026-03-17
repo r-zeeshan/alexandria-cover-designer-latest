@@ -19,10 +19,12 @@ from PIL import Image, ImageDraw
 
 try:
     from src import config
+    from src import focus_crop
     from src import safe_json
     from src.logger import get_logger
 except ModuleNotFoundError:  # pragma: no cover
     import config  # type: ignore
+    import focus_crop  # type: ignore
     import safe_json  # type: ignore
     from logger import get_logger  # type: ignore
 
@@ -441,15 +443,8 @@ def _geometry_from_strict_mask(mask: Image.Image | None) -> dict[str, int] | Non
 
 
 def _smart_square_crop(image: Image.Image) -> Image.Image:
-    """Crop image to a centered square for deterministic medallion placement."""
-    src = image.convert("RGBA")
-    img_w, img_h = src.size
-    if img_w <= 1 or img_h <= 1:
-        return src
-    side = min(img_w, img_h)
-    left = (img_w - side) // 2
-    top = (img_h - side) // 2
-    return src.crop((left, top, left + side, top + side))
+    """Crop image to a focus-aware square for medallion-safe placement."""
+    return focus_crop.smart_square_crop(image)
 
 
 def _simple_center_crop(image: Image.Image) -> Image.Image:

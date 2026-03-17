@@ -19,6 +19,19 @@ const AUTO_ROTATE_EXCLUDED_WILDCARD_TAGS = new Set([
   'travel-poster',
   'soviet-constructivist',
 ]);
+const VARIANT_COMPOSITION_DIRECTIVES = [
+  'Composition: one centered primary subject, fully visible, with generous negative space around the silhouette.',
+  'Composition: mid-distance narrative staging, with the primary subject smaller and the environment clearly visible around it.',
+  'Composition: a three-quarter-view subject with diagonal depth, open space on both sides, and a clearly different camera angle.',
+  'Composition: a wide environmental tableau, keeping the primary subject centered in the middle third with secondary elements farther back.',
+  'Composition: a symmetrical storybook tableau with layered depth and a clean foreground-to-background separation.',
+  'Composition: low-angle heroic staging, while keeping the entire primary subject fully visible with generous headroom.',
+  'Composition: an elevated viewpoint with the primary subject anchored below center and broad surrounding environment.',
+  'Composition: two-plane depth staging with one foreground motif and the primary subject centered farther back.',
+  'Composition: lateral motion with the primary subject turned in profile but still fully contained within the frame.',
+  'Composition: architectural or natural framing behind a centered subject, keeping strong open margin around the silhouette.',
+];
+const CENTRAL_SAFE_AREA_DIRECTIVE = 'Keep the primary subject fully contained inside the center of the image with clear margin on all sides. No cut-off subject at the edges.';
 const PREFERRED_DEFAULT_MODELS = [
   'openrouter/google/gemini-3-pro-image-preview',
   'nano-banana-pro',
@@ -1129,6 +1142,22 @@ function resolvePrompt(templateObj, book, customPrompt, sceneVal, moodVal, eraVa
   return resolved.trim();
 }
 
+function variantCompositionDirective(variantNumber) {
+  const index = Math.max(0, (Number(variantNumber || 1) - 1)) % VARIANT_COMPOSITION_DIRECTIVES.length;
+  const directive = VARIANT_COMPOSITION_DIRECTIVES[index] || VARIANT_COMPOSITION_DIRECTIVES[0];
+  return `${directive} ${CENTRAL_SAFE_AREA_DIRECTIVE}`.trim();
+}
+
+function appendVariantCompositionDirective(promptText, variantNumber) {
+  const base = String(promptText || '').trim();
+  if (!base) return variantCompositionDirective(variantNumber);
+  const directive = variantCompositionDirective(variantNumber);
+  const lowered = base.toLowerCase();
+  if (lowered.includes(CENTRAL_SAFE_AREA_DIRECTIVE.toLowerCase())) return base;
+  if (lowered.includes(String(directive).toLowerCase())) return base;
+  return `${base} ${directive}`.trim();
+}
+
 function validatePromptBeforeGeneration({ prompt, book }) {
   const text = _normalizePromptText(prompt);
   const errors = [];
@@ -1167,7 +1196,7 @@ function validatePromptBeforeGeneration({ prompt, book }) {
   };
 }
 
-function buildGenerationJobPrompt({ book, templateObj, promptId, customPrompt, sceneVal, moodVal, eraVal, style }) {
+function buildGenerationJobPrompt({ book, templateObj, promptId, customPrompt, sceneVal, moodVal, eraVal, style, variantNumber = 1 }) {
   const trimmedPromptId = String(promptId || '').trim();
   const trimmedCustomPrompt = String(customPrompt || '').trim();
   const templateText = String(templateObj?.prompt_template || '').trim();
@@ -1184,6 +1213,7 @@ function buildGenerationJobPrompt({ book, templateObj, promptId, customPrompt, s
   if (titleAnchor && !_promptStartsWithBookContent(prompt, book)) {
     prompt = `${titleAnchor} ${prompt}`.trim();
   }
+  prompt = appendVariantCompositionDirective(prompt, variantNumber);
   const templateName = String(templateObj?.name || '').trim();
   const styleLabel = usesStandalonePrompt
     ? (
@@ -1286,6 +1316,7 @@ function buildVariantPromptPayloads({
       moodVal: assignedMood,
       eraVal: assignedEra,
       style: styles[index % Math.max(1, styles.length)] || { id: 'none', label: 'Default' },
+      variantNumber: variant,
     });
     entries.push({
       variant,

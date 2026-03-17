@@ -315,6 +315,35 @@ def test_iterate_prompt_builder_adds_title_anchor_even_when_scene_starts_with_pr
     assert result["prompt"].count('Scene from "Emma":') == 1
 
 
+def test_iterate_prompt_builder_adds_variant_specific_composition_directives():
+    payload = {
+        "book": {
+            "title": "Moby Dick",
+            "author": "Herman Melville",
+        },
+        "templateObj": {
+            "id": "alexandria-wildcard-klimt-gold-leaf",
+            "name": "Klimt Gold Leaf",
+            "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. Mood: {MOOD}. Era: {ERA}.",
+        },
+        "promptId": "alexandria-wildcard-klimt-gold-leaf",
+        "customPrompt": "",
+        "sceneVal": "Captain Ahab on the Pequod deck at sunrise.",
+        "moodVal": "obsessive and windswept",
+        "eraVal": "19th-century Atlantic",
+        "style": {"id": "romantic-sublime", "label": "Romantic Sublime"},
+    }
+
+    variant_one = _run_iterate_prompt_builder({**payload, "variantNumber": 1})
+    variant_two = _run_iterate_prompt_builder({**payload, "variantNumber": 2})
+
+    assert "Keep the primary subject fully contained inside the center of the image" in variant_one["prompt"]
+    assert "Keep the primary subject fully contained inside the center of the image" in variant_two["prompt"]
+    assert "one centered primary subject" in variant_one["prompt"]
+    assert "mid-distance narrative staging" in variant_two["prompt"]
+    assert variant_one["prompt"] != variant_two["prompt"]
+
+
 def test_iterate_ui_defaults_use_ten_variants_and_auto_rotate_label():
     result = _run_iterate_ui_defaults()
 

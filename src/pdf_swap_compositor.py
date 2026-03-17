@@ -15,7 +15,12 @@ from pathlib import Path
 
 import numpy as np
 import pikepdf
-from PIL import Image, ImageOps
+from PIL import Image
+
+try:
+    from src import focus_crop
+except ModuleNotFoundError:  # pragma: no cover
+    import focus_crop  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -177,12 +182,7 @@ def _load_ai_art(
 ) -> Image.Image:
     with Image.open(ai_art_path) as source:
         prepared = _strip_border(source.convert("RGB"), border_trim_ratio=border_trim_ratio)
-        fitted = ImageOps.fit(
-            prepared,
-            size,
-            method=Image.LANCZOS,
-            centering=(0.5, 0.5),
-        )
+        fitted = focus_crop.smart_fit(prepared, size)
         if mode != fitted.mode:
             fitted = fitted.convert(mode)
         return fitted
