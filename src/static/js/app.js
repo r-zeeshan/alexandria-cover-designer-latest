@@ -18,9 +18,21 @@ const PAGES = {
   'api-docs': { title: 'API Docs', render: () => window.Pages['api-docs'].render() },
 };
 
+const RETRY_PROMPT_SUFFIX = 'Focus on one clear subject. No text or lettering. Vivid painterly palette.';
+
 function getPageFromHash() {
   const hashPage = location.hash.slice(1).split('?')[0];
   return hashPage || window.__INITIAL_PAGE__ || 'iterate';
+}
+
+function buildRetryPrompt(basePrompt, attemptNumber) {
+  const cleaned = String(basePrompt || '')
+    .replace(/\s*IMPORTANT:\s*This must be a circular vignette illustration centered and fully contained\.\s*/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (Number(attemptNumber || 1) <= 1) return cleaned;
+  if (cleaned.includes(RETRY_PROMPT_SUFFIX)) return cleaned;
+  return `${cleaned} ${RETRY_PROMPT_SUFFIX}`.trim();
 }
 
 async function renderPage() {
@@ -333,9 +345,7 @@ window.JobQueue = {
 
       while (attempts < this.MAX_RETRIES + 1) {
         attempts += 1;
-        const retryPrompt = attempts > 1
-          ? `${job.prompt} IMPORTANT: This must be a circular vignette illustration centered and fully contained.`
-          : job.prompt;
+        const retryPrompt = buildRetryPrompt(job.prompt, attempts);
         const currentBookRow = DB.dbGet('books', Number(job.book_id || 0))
           || DB.dbGetAll('books').find((row) => Number(row?.id || 0) === Number(job.book_id || 0))
           || null;
@@ -656,6 +666,7 @@ window.__APP_TEST_HOOKS__.buildProjectThumbnailUrl = (value, size = 'large', ver
   window.buildProjectThumbnailUrl(value, size, versionToken)
 );
 window.__APP_TEST_HOOKS__.resolveFullResolutionCompositeSource = (value) => resolveFullResolutionCompositeSource(value);
+window.__APP_TEST_HOOKS__.buildRetryPrompt = (value, attemptNumber = 1) => buildRetryPrompt(value, attemptNumber);
 
 function warnIfSuspiciousCompositeBlob(blob, source) {
   if (!(blob instanceof Blob)) return;
