@@ -203,6 +203,9 @@ def test_negative_prompt_merge_and_nano_alias_resolution(tmp_path: Path, monkeyp
     assert "no airbrushed surfaces" in merged.lower()
     assert "no seamless blending" in merged.lower()
     assert "no uniform color fills" in merged.lower()
+    assert "no decorative ring" in merged.lower()
+    assert "no plaque" in merged.lower()
+    assert "no banner" in merged.lower()
     assert "no plastic surfaces" in merged.lower()
     assert "no stock photo look" in merged.lower()
     assert "no anime" in merged.lower()
@@ -289,11 +292,13 @@ def test_guardrailed_prompt_strips_text_and_frame_directions():
     raw = "Typography-led circular vignette composition with circular medallion illustration, ribbon banner and title text"
     guarded = ig._guardrailed_prompt(raw).lower()
     assert "typography-led" not in guarded
-    assert "circular vignette composition" in guarded
+    assert "circular vignette composition" not in guarded
     assert "circular medallion illustration" not in guarded
     assert "ribbon banner" not in guarded
     assert "mandatory output rules" not in guarded
+    assert "centered focal composition inside an implied circle" in guarded
     assert "no text" in guarded
+    assert "no internal border" in guarded
     assert "vivid painterly palette" in guarded
 
 
@@ -334,6 +339,19 @@ def test_content_guardrail_detects_rectangular_internal_frame():
     assert score > 0.24
     assert "rectangular_frame_artifact" in issues
     assert float(metrics.get("frame_penalty", 0.0)) > 0.20
+
+
+def test_content_guardrail_detects_off_center_subject():
+    off_center = Image.new("RGBA", (256, 256), (16, 24, 34, 255))
+    draw = ImageDraw.Draw(off_center, "RGBA")
+    draw.ellipse((158, 74, 246, 198), fill=(218, 176, 92, 255))
+    draw.rectangle((184, 102, 238, 162), fill=(62, 46, 28, 255))
+
+    score, issues, metrics = ig._content_guardrail_score(off_center)
+    assert "off_center_subject_artifact" in issues
+    assert float(metrics.get("focus_offset", 0.0)) > 0.16
+    assert float(metrics.get("composition_penalty", 0.0)) > 0.34
+    assert score > 0.20
 
 
 def test_provider_classes_with_mocked_http(tmp_path: Path, monkeypatch):
@@ -413,7 +431,8 @@ def test_openrouter_modalities_and_429_retry(tmp_path: Path, monkeypatch):
     system_prompt = calls[-1]["json"]["messages"][0]["content"]
     assert system_prompt == ig.ALEXANDRIA_SYSTEM_PROMPT
     assert "No text, letters, words, or typography" in system_prompt
-    assert "no borders or frames" in system_prompt
+    assert "no borders, frames" in system_prompt
+    assert "implied centered circle" in system_prompt
 
     calls.clear()
     flux = ig.OpenRouterProvider(model="flux-2-pro", api_key="k", runtime=runtime)
@@ -1379,7 +1398,7 @@ def test_generate_one_artifact_error_retries_with_hardened_prompt(tmp_path: Path
     assert result.success is True
     assert result.attempts == 2
     assert len(seen_prompts) == 2
-    assert ig.ARTIFACT_RETRY_APPEND in seen_prompts[1]
+    assert seen_prompts[1] == "Original prompt"
     assert "Mandatory output rules" not in seen_prompts[1]
     assert "no frame" not in seen_prompts[1].lower()
     assert (
@@ -1394,7 +1413,7 @@ def test_generate_one_artifact_error_retries_with_hardened_prompt(tmp_path: Path
         )
         <= ig.MODEL_PROMPT_CHAR_LIMIT
     )
-    assert ig.ARTIFACT_RETRY_APPEND in result.prompt
+    assert result.prompt == "Original prompt"
 
 
 def test_generate_one_preserve_prompt_text_keeps_saved_prompt_on_artifact_retry(tmp_path: Path, monkeypatch):
@@ -1440,7 +1459,7 @@ def test_generate_one_preserve_prompt_text_keeps_saved_prompt_on_artifact_retry(
     assert result.success is True
     assert result.attempts == 2
     assert len(seen_prompts) == 2
-    assert ig.ARTIFACT_RETRY_APPEND in seen_prompts[1]
+    assert seen_prompts[1] == original_prompt
     assert result.prompt == original_prompt
 
 
@@ -1454,7 +1473,7 @@ def test_artifact_retry_prompt_uses_original_text_and_caps_total_length():
     retry_prompt_2 = ig._artifact_retry_prompt(prompt=base_prompt, retry_index=2)
 
     assert retry_prompt_1 == retry_prompt_2
-    assert ig.ARTIFACT_RETRY_APPEND in retry_prompt_1
+    assert retry_prompt_1 == ig._fit_prompt_to_model_limit(ig._sanitize_prompt_text(base_prompt))
     assert "Mandatory output rules" not in retry_prompt_1
     assert "no medallion ring" not in retry_prompt_1.lower()
     assert "no frame" not in retry_prompt_1.lower()

@@ -337,11 +337,50 @@ def test_iterate_prompt_builder_adds_variant_specific_composition_directives():
     variant_one = _run_iterate_prompt_builder({**payload, "variantNumber": 1})
     variant_two = _run_iterate_prompt_builder({**payload, "variantNumber": 2})
 
-    assert "Keep the primary subject fully contained inside the center of the image" in variant_one["prompt"]
-    assert "Keep the primary subject fully contained inside the center of the image" in variant_two["prompt"]
+    assert "Keep all important figures, faces, hands, props, and horizon lines fully contained inside an implied centered circle" in variant_one["prompt"]
+    assert "Keep all important figures, faces, hands, props, and horizon lines fully contained inside an implied centered circle" in variant_two["prompt"]
+    assert "Leave the outer corners as quiet background only." in variant_one["prompt"]
+    assert "Do not draw any internal border, ring, plaque, banner, decorative ornament, or lettering." in variant_one["prompt"]
     assert "one centered primary subject" in variant_one["prompt"]
     assert "mid-distance narrative staging" in variant_two["prompt"]
     assert variant_one["prompt"] != variant_two["prompt"]
+
+
+def test_iterate_prompt_builder_strips_border_and_label_directions_from_prompt_text():
+    result = _run_iterate_prompt_builder(
+        {
+            "book": {
+                "title": "Moby Dick",
+                "author": "Herman Melville",
+            },
+            "templateObj": {
+                "id": "alexandria-wildcard-botanical-plate",
+                "name": "Botanical Plate",
+                "prompt_template": (
+                    "Book cover illustration — no text, no lettering. Scene: {SCENE}. "
+                    "STYLE: botanical precision with Latin labels in copperplate script, interlaced knotwork framing the scene, "
+                    "intricate geometric borders, ribbon banner, and circular vignette composition. Mood: {MOOD}. Era: {ERA}."
+                ),
+            },
+            "promptId": "alexandria-wildcard-botanical-plate",
+            "customPrompt": "",
+            "sceneVal": "Captain Ahab at the prow of the Pequod under a blazing sunset.",
+            "moodVal": "obsessive and windswept",
+            "eraVal": "19th-century Atlantic",
+            "style": {"id": "romantic-sublime", "label": "Romantic Sublime"},
+            "variantNumber": 1,
+        }
+    )
+
+    lowered = result["prompt"].lower()
+    assert lowered.startswith('scene from "moby dick":')
+    assert "latin labels" not in lowered
+    assert "copperplate script" not in lowered
+    assert "knotwork framing the scene" not in lowered
+    assert "geometric borders" not in lowered
+    assert "ribbon banner" not in lowered
+    assert "circular vignette composition" not in lowered
+    assert "centered focal composition inside an implied circle" in lowered
 
 
 def test_iterate_ui_defaults_use_ten_variants_and_auto_rotate_label():

@@ -32,6 +32,7 @@ except Exception:  # pragma: no cover
 try:
     from src import config
     from src import content_relevance
+    from src import focus_crop
     from src import safe_json
     from src import similarity_detector
     from src import prompt_generator
@@ -40,6 +41,7 @@ try:
 except ModuleNotFoundError:  # pragma: no cover
     import config  # type: ignore
     import content_relevance  # type: ignore
+    import focus_crop  # type: ignore
     import safe_json  # type: ignore
     import similarity_detector  # type: ignore
     import prompt_generator  # type: ignore
@@ -117,12 +119,15 @@ STRICT_SCENE_GUARDRAIL = (
     "No text, no letters, no words, no numbers, no logos, no title design, no labels, "
     "no inscriptions, no calligraphy."
 )
-NO_ORNAMENT_GUARDRAIL = ""
+NO_ORNAMENT_GUARDRAIL = (
+    "No internal border, no decorative ring, no plaque, no banner, no cartouche, no filigree, "
+    "no ornamental flourishes."
+)
 VIVID_COLOR_GUARDRAIL = (
     "Vivid painterly palette with strong contrast and luminous highlights."
 )
 GENERATION_GUARDRAIL = " ".join(
-    part for part in (STRICT_SCENE_GUARDRAIL, VIVID_COLOR_GUARDRAIL) if part
+    part for part in (STRICT_SCENE_GUARDRAIL, NO_ORNAMENT_GUARDRAIL, VIVID_COLOR_GUARDRAIL) if part
 )
 GENERIC_SCENE_PATTERN = re.compile(
     r'A pivotal dramatic moment from the literary work\s+"[^"]*"'
@@ -158,11 +163,13 @@ TEXT_ARTIFACT_ORNAMENT_BAND_MIN = 0.075
 TEXT_ARTIFACT_ORNAMENT_BAND_MAX = 0.155
 TEXT_ARTIFACT_ORNAMENT_TINY_MIN = 0.017
 ARTIFACT_RETRY_LIMIT = 3
-ARTIFACT_RETRY_APPEND = "Focus on one clear subject. No text or lettering. Vivid painterly palette."
+ARTIFACT_RETRY_APPEND = ""
 _ENRICHED_BOOK_LOOKUP_CACHE: dict[str, Any] = {"path": "", "mtime": -1.0, "lookup": {}}
 _ENRICHED_BOOK_LOOKUP_LOCK = threading.Lock()
 ALEXANDRIA_NEGATIVE_PROMPT = (
     "No text, no letters, no words, no numbers, no titles, no typography, no watermarks. "
+    "No internal border, no decorative ring, no plaque, no banner, no cartouche, no filigree, "
+    "no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout. "
     "No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, "
     "no airbrushed surfaces, no seamless blending, no uniform color fills, "
     "no pixel-perfect edges, no smooth digital gradients, no plastic surfaces, "
@@ -177,7 +184,8 @@ ALEXANDRIA_RENDERING_PREFIX = (
 )
 ALEXANDRIA_SYSTEM_PROMPT = (
     "Generate artwork only. No text, letters, words, or typography of any kind. "
-    "Return a single image with no borders or frames around it."
+    "Keep the entire subject and action inside an implied centered circle with quiet outer corners; do not draw the circle itself. "
+    "Return a single image with no borders, frames, plaques, banners, or internal ornaments."
 )
 MEDIUM_OPENERS = {
     "oil": "Oil paint on stretched linen canvas, visible impasto brushwork throughout —",
@@ -231,8 +239,38 @@ PHYSICAL_TEXTURE_CLOSER = (
     "Surface shows natural material texture: visible brushstrokes, pigment variation, paper grain."
 )
 PROVIDER_DIGITAL_AVOIDANCE_LINE = "Do not render as digital art, vector, CGI, or 3D."
+_PROMPT_REPLACEMENTS: tuple[tuple[str, str], ...] = (
+    (r"\bcircular vignette composition\b", "centered focal composition inside an implied circle"),
+    (r"\bcircular medallion-ready composition\b", "centered focal composition inside an implied circle"),
+    (r"\blatin labels?\s+in\s+copperplate\s+script\b", "scientific precision and careful linework"),
+    (
+        r"\bintertwining vines and birds framing the scene\b",
+        "intertwining vine and bird motifs woven into fabrics and background details",
+    ),
+    (
+        r"\binterlaced knotwork framing the scene\b",
+        "interlaced knotwork motifs woven into textiles and carved details",
+    ),
+    (
+        r"\bintricate geometric borders\b",
+        "intricate geometric patterning in textiles and architecture",
+    ),
+    (
+        r"\bintricate marginalia patterns\b",
+        "intricate manuscript patterning within fabrics and objects",
+    ),
+    (
+        r"\bsea monsters and ships in margins\b",
+        "ships and sea-creature motifs worked into the distant waters and sky",
+    ),
+    (
+        r"\bscrolls and books as decorative elements\b",
+        "scrolls and books naturally present in the environment",
+    ),
+)
 _PROMPT_REMOVAL_PATTERNS: tuple[str, ...] = (
     r"(?<!no )\bcircular\s+medallion(?:\s+illustration)?\b",
+    r"(?<!no )\bcircular\s+vignette(?:\s+composition)?\b",
     r"(?<!no )\bcircular\s+(?:frame|border|ring)\b",
     r"(?<!no )\bgold\s+circular\s+border\b",
     r"\btypography(?:[- ]led)?\b",
@@ -249,13 +287,19 @@ _PROMPT_REMOVAL_PATTERNS: tuple[str, ...] = (
     r"(?<!no )\bflourish(?:es)?\b",
     r"(?<!no )\bbotanical ornament\b",
     r"(?<!no )\bornamental arches?\b",
+    r"\bmarginalia(?:\s+patterns?)?\b",
+    r"(?<!no )\bgeometric\s+borders?\b",
     r"(?<!no )\blace(?:-like)?(?:\s+cutout)?(?:\s+motifs?)?\b",
     r"\bplaque\b",
     r"\bseal\b",
+    r"\bcartouche\b",
     r"\binner(?:\s+frame|\s+ring|\s+border)?\b",
     r"(?<!no )\bdecorative(?:\s+edge|\s+frame|\s+border)?\b",
+    r"(?<!no )\bdecorative\s+detail\b",
     r"(?<!no )\bornamental(?:\s+border|\s+frame|\s+edge)?\b",
     r"\bframing\b",
+    r"\bin\s+margins\b",
+    r"\bcopperplate\s+script\b",
     r"\bmedallion(?:\s+zone|\s+opening|\s+window)?\b",
     r"\bgilt ornament language\b",
 )
@@ -385,6 +429,8 @@ def _sanitize_prompt_text(prompt: str) -> str:
     text = " ".join(str(prompt or "").split())
     if not text:
         return text
+    for pattern, replacement in _PROMPT_REPLACEMENTS:
+        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
     for pattern in _PROMPT_REMOVAL_PATTERNS:
         text = re.sub(pattern, " ", text, flags=re.IGNORECASE)
     # Keep tragic scenes book-specific without explicitly instructing self-harm.
@@ -491,6 +537,11 @@ def _guardrailed_prompt(prompt: str) -> str:
     prefixes: list[str] = []
     if not all(marker in lowered for marker in ("no text", "no letters", "no words")):
         prefixes.append(STRICT_SCENE_GUARDRAIL)
+    if not any(
+        marker in lowered
+        for marker in ("no internal border", "no decorative ring", "no plaque", "no banner", "no ornament")
+    ):
+        prefixes.append(NO_ORNAMENT_GUARDRAIL)
     if "vivid painterly palette" not in lowered and "vivid, high-saturation painterly palette" not in lowered:
         prefixes.append(VIVID_COLOR_GUARDRAIL)
     text = " ".join(part for part in [*prefixes, base] if part).strip()
@@ -593,7 +644,7 @@ def _is_artifact_generation_error(message: str) -> bool:
 
 def _artifact_retry_prompt(*, prompt: str, retry_index: int) -> str:
     del retry_index
-    return _fit_prompt_to_model_limit(_sanitize_prompt_text(prompt), suffix=ARTIFACT_RETRY_APPEND)
+    return _fit_prompt_to_model_limit(_sanitize_prompt_text(prompt))
 
 
 def _is_high_confidence_text_artifact(*, content_score: float, metrics: dict[str, float]) -> bool:
@@ -626,6 +677,67 @@ def _is_high_confidence_text_artifact(*, content_score: float, metrics: dict[str
         text_band_ratio >= TEXT_ARTIFACT_HARD_BAND_RATIO
         or tiny_effective >= TEXT_ARTIFACT_HARD_TINY_EFFECTIVE
     )
+
+
+def _composition_guardrail_metrics(image: Image.Image) -> dict[str, float]:
+    try:
+        working = image.convert("RGBA")
+        weights = np.asarray(focus_crop._focus_weights(working), dtype=np.float32)  # type: ignore[attr-defined]
+    except Exception:
+        return {
+            "focus_offset": 0.0,
+            "center_mass_ratio": 1.0,
+            "corner_focus_ratio": 0.0,
+            "composition_penalty": 0.0,
+        }
+
+    if weights.ndim != 2 or weights.size <= 0:
+        return {
+            "focus_offset": 0.0,
+            "center_mass_ratio": 1.0,
+            "corner_focus_ratio": 0.0,
+            "composition_penalty": 0.0,
+        }
+
+    total = float(weights.sum())
+    if total <= 1e-6:
+        return {
+            "focus_offset": 0.0,
+            "center_mass_ratio": 1.0,
+            "corner_focus_ratio": 0.0,
+            "composition_penalty": 0.0,
+        }
+
+    h, w = weights.shape
+    if min(h, w) < 128:
+        return {
+            "focus_offset": 0.0,
+            "center_mass_ratio": 1.0,
+            "corner_focus_ratio": 0.0,
+            "composition_penalty": 0.0,
+        }
+    yy, xx = np.indices((h, w), dtype=np.float32)
+    norm_x = xx / float(max(1, w - 1))
+    norm_y = yy / float(max(1, h - 1))
+    radius = np.sqrt(((norm_x - 0.5) ** 2) + ((norm_y - 0.5) ** 2))
+    center_mask = radius <= 0.36
+    corner_mask = radius >= 0.58
+
+    focus_x, focus_y = focus_crop.focus_centering(working)
+    focus_offset = float(np.sqrt(((focus_x - 0.5) ** 2) + ((focus_y - 0.5) ** 2)))
+    center_mass_ratio = float(weights[center_mask].sum() / total) if np.any(center_mask) else 0.0
+    corner_focus_ratio = float(weights[corner_mask].sum() / total) if np.any(corner_mask) else 0.0
+
+    offset_penalty = _clip((focus_offset - 0.08) / 0.16)
+    corner_penalty = _clip((corner_focus_ratio - 0.26) / 0.22)
+    center_penalty = _clip((0.46 - center_mass_ratio) / 0.22)
+    composition_penalty = _clip((0.72 * offset_penalty) + (0.18 * corner_penalty) + (0.10 * center_penalty))
+    return {
+        "focus_offset": float(focus_offset),
+        "center_mass_ratio": float(center_mass_ratio),
+        "corner_focus_ratio": float(corner_focus_ratio),
+        "composition_penalty": float(composition_penalty),
+    }
 
 
 @dataclass(slots=True)
@@ -2121,6 +2233,13 @@ def generate_image(
             ("inner_frame_or_ring_artifact" in content_issues or "rectangular_frame_artifact" in content_issues)
             and content_score >= 0.35
         )
+        hard_composition_artifact = (
+            "off_center_subject_artifact" in content_issues
+            and (
+                float(metrics.get("focus_offset", 0.0) or 0.0) > 0.16
+                or float(metrics.get("corner_focus_ratio", 0.0) or 0.0) > 0.28
+            )
+        )
         if has_text_artifact and not hard_text_artifact:
             logger.info(
                 "Soft-passing low-confidence text artifact: score=%.3f text_penalty=%.3f band=%.3f tiny=%.3f",
@@ -2129,7 +2248,7 @@ def generate_image(
                 float(metrics.get("text_band_ratio", 0.0) or 0.0),
                 float(metrics.get("tiny_effective", 0.0) or 0.0),
             )
-        if content_score > MAX_CONTENT_VIOLATION_SCORE or hard_text_artifact or hard_frame_artifact:
+        if content_score > MAX_CONTENT_VIOLATION_SCORE or hard_text_artifact or hard_frame_artifact or hard_composition_artifact:
             issue_blob = ", ".join(content_issues[:3]) if content_issues else "content_artifacts"
             raise GenerationError(
                 f"Generated image rejected by content guardrail ({content_score:.3f}): {issue_blob}"
@@ -3478,8 +3597,16 @@ def _content_guardrail_score(image: Image.Image) -> tuple[float, list[str], dict
     ring_penalty, ring_metrics = _ring_artifact_penalty(edge_map=edge_map, mask=mask)
     frame_penalty, frame_metrics = _rectangular_frame_penalty(edge_map=edge_map, mask=mask)
     dull_penalty, color_metrics = _dull_palette_penalty(rgb=rgb, mask=mask)
+    composition_metrics = _composition_guardrail_metrics(image)
+    composition_penalty = float(composition_metrics.get("composition_penalty", 0.0))
 
-    score = (0.52 * text_penalty) + (0.30 * ring_penalty) + (0.28 * frame_penalty) + (0.18 * dull_penalty)
+    score = (
+        (0.52 * text_penalty)
+        + (0.30 * ring_penalty)
+        + (0.28 * frame_penalty)
+        + (0.18 * dull_penalty)
+        + (0.26 * composition_penalty)
+    )
     score = _clip(score)
 
     issues: list[str] = []
@@ -3489,6 +3616,14 @@ def _content_guardrail_score(image: Image.Image) -> tuple[float, list[str], dict
         issues.append("inner_frame_or_ring_artifact")
     if frame_penalty > 0.22:
         issues.append("rectangular_frame_artifact")
+    if composition_penalty > 0.34 and (
+        float(composition_metrics.get("focus_offset", 0.0)) > 0.16
+        or (
+            float(composition_metrics.get("focus_offset", 0.0)) > 0.12
+            and float(composition_metrics.get("corner_focus_ratio", 0.0)) > 0.28
+        )
+    ):
+        issues.append("off_center_subject_artifact")
     if dull_penalty > 0.12:
         issues.append("low_vibrancy")
     metrics = {
@@ -3505,6 +3640,10 @@ def _content_guardrail_score(image: Image.Image) -> tuple[float, list[str], dict
         "frame_line_strength": float(frame_metrics.get("line_strength", 0.0)),
         "frame_vs_center_ratio": float(frame_metrics.get("frame_vs_center_ratio", 0.0)),
         "mean_saturation": float(color_metrics.get("mean_saturation", 0.0)),
+        "focus_offset": float(composition_metrics.get("focus_offset", 0.0)),
+        "center_mass_ratio": float(composition_metrics.get("center_mass_ratio", 0.0)),
+        "corner_focus_ratio": float(composition_metrics.get("corner_focus_ratio", 0.0)),
+        "composition_penalty": float(composition_metrics.get("composition_penalty", 0.0)),
     }
     return score, issues, metrics
 

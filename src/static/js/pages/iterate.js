@@ -31,7 +31,9 @@ const VARIANT_COMPOSITION_DIRECTIVES = [
   'Composition: lateral motion with the primary subject turned in profile but still fully contained within the frame.',
   'Composition: architectural or natural framing behind a centered subject, keeping strong open margin around the silhouette.',
 ];
-const CENTRAL_SAFE_AREA_DIRECTIVE = 'Keep the primary subject fully contained inside the center of the image with clear margin on all sides. No cut-off subject at the edges.';
+const CENTRAL_SAFE_AREA_DIRECTIVE = 'Keep all important figures, faces, hands, props, and horizon lines fully contained inside an implied centered circle in the middle of the image.';
+const QUIET_CORNER_DIRECTIVE = 'Leave the outer corners as quiet background only. No cut-off subject at the edges.';
+const NO_INTERNAL_FRAME_DIRECTIVE = 'Do not draw any internal border, ring, plaque, banner, decorative ornament, or lettering.';
 const PREFERRED_DEFAULT_MODELS = [
   'openrouter/google/gemini-3-pro-image-preview',
   'nano-banana-pro',
@@ -83,6 +85,51 @@ const GENERIC_CONTENT_MARKERS = [
   'supporting cast',
   'mentor/foil',
   'antagonistic force',
+];
+const PROMPT_CONFLICT_REPLACEMENTS = [
+  [/\bcircular vignette composition\b/gi, 'centered focal composition inside an implied circle'],
+  [/\bcircular medallion-ready composition\b/gi, 'centered focal composition inside an implied circle'],
+  [/\blatin labels?\s+in\s+copperplate\s+script\b/gi, 'scientific precision and careful linework'],
+  [/\bintertwining vines and birds framing the scene\b/gi, 'intertwining vine and bird motifs woven into fabrics and background details'],
+  [/\binterlaced knotwork framing the scene\b/gi, 'interlaced knotwork motifs woven into textiles and carved details'],
+  [/\bintricate geometric borders\b/gi, 'intricate geometric patterning in textiles and architecture'],
+  [/\bintricate marginalia patterns\b/gi, 'intricate manuscript patterning within fabrics and objects'],
+  [/\bsea monsters and ships in margins\b/gi, 'ships and sea-creature motifs worked into the distant waters and sky'],
+  [/\bscrolls and books as decorative elements\b/gi, 'scrolls and books naturally present in the environment'],
+];
+const PROMPT_CONFLICT_REMOVALS = [
+  /(?<!no )\bcircular\s+medallion(?:\s+illustration)?\b/gi,
+  /(?<!no )\bcircular\s+vignette(?:\s+composition)?\b/gi,
+  /(?<!no )\bcircular\s+(?:frame|border|ring)\b/gi,
+  /\btypography(?:[- ]led)?\b/gi,
+  /\btext[- ]safe\b/gi,
+  /\btitle[- ]safe\b/gi,
+  /\bnameplate\b/gi,
+  /\blogo(?:s)?\b/gi,
+  /\bwatermark(?:s)?\b/gi,
+  /\bribbon(?:\s+banner)?\b/gi,
+  /(?<!no )\bfiligree\b/gi,
+  /(?<!no )\bscroll(?:work)?\b/gi,
+  /(?<!no )\barabesque(?:s)?\b/gi,
+  /(?<!no )\btracery\b/gi,
+  /(?<!no )\bflourish(?:es)?\b/gi,
+  /(?<!no )\bbotanical ornament\b/gi,
+  /(?<!no )\bornamental arches?\b/gi,
+  /\bmarginalia(?:\s+patterns?)?\b/gi,
+  /(?<!no )\bgeometric\s+borders?\b/gi,
+  /(?<!no )\blace(?:-like)?(?:\s+cutout)?(?:\s+motifs?)?\b/gi,
+  /\bplaque\b/gi,
+  /\bseal\b/gi,
+  /\bcartouche\b/gi,
+  /\binner(?:\s+frame|\s+ring|\s+border)?\b/gi,
+  /(?<!no )\bdecorative(?:\s+edge|\s+frame|\s+border)?\b/gi,
+  /(?<!no )\bdecorative\s+detail\b/gi,
+  /(?<!no )\bornamental(?:\s+border|\s+frame|\s+edge)?\b/gi,
+  /\bframing\b/gi,
+  /\bin\s+margins\b/gi,
+  /\bcopperplate\s+script\b/gi,
+  /\bmedallion(?:\s+zone|\s+opening|\s+window)?\b/gi,
+  /\bgilt ornament language\b/gi,
 ];
 const ALEXANDRIA_BASE_PROMPT_IDS = {
   classicalDevotion: 'alexandria-base-classical-devotion',
@@ -1100,11 +1147,26 @@ function sceneForVariant(book, variant, explicitScene = '') {
 }
 
 function cleanupResolvedPrompt(promptText) {
-  return String(promptText || '')
+  let text = String(promptText || '');
+  PROMPT_CONFLICT_REPLACEMENTS.forEach(([pattern, replacement]) => {
+    text = text.replace(pattern, replacement);
+  });
+  PROMPT_CONFLICT_REMOVALS.forEach((pattern) => {
+    text = text.replace(pattern, ' ');
+  });
+  return text
     .replace(/Era reference:\s*(?:\.|,|;|:)?/gi, '')
+    .replace(/\bno\s*,\s*no\b/gi, 'no')
+    .replace(/\bno,\s*(?=no\b)/gi, '')
+    .replace(/\bno,\s*(?=[.,;:!?]|$)/gi, '')
+    .replace(/,\s*no\s*,/gi, ', ')
+    .replace(/,\s*,+/g, ', ')
     .replace(/\s+([,.;:!?])/g, '$1')
     .replace(/([.?!])\s*\./g, '$1')
     .replace(/\s{2,}/g, ' ')
+    .trim()
+    .replace(/^[,.;:!?]+\s*/, '')
+    .replace(/\s*[,;:]+$/g, '')
     .trim();
 }
 
@@ -1147,7 +1209,7 @@ function resolvePrompt(templateObj, book, customPrompt, sceneVal, moodVal, eraVa
 function variantCompositionDirective(variantNumber) {
   const index = Math.max(0, (Number(variantNumber || 1) - 1)) % VARIANT_COMPOSITION_DIRECTIVES.length;
   const directive = VARIANT_COMPOSITION_DIRECTIVES[index] || VARIANT_COMPOSITION_DIRECTIVES[0];
-  return `${directive} ${CENTRAL_SAFE_AREA_DIRECTIVE}`.trim();
+  return `${directive} ${CENTRAL_SAFE_AREA_DIRECTIVE} ${QUIET_CORNER_DIRECTIVE} ${NO_INTERNAL_FRAME_DIRECTIVE}`.trim();
 }
 
 function appendVariantCompositionDirective(promptText, variantNumber) {
@@ -1211,10 +1273,12 @@ function buildGenerationJobPrompt({ book, templateObj, promptId, customPrompt, s
   let prompt = usesStandalonePrompt
     ? basePrompt
     : `${StyleDiversifier.buildDiversifiedPrompt(book.title, book.author, style)} ${basePrompt}`.trim();
+  prompt = cleanupResolvedPrompt(prompt);
   const titleAnchor = _buildTitleAnchor(book);
   if (titleAnchor && !_promptStartsWithBookContent(prompt, book)) {
     prompt = `${titleAnchor} ${prompt}`.trim();
   }
+  prompt = cleanupResolvedPrompt(prompt);
   prompt = appendVariantCompositionDirective(prompt, variantNumber);
   const templateName = String(templateObj?.name || '').trim();
   const styleLabel = usesStandalonePrompt
