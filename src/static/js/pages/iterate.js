@@ -15,6 +15,9 @@ const DEFAULT_VARIANT_COUNT = 10;
 const SEQUENTIAL_BATCH_SIZE = 4;
 const AUTO_ROTATE_PROMPT_OPTION_LABEL = 'Auto-Rotate (Recommended)';
 const AUTO_ROTATE_PROMPT_INFO = 'Automatically varies artistic styles and scenes across your covers.';
+const AUTO_ROTATE_EXCLUDED_WILDCARD_TAGS = new Set([
+  'travel-poster',
+]);
 const PREFERRED_DEFAULT_MODELS = [
   'openrouter/google/gemini-3-pro-image-preview',
   'nano-banana-pro',
@@ -1322,6 +1325,29 @@ function findPromptById(promptId) {
   return sortPromptsForUI(DB.dbGetAll('prompts')).find((prompt) => _normalizePromptText(prompt?.id) === token) || null;
 }
 
+function promptTagSet(prompt) {
+  return new Set(
+    (Array.isArray(prompt?.tags) ? prompt.tags : [])
+      .map((tag) => _normalizePromptText(tag))
+      .filter(Boolean)
+  );
+}
+
+function isAlexandriaWildcardPrompt(prompt) {
+  const tags = promptTagSet(prompt);
+  const category = _normalizePromptText(prompt?.category || '');
+  return category === 'wildcard' || (tags.has('alexandria') && tags.has('wildcard'));
+}
+
+function isAutoRotateEligibleWildcardPrompt(prompt) {
+  if (!isAlexandriaWildcardPrompt(prompt)) return false;
+  const tags = promptTagSet(prompt);
+  for (const token of AUTO_ROTATE_EXCLUDED_WILDCARD_TAGS) {
+    if (tags.has(token)) return false;
+  }
+  return true;
+}
+
 function genrePromptConfigForBook(book) {
   const enrichment = _bookEnrichment(book);
   const rawTokens = [
@@ -1364,8 +1390,7 @@ function _dayOfYear(referenceDate = new Date()) {
 }
 
 function suggestedWildcardPromptForBook(book, referenceDate = new Date()) {
-  const config = genrePromptConfigForBook(book);
-  const ids = Array.isArray(config?.wildcards) ? config.wildcards : [];
+  const ids = buildWildcardRotationPoolForBook(book);
   if (!ids.length) return null;
   const seed = _hashString(`${book?.title || ''}::${book?.author || ''}`);
   const index = (seed + _dayOfYear(referenceDate)) % ids.length;
@@ -1382,6 +1407,28 @@ function defaultAutoPromptConfigForBook(book) {
     base: ALEXANDRIA_BASE_PROMPT_IDS.romanticRealism,
     wildcards: [],
   };
+}
+
+function buildWildcardRotationPoolForBook(book) {
+  const config = defaultAutoPromptConfigForBook(book);
+  const preferredIds = Array.isArray(config?.wildcards) ? config.wildcards : [];
+  const inventory = sortPromptsForUI(DB.dbGetAll('prompts'))
+    .filter((prompt) => isAutoRotateEligibleWildcardPrompt(prompt));
+  const sequence = [];
+  const pushPromptId = (value, { allowMissing = false } = {}) => {
+    const resolved = resolvePromptIdAlias(value || '');
+    if (!resolved || sequence.includes(resolved)) return;
+    const prompt = findPromptById(resolved);
+    if (prompt) {
+      if (!isAutoRotateEligibleWildcardPrompt(prompt)) return;
+    } else if (!allowMissing) {
+      return;
+    }
+    sequence.push(resolved);
+  };
+  preferredIds.forEach((promptId) => pushPromptId(promptId, { allowMissing: true }));
+  inventory.forEach((prompt) => pushPromptId(prompt?.id || ''));
+  return sequence;
 }
 
 function buildExpandedBasePromptIds(primaryBaseId) {
@@ -1427,9 +1474,7 @@ function buildVariantPromptAssignments({ book, variantCount, referenceDate = new
   const total = Math.max(1, Number(variantCount || 1));
   const config = defaultAutoPromptConfigForBook(book);
   const basePromptId = resolvePromptIdAlias(config?.base || ALEXANDRIA_BASE_PROMPT_IDS.romanticRealism || '');
-  const wildcardIds = Array.isArray(config?.wildcards)
-    ? config.wildcards.map((value) => resolvePromptIdAlias(value)).filter(Boolean)
-    : [];
+  const wildcardIds = buildWildcardRotationPoolForBook(book);
   const wildcardSeed = wildcardIds.length
     ? (_hashString(`${book?.title || ''}::${book?.author || ''}`) + _dayOfYear(referenceDate)) % wildcardIds.length
     : 0;
@@ -1507,6 +1552,7 @@ window.__ITERATE_TEST_HOOKS__.buildVariantPromptAssignments = ({ book, variantCo
     referenceDate: referenceDate ? new Date(referenceDate) : new Date(),
   })
 );
+window.__ITERATE_TEST_HOOKS__.buildWildcardRotationPoolForBook = ({ book }) => buildWildcardRotationPoolForBook(book);
 
 function backendJobIdForJob(job) {
   const direct = String(job?.backend_job_id || '').trim();

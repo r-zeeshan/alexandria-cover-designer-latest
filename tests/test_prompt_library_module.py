@@ -167,13 +167,13 @@ def test_seeded_alexandria_builtins_are_scene_first(tmp_path: Path, monkeypatch)
         if prompt.id.startswith("alexandria-")
     }
 
-    assert len(prompts) == 37
+    assert len(prompts) == 38
     wildcard_prompts = [
         prompt
         for prompt in prompts.values()
         if "wildcard" in {tag.lower() for tag in prompt.tags}
     ]
-    assert len(wildcard_prompts) == 32
+    assert len(wildcard_prompts) == 33
     for prompt_id, prompt in prompts.items():
         template = prompt.prompt_template
         assert template.startswith("Book cover illustration")
@@ -282,8 +282,9 @@ def test_seeded_alexandria_wildcards_use_prompt65_compact_templates(tmp_path: Pa
         if prompt.id.startswith("alexandria-wildcard-")
     ]
 
-    assert len(wildcard_prompts) == 32
+    assert len(wildcard_prompts) == 33
     tails = []
+    prompt_by_id = {prompt.id: prompt for prompt in wildcard_prompts}
     for prompt in wildcard_prompts:
         assert prompt.prompt_template.startswith("Book cover illustration — no text, no lettering.")
         assert "Scene: {SCENE}." in prompt.prompt_template
@@ -295,6 +296,10 @@ def test_seeded_alexandria_wildcards_use_prompt65_compact_templates(tmp_path: Pa
         assert "Rendered with the physical texture of traditional handmade artwork." not in prompt.prompt_template
         tails.append(prompt.prompt_template.split("Era: {ERA}. ", 1)[-1].strip())
     assert len(set(tails)) == len(wildcard_prompts)
+    assert prompt_by_id["alexandria-wildcard-pre-raphaelite-garden"].name == "WILDCARD 2 — Pre-Raphaelite Garden"
+    assert "lush Pre-Raphaelite garden painting" in prompt_by_id["alexandria-wildcard-pre-raphaelite-garden"].prompt_template
+    assert prompt_by_id["alexandria-wildcard-vintage-travel-poster"].name == "Vintage Travel Poster"
+    assert "bold 1930s vintage travel poster" in prompt_by_id["alexandria-wildcard-vintage-travel-poster"].prompt_template
 
 
 def test_build_prompt_best_prompts_add_anchor(tmp_path: Path, monkeypatch):

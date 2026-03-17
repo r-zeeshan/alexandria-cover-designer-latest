@@ -495,6 +495,56 @@ def test_iterate_wildcard_rotation_changes_across_days():
     assert first["id"] != second["id"]
 
 
+def test_iterate_wildcard_rotation_pool_excludes_travel_poster_for_auto_rotate():
+    prompts = [
+        {"id": "alexandria-wildcard-pre-raphaelite-garden", "name": "WILDCARD 2 — Pre-Raphaelite Garden", "tags": ["alexandria", "wildcard", "pre-raphaelite-garden", "romantic"]},
+        {"id": "alexandria-wildcard-vintage-travel-poster", "name": "Vintage Travel Poster", "tags": ["alexandria", "wildcard", "travel-poster", "graphic", "flat-color"]},
+        {"id": "alexandria-wildcard-painterly-soft", "name": "Painterly Soft Brushwork", "tags": ["alexandria", "wildcard"]},
+        {"id": "alexandria-wildcard-pre-raphaelite-dream", "name": "WILDCARD 23 — Pre-Raphaelite Dream", "tags": ["alexandria", "wildcard"]},
+        {"id": "alexandria-wildcard-impressionist-plein-air", "name": "Impressionist Plein Air", "tags": ["alexandria", "wildcard"]},
+        {"id": "alexandria-wildcard-art-nouveau-poster", "name": "Art Nouveau Poster", "tags": ["alexandria", "wildcard", "graphic"]},
+    ]
+
+    pool = _run_iterate_hook(
+        function_name="buildWildcardRotationPoolForBook",
+        payload={
+            "book": {"title": "Emma", "author": "Jane Austen", "genre": "literature"},
+        },
+        prompts=prompts,
+    )
+
+    assert "alexandria-wildcard-vintage-travel-poster" not in pool
+    assert "alexandria-wildcard-pre-raphaelite-garden" in pool
+    assert "alexandria-wildcard-impressionist-plein-air" in pool
+
+
+def test_iterate_variant_prompt_plan_skips_travel_poster_for_emma_auto_rotate():
+    prompts = [
+        {"id": "alexandria-base-romantic-realism", "name": "BASE 4 — Romantic Realism", "tags": ["alexandria", "base"]},
+        {"id": "alexandria-wildcard-pre-raphaelite-garden", "name": "WILDCARD 2 — Pre-Raphaelite Garden", "tags": ["alexandria", "wildcard", "pre-raphaelite-garden", "romantic"]},
+        {"id": "alexandria-wildcard-vintage-travel-poster", "name": "Vintage Travel Poster", "tags": ["alexandria", "wildcard", "travel-poster", "graphic", "flat-color"]},
+        {"id": "alexandria-wildcard-painterly-soft", "name": "Painterly Soft Brushwork", "tags": ["alexandria", "wildcard"]},
+        {"id": "alexandria-wildcard-painterly-detailed", "name": "Painterly Hyper-Detailed", "tags": ["alexandria", "wildcard"]},
+        {"id": "alexandria-wildcard-pre-raphaelite-dream", "name": "WILDCARD 23 — Pre-Raphaelite Dream", "tags": ["alexandria", "wildcard"]},
+        {"id": "alexandria-wildcard-impressionist-plein-air", "name": "Impressionist Plein Air", "tags": ["alexandria", "wildcard"]},
+    ]
+
+    assignments = _run_iterate_hook(
+        function_name="buildVariantPromptAssignments",
+        payload={
+            "book": {"title": "Emma", "author": "Jane Austen", "genre": "literature"},
+            "variantCount": 6,
+            "referenceDate": "2026-03-11T00:00:00.000Z",
+        },
+        prompts=prompts,
+    )
+
+    prompt_ids = [row["promptId"] for row in assignments]
+    assert "alexandria-wildcard-vintage-travel-poster" not in prompt_ids
+    assert "alexandria-wildcard-pre-raphaelite-garden" in prompt_ids
+    assert "alexandria-wildcard-impressionist-plein-air" in prompt_ids
+
+
 def test_iterate_variant_prompt_plan_uses_base_then_rotating_wildcards():
     prompts = [
         {"id": "alexandria-base-romantic-realism", "name": "BASE 4 — Romantic Realism", "tags": ["alexandria", "base"]},

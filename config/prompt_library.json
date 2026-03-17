@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "updated_at": "2026-03-16T20:58:23.844800+00:00",
+  "updated_at": "2026-03-17T12:12:39.683241+00:00",
   "style_anchors": [
     {
       "name": "allegorical_symbolic",
@@ -253,6 +253,33 @@
       "win_count": 0,
       "last_used_at": "",
       "updated_at": "2026-03-16T20:58:23.844708+00:00"
+    },
+    {
+      "id": "alexandria-wildcard-vintage-travel-poster",
+      "name": "Vintage Travel Poster",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: bold 1930s vintage travel poster — flat unblended colour blocks with clean outlines, layered depth planes, burgundy navy cream and forest green palette, geometric confidence. Mood: {MOOD}. Era: {ERA}. Poster gouache with uneven screenprint grain. Slightly irregular linework, color bleeds at edges.",
+      "style_anchors": [],
+      "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
+      "source_book": "builtin",
+      "source_model": "openrouter/google/gemini-3-pro-image-preview",
+      "quality_score": 1.0,
+      "saved_by": "system",
+      "created_at": "2026-03-17T12:12:08.419932+00:00",
+      "notes": "Alexandria wildcard prompt. Flat-colour travel-poster composition with bold geometric depth.",
+      "tags": [
+        "alexandria",
+        "wildcard",
+        "vintage-travel-poster",
+        "travel-poster",
+        "graphic",
+        "flat-color"
+      ],
+      "category": "wildcard",
+      "version": 1,
+      "usage_count": 0,
+      "win_count": 0,
+      "last_used_at": "",
+      "updated_at": "2026-03-17T12:12:08.419932+00:00"
     },
     {
       "id": "alexandria-wildcard-painterly-soft",
@@ -1050,8 +1077,8 @@
     },
     {
       "id": "alexandria-wildcard-pre-raphaelite-garden",
-      "name": "WILDCARD 2 — Vintage Travel Poster",
-      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: bold 1930s vintage travel poster — flat unblended colour blocks with clean outlines, layered depth planes, burgundy navy cream and forest green palette, geometric confidence. Mood: {MOOD}. Era: {ERA}. Poster gouache with uneven screenprint grain. Slightly irregular linework, color bleeds at edges.",
+      "name": "WILDCARD 2 — Pre-Raphaelite Garden",
+      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: lush Pre-Raphaelite garden painting — rose gardens, jewel-rich foliage, flowing drapery, Waterhouse tenderness, warm evening light. Mood: {MOOD}. Era: {ERA}. Layered watercolor glazes over gesso, petals brushed by hand. Slightly irregular linework, color bleeds at edges.",
       "style_anchors": [],
       "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
@@ -1059,21 +1086,21 @@
       "quality_score": 1.0,
       "saved_by": "system",
       "created_at": "2026-03-08T09:39:50.801657+00:00",
-      "notes": "Alexandria wildcard prompt. Flat-colour travel-poster composition with bold geometric depth.",
+      "notes": "Alexandria wildcard prompt. Romantic garden tableau with Pre-Raphaelite colour and floral richness.",
       "tags": [
         "alexandria",
         "wildcard",
-        "vintage-travel-poster",
-        "travel-poster",
-        "graphic",
-        "flat-color"
+        "pre-raphaelite-garden",
+        "romantic",
+        "garden",
+        "painterly"
       ],
       "category": "wildcard",
       "version": 1,
       "usage_count": 0,
       "win_count": 0,
       "last_used_at": "",
-      "updated_at": "2026-03-16T20:58:23.844729+00:00"
+      "updated_at": "2026-03-17T12:12:39.683202+00:00"
     },
     {
       "id": "alexandria-wildcard-edo-meets-alexandria",

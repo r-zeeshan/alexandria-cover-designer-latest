@@ -49,7 +49,8 @@ ALEXANDRIA_ORGANIC_QUALITY_CLAUSE = (
 
 ALEXANDRIA_WILDCARD_TEXTURE_CLAUSES: dict[str, str] = {
     "alexandria-wildcard-edo-meets-alexandria": "Dry-brush ink drag with rough paper tooth.",
-    "alexandria-wildcard-pre-raphaelite-garden": "Poster gouache with uneven screenprint grain.",
+    "alexandria-wildcard-pre-raphaelite-garden": "Layered watercolor glazes over gesso, petals brushed by hand.",
+    "alexandria-wildcard-vintage-travel-poster": "Poster gouache with uneven screenprint grain.",
     "alexandria-wildcard-illuminated-manuscript": "Gold leaf flecks over vellum, pigment edges irregular.",
     "alexandria-wildcard-celestial-cartography": "Copperplate hatchwork pressed into warm parchment grain.",
     "alexandria-wildcard-temple-of-knowledge": "Dusty fresco pigments over porous stone texture.",
@@ -253,7 +254,18 @@ ALEXANDRIA_PROMPT_CATALOG: tuple[dict[str, object], ...] = (
     },
     {
         "id": "alexandria-wildcard-pre-raphaelite-garden",
-        "name": "WILDCARD 2 — Vintage Travel Poster",
+        "name": "WILDCARD 2 — Pre-Raphaelite Garden",
+        "style_label": "lush Pre-Raphaelite garden painting",
+        "style_description": (
+            "rose gardens, jewel-rich foliage, flowing drapery, Waterhouse tenderness, warm evening light"
+        ),
+        "notes": "Alexandria wildcard prompt. Romantic garden tableau with Pre-Raphaelite colour and floral richness.",
+        "tags": ["alexandria", "wildcard", "pre-raphaelite-garden", "romantic", "garden", "painterly"],
+        "category": "wildcard",
+    },
+    {
+        "id": "alexandria-wildcard-vintage-travel-poster",
+        "name": "Vintage Travel Poster",
         "style_label": "bold 1930s vintage travel poster",
         "style_description": (
             "flat unblended colour blocks with clean outlines, layered depth planes, burgundy navy cream and "
