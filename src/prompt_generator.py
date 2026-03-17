@@ -24,7 +24,7 @@ DEFAULT_CATALOG_PATH = Path("config/book_catalog.json")
 DEFAULT_TEMPLATES_PATH = Path("config/prompt_templates.json")
 DEFAULT_OUTPUT_PATH = Path("config/book_prompts.json")
 
-REQUIRED_PHRASE_COMPOSITION = "centered focal subject"
+REQUIRED_PHRASE_COMPOSITION = "full-bleed crop-safe composition"
 REQUIRED_PHRASE_TEXT = (
     "no text, no letters, no words, no typography"
 )
@@ -57,7 +57,7 @@ REQUIRED_NEGATIVE_BORDER_TERMS: tuple[str, ...] = (
 )
 
 _PHRASE_REPLACEMENTS: tuple[tuple[str, str], ...] = (
-    (r"\bcircular vignette composition\b", "centered focal subject"),
+    (r"\bcircular vignette composition\b", "full-bleed crop-safe composition"),
     (r"\bstructured geometry with deliberate text-safe negative space\b", "dense story-focused composition"),
     (r"\btypography[- ]led\b", "painterly"),
     (r"\btext[- ]safe\b", "detail-rich"),

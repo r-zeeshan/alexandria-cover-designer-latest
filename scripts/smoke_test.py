@@ -25,6 +25,7 @@ REQUIRED_NEGATIVE_TERMS = [
     "visible circle outline",
     "wreath",
     "sunburst",
+    "blank paper",
 ]
 BANNED_CATALOG_STYLE_FRAGMENTS = [
     "gold outlines",
@@ -40,6 +41,12 @@ BANNED_PROMPT_FRAGMENTS = [
     "no circular border",
     "no circular frame",
     "full rectangular canvas",
+    "implied centered circle",
+    "quiet outer corners",
+]
+REQUIRED_PROMPT_FRAGMENTS = [
+    "later circular crop",
+    "all four edges",
 ]
 MEDIUM_STARTS = [
     "Oil paint",
@@ -147,6 +154,9 @@ def check_recent_jobs(
             failures.append(f"{token}: old rendering prefix still present")
         if "visible brushstrokes" not in prompt.lower() and "pigment variation" not in prompt.lower():
             failures.append(f"{token}: texture closer missing from prompt")
+        for required in REQUIRED_PROMPT_FRAGMENTS:
+            if required not in prompt.lower():
+                failures.append(f"{token}: prompt missing '{required}'")
 
         if not negative_prompt:
             failures.append(f"{token}: negative_prompt is empty")

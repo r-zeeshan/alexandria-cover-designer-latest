@@ -210,6 +210,8 @@ def test_negative_prompt_merge_and_nano_alias_resolution(tmp_path: Path, monkeyp
     assert "no sunburst" in merged.lower()
     assert "no plaque" in merged.lower()
     assert "no banner" in merged.lower()
+    assert "no isolated oval vignette" in merged.lower()
+    assert "no blank paper margins" in merged.lower()
     assert "no plastic surfaces" in merged.lower()
     assert "no stock photo look" in merged.lower()
     assert "no anime" in merged.lower()
@@ -305,13 +307,14 @@ def test_guardrailed_prompt_strips_text_and_frame_directions():
     assert "ribbon banner" not in guarded
     assert "no empty space" not in guarded
     assert "mandatory output rules" not in guarded
-    assert "centered focal composition inside an implied circle" in guarded
+    assert "center-weighted full-bleed scene built to survive a later circular crop with scenery extending to all four edges" in guarded
     assert "no text" in guarded
     assert "no internal border" in guarded
     assert "no visible circle outline" in guarded
     assert "no floral surround" in guarded
     assert "no sunburst" in guarded
     assert "no radial rays" in guarded
+    assert "all four edges" in guarded
     assert "gold outlines" not in guarded
     assert "decorative elegance" not in guarded
     assert "nature-integrated composition" not in guarded
@@ -449,7 +452,8 @@ def test_openrouter_modalities_and_429_retry(tmp_path: Path, monkeypatch):
     assert system_prompt == ig.ALEXANDRIA_SYSTEM_PROMPT
     assert "No text, letters, words, or typography" in system_prompt
     assert "no borders, frames" in system_prompt
-    assert "implied centered circle" in system_prompt
+    assert "later circular crop" in system_prompt
+    assert "all four edges" in system_prompt
     assert "visible circle outlines" in system_prompt
     assert "sunbursts" in system_prompt
 

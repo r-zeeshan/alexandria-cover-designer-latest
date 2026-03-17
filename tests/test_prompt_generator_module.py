@@ -101,6 +101,7 @@ def test_prompt_constraints_strip_typography_and_frame_directions():
     assert "circular vignette composition" not in constrained
     assert "filigree" not in constrained
     assert "scrollwork" not in constrained
+    assert "full-bleed crop-safe composition" in constrained
     assert pg.REQUIRED_PHRASE_COMPOSITION in constrained
 
 

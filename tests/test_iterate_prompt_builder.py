@@ -337,9 +337,9 @@ def test_iterate_prompt_builder_adds_variant_specific_composition_directives():
     variant_one = _run_iterate_prompt_builder({**payload, "variantNumber": 1})
     variant_two = _run_iterate_prompt_builder({**payload, "variantNumber": 2})
 
-    assert "Keep all important figures, faces, hands, props, and horizon lines fully contained inside an implied centered circle" in variant_one["prompt"]
-    assert "Keep all important figures, faces, hands, props, and horizon lines fully contained inside an implied centered circle" in variant_two["prompt"]
-    assert "Leave the outer corners as quiet background only." in variant_one["prompt"]
+    assert "Keep all important figures, faces, hands, props, and horizon lines inside a centered crop-safe zone that will survive a later circular crop." in variant_one["prompt"]
+    assert "Keep all important figures, faces, hands, props, and horizon lines inside a centered crop-safe zone that will survive a later circular crop." in variant_two["prompt"]
+    assert "Extend the environment naturally to all four edges of the square canvas with painted scenery, not blank paper." in variant_one["prompt"]
     assert "Express style only through brushwork, palette, costume, props, and environmental details inside the scene." in variant_one["prompt"]
     assert "Do not draw any visible circle outline, border, ring, halo, medallion edge, wreath, floral surround, sunburst, radial rays, plaque, banner, decorative ornament, or lettering." in variant_one["prompt"]
     assert "one centered primary subject" in variant_one["prompt"]
@@ -387,12 +387,14 @@ def test_iterate_prompt_builder_strips_border_and_label_directions_from_prompt_t
     assert "ribbon banner" not in lowered
     assert "circular vignette composition" not in lowered
     assert "no empty space" not in lowered
-    assert "centered focal composition inside an implied circle" in lowered
+    assert "center-weighted full-bleed scene built to survive a later circular crop with scenery extending to all four edges" in lowered
     assert "style only through brushwork" in lowered
     assert "do not draw any visible circle outline" in lowered
     assert "floral surround" in lowered
     assert "sunburst" in lowered
     assert "radial rays" in lowered
+    assert "implied centered circle" not in lowered
+    assert "quiet outer corners" not in lowered
 
 
 def test_iterate_ui_defaults_use_ten_variants_and_auto_rotate_label():

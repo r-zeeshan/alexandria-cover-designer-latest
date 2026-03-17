@@ -34,7 +34,7 @@ def test_smoke_script_checks_catalog_and_recent_jobs(monkeypatch):
                         {
                             "id": "alexandria-wildcard-art-nouveau-poster",
                             "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Art Nouveau illustration with graceful figure styling.",
-                            "negative_prompt": "no vector art, no airbrushed surfaces, no seamless blending, no uniform color fills, no visible circle outline, no wreath, no sunburst",
+                            "negative_prompt": "no vector art, no airbrushed surfaces, no seamless blending, no uniform color fills, no visible circle outline, no wreath, no sunburst, no blank paper margins",
                         },
                         {"id": "p2"},
                         {"id": "p3"},
@@ -56,10 +56,10 @@ def test_smoke_script_checks_catalog_and_recent_jobs(monkeypatch):
                                     {
                                         "prompt": (
                                             "Oil paint on stretched linen canvas, visible impasto brushwork throughout — "
-                                            "Scene: Emma at Hartfield. STYLE: Romantic Realism. "
+                                            "Scene: Emma at Hartfield. STYLE: Romantic Realism. Built for a later circular crop while extending scenery to all four edges. "
                                             "Surface shows natural material texture: visible brushstrokes, pigment variation, paper grain."
                                         ),
-                                        "negative_prompt": "no vector art, no airbrushed surfaces, no seamless blending, no uniform color fills, no visible circle outline, no wreath, no sunburst",
+                                        "negative_prompt": "no vector art, no airbrushed surfaces, no seamless blending, no uniform color fills, no visible circle outline, no wreath, no sunburst, no blank paper margins",
                                     }
                                 ]
                             },
@@ -142,7 +142,7 @@ def test_smoke_script_reports_banned_catalog_style_fragments(monkeypatch):
                         {
                             "id": "alexandria-wildcard-art-nouveau-poster",
                             "prompt_template": "STYLE: Art Nouveau illustration with gold outlines and decorative elegance.",
-                            "negative_prompt": "no vector art, no airbrushed surfaces, no seamless blending, no uniform color fills, no visible circle outline, no wreath, no sunburst",
+                            "negative_prompt": "no vector art, no airbrushed surfaces, no seamless blending, no uniform color fills, no visible circle outline, no wreath, no sunburst, no blank paper margins",
                         },
                         {"id": "p2"},
                         {"id": "p3"},

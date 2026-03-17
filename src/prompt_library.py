@@ -37,7 +37,8 @@ ALEXANDRIA_BASE_NEGATIVE_PROMPT = (
     "No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, "
     "no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, "
     "no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, "
-    "no title-page layout. "
+    "no title-page layout, no isolated oval vignette, no cameo cutout, no floating picture on blank paper, "
+    "no blank paper margins. "
     "No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, "
     "no airbrushed surfaces, no seamless blending, no uniform color fills, "
     "no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, "
@@ -1344,7 +1345,7 @@ class PromptLibrary:
             StyleAnchor(
                 name="engraving_detailed",
                 description="Ultra-detailed copperplate engraving and etching line work.",
-                style_text="copper plate engraving, fine line work, meticulous etching detail, circular vignette composition",
+                style_text="copper plate engraving, fine line work, meticulous etching detail, full-bleed crop-safe composition",
                 tags=["engraving", "detailed", "linework"],
             ),
             StyleAnchor(
@@ -1376,7 +1377,7 @@ class PromptLibrary:
         starter_prompt_specs = [
             {
                 "name": "Iconic Scene Sketch Baseline",
-                "template": "Detailed pen-and-ink engraving of the most iconic scene from {title}, rendered as a circular vignette.",
+                "template": "Detailed pen-and-ink engraving of the most iconic scene from {title}, rendered as a full-bleed crop-safe scene.",
                 "anchors": ["warm_sepia_sketch", "engraving_detailed"],
                 "model": "flux-2-pro",
                 "score": 0.80,

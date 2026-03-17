@@ -124,6 +124,11 @@ NO_ORNAMENT_GUARDRAIL = (
     "no wreath, no floral surround, no sunburst, no radial rays, no plaque, no banner, "
     "no cartouche, no filigree, no ornamental flourishes."
 )
+FULL_BLEED_COMPOSITION_GUARDRAIL = (
+    "Build a full-bleed square scene that extends to all four edges. Keep the important figures, faces, hands, props, "
+    "and horizon lines inside a centered crop-safe zone for a later circular crop, but never isolate the artwork as an oval, "
+    "cameo, sticker, cutout, or floating vignette on blank paper."
+)
 SCENE_ONLY_STYLE_GUARDRAIL = (
     "Express style only through brushwork, palette, costume, props, and environmental details inside the scene, "
     "never as a border, emblem, halo, wreath, sunburst, radiating backdrop, or floating ornament."
@@ -133,7 +138,13 @@ VIVID_COLOR_GUARDRAIL = (
 )
 GENERATION_GUARDRAIL = " ".join(
     part
-    for part in (STRICT_SCENE_GUARDRAIL, NO_ORNAMENT_GUARDRAIL, SCENE_ONLY_STYLE_GUARDRAIL, VIVID_COLOR_GUARDRAIL)
+    for part in (
+        STRICT_SCENE_GUARDRAIL,
+        NO_ORNAMENT_GUARDRAIL,
+        FULL_BLEED_COMPOSITION_GUARDRAIL,
+        SCENE_ONLY_STYLE_GUARDRAIL,
+        VIVID_COLOR_GUARDRAIL,
+    )
     if part
 )
 GENERIC_SCENE_PATTERN = re.compile(
@@ -178,7 +189,8 @@ ALEXANDRIA_NEGATIVE_PROMPT = (
     "No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, "
     "no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, "
     "no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, "
-    "no title-page layout. "
+    "no title-page layout, no isolated oval vignette, no cameo cutout, no floating picture on blank paper, "
+    "no blank paper margins. "
     "No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, "
     "no airbrushed surfaces, no seamless blending, no uniform color fills, "
     "no pixel-perfect edges, no smooth digital gradients, no plastic surfaces, "
@@ -193,7 +205,8 @@ ALEXANDRIA_RENDERING_PREFIX = (
 )
 ALEXANDRIA_SYSTEM_PROMPT = (
     "Generate artwork only. No text, letters, words, or typography of any kind. "
-    "Keep the entire subject and action inside an implied centered circle with quiet outer corners; do not draw the circle itself. "
+    "Compose the important figures, faces, hands, props, and horizon lines inside a centered crop-safe zone that will survive a later circular crop. "
+    "Extend the environment naturally to all four edges of the square canvas; do not leave blank paper or isolate the scene as an oval, cameo, sticker, or floating vignette. "
     "Express style only through brushwork, palette, costume, props, and environmental details inside the scene. "
     "Return a single image with no borders, frames, plaques, banners, visible circle outlines, wreaths, floral surrounds, "
     "sunbursts, radial rays, or internal ornaments."
@@ -251,8 +264,14 @@ PHYSICAL_TEXTURE_CLOSER = (
 )
 PROVIDER_DIGITAL_AVOIDANCE_LINE = "Do not render as digital art, vector, CGI, or 3D."
 _PROMPT_REPLACEMENTS: tuple[tuple[str, str], ...] = (
-    (r"\bcircular vignette composition\b", "centered focal composition inside an implied circle"),
-    (r"\bcircular medallion-ready composition\b", "centered focal composition inside an implied circle"),
+    (
+        r"\bcircular vignette composition\b",
+        "center-weighted full-bleed scene built to survive a later circular crop with scenery extending to all four edges",
+    ),
+    (
+        r"\bcircular medallion-ready composition\b",
+        "center-weighted full-bleed scene built to survive a later circular crop with scenery extending to all four edges",
+    ),
     (r"\blatin labels?\s+in\s+copperplate\s+script\b", "scientific precision and careful linework"),
     (
         r"\bintertwining vines and birds framing the scene\b",
@@ -597,6 +616,8 @@ def _guardrailed_prompt(prompt: str) -> str:
         for marker in ("no internal border", "no decorative ring", "no plaque", "no banner", "no ornament")
     ):
         prefixes.append(NO_ORNAMENT_GUARDRAIL)
+    if "later circular crop" not in lowered and "all four edges" not in lowered:
+        prefixes.append(FULL_BLEED_COMPOSITION_GUARDRAIL)
     if "express style only through" not in lowered and "style only through" not in lowered:
         prefixes.append(SCENE_ONLY_STYLE_GUARDRAIL)
     if "vivid painterly palette" not in lowered and "vivid, high-saturation painterly palette" not in lowered:

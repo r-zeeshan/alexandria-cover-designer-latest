@@ -31,8 +31,8 @@ const VARIANT_COMPOSITION_DIRECTIVES = [
   'Composition: lateral motion with the primary subject turned in profile but still fully contained within the frame.',
   'Composition: architectural or natural framing behind a centered subject, keeping strong open margin around the silhouette.',
 ];
-const CENTRAL_SAFE_AREA_DIRECTIVE = 'Keep all important figures, faces, hands, props, and horizon lines fully contained inside an implied centered circle in the middle of the image.';
-const QUIET_CORNER_DIRECTIVE = 'Leave the outer corners as quiet background only. No cut-off subject at the edges.';
+const CENTRAL_SAFE_AREA_DIRECTIVE = 'Keep all important figures, faces, hands, props, and horizon lines inside a centered crop-safe zone that will survive a later circular crop.';
+const FULL_BLEED_SCENE_DIRECTIVE = 'Extend the environment naturally to all four edges of the square canvas with painted scenery, not blank paper. No isolated oval, cameo, sticker, cutout, or floating vignette.';
 const SCENE_ONLY_STYLE_DIRECTIVE = 'Express style only through brushwork, palette, costume, props, and environmental details inside the scene. Never create a border, emblem, halo, wreath, sunburst, radiating backdrop, or floating ornament.';
 const NO_INTERNAL_FRAME_DIRECTIVE = 'Do not draw any visible circle outline, border, ring, halo, medallion edge, wreath, floral surround, sunburst, radial rays, plaque, banner, decorative ornament, or lettering.';
 const PREFERRED_DEFAULT_MODELS = [
@@ -88,8 +88,8 @@ const GENERIC_CONTENT_MARKERS = [
   'antagonistic force',
 ];
 const PROMPT_CONFLICT_REPLACEMENTS = [
-  [/\bcircular vignette composition\b/gi, 'centered focal composition inside an implied circle'],
-  [/\bcircular medallion-ready composition\b/gi, 'centered focal composition inside an implied circle'],
+  [/\bcircular vignette composition\b/gi, 'center-weighted full-bleed scene built to survive a later circular crop with scenery extending to all four edges'],
+  [/\bcircular medallion-ready composition\b/gi, 'center-weighted full-bleed scene built to survive a later circular crop with scenery extending to all four edges'],
   [/\blatin labels?\s+in\s+copperplate\s+script\b/gi, 'scientific precision and careful linework'],
   [/\bintertwining vines and birds framing the scene\b/gi, 'intertwining vine and bird motifs woven into fabrics, wallpaper, and garden details inside the scene'],
   [/\binterlaced knotwork framing the scene\b/gi, 'interlaced knotwork motifs worked into textiles, stone carving, and metalwork inside the scene'],
@@ -151,6 +151,7 @@ const PROMPT_CONFLICT_REMOVALS = [
   /\bno\s+empty\s+space\b/gi,
   /\bno\s+plain\s+backgrounds?\b/gi,
   /\bgilt ornament language\b/gi,
+  /\bquiet\s+outer\s+corners?\b/gi,
 ];
 const ALEXANDRIA_BASE_PROMPT_IDS = {
   classicalDevotion: 'alexandria-base-classical-devotion',
@@ -1230,7 +1231,7 @@ function resolvePrompt(templateObj, book, customPrompt, sceneVal, moodVal, eraVa
 function variantCompositionDirective(variantNumber) {
   const index = Math.max(0, (Number(variantNumber || 1) - 1)) % VARIANT_COMPOSITION_DIRECTIVES.length;
   const directive = VARIANT_COMPOSITION_DIRECTIVES[index] || VARIANT_COMPOSITION_DIRECTIVES[0];
-  return `${directive} ${CENTRAL_SAFE_AREA_DIRECTIVE} ${QUIET_CORNER_DIRECTIVE} ${SCENE_ONLY_STYLE_DIRECTIVE} ${NO_INTERNAL_FRAME_DIRECTIVE}`.trim();
+  return `${directive} ${CENTRAL_SAFE_AREA_DIRECTIVE} ${FULL_BLEED_SCENE_DIRECTIVE} ${SCENE_ONLY_STYLE_DIRECTIVE} ${NO_INTERNAL_FRAME_DIRECTIVE}`.trim();
 }
 
 function appendVariantCompositionDirective(promptText, variantNumber) {

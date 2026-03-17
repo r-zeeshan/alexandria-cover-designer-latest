@@ -229,6 +229,7 @@ def test_seeded_alexandria_base_prompts_use_prompt65_templates(tmp_path: Path, m
         assert "no visible circle outline" in prompt.negative_prompt.lower()
         assert "no wreath" in prompt.negative_prompt.lower()
         assert "no sunburst" in prompt.negative_prompt.lower()
+        assert "no blank paper margins" in prompt.negative_prompt.lower()
         assert prompt.negative_prompt == pl.ALEXANDRIA_BASE_NEGATIVE_PROMPT
 
     assert "STYLE: Rich oil painting, hyper-detailed botanical precision." in prompts["alexandria-base-classical-devotion"].prompt_template
