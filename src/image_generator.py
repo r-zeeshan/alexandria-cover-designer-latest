@@ -162,18 +162,26 @@ ARTIFACT_RETRY_APPEND = "Focus on one clear subject. No text or lettering. Vivid
 _ENRICHED_BOOK_LOOKUP_CACHE: dict[str, Any] = {"path": "", "mtime": -1.0, "lookup": {}}
 _ENRICHED_BOOK_LOOKUP_LOCK = threading.Lock()
 ALEXANDRIA_NEGATIVE_PROMPT = (
-    "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, "
-    "no labels, no watermarks, no signatures, no inscriptions of any kind. "
+    "No text, no letters, no words, no numbers, no titles, no typography, no watermarks. "
     "No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, "
     "no airbrushed surfaces, no seamless blending, no uniform color fills, "
-    "no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, "
-    "no AI-generated sheen, no perfectly smooth skin, no stock photo look, "
-    "no photorealistic rendering, no neon colours, "
-    "no cartoonish style, no anime influence, no blurry, no white backgrounds."
+    "no pixel-perfect edges, no smooth digital gradients, no plastic surfaces, "
+    "no AI-generated sheen, no photorealistic rendering, no stock photo look, "
+    "no neon colours, no cartoonish style, no anime, no blurry, no white backgrounds."
 )
 ALEXANDRIA_RENDERING_PREFIX = (
-    "Rendered with visible hand-applied texture — real brushstrokes, paper grain, "
-    "natural imperfections of physical media. Not digital art. "
+    "Illustrated as a vintage hand-painted book plate — "
+    "gouache and ink on textured paper, visible brushstrokes "
+    "and pen lines throughout. Not digital art. "
+)
+ALEXANDRIA_SYSTEM_PROMPT = (
+    "You are generating artwork that looks like a physical painting or illustration "
+    "made by hand on real paper or canvas. The output MUST have: "
+    "visible individual brushstrokes or pen strokes, paper or canvas grain texture, "
+    "slight color variations within painted areas (not uniform fills), "
+    "natural edge irregularities where colors meet. "
+    "It must look like a scan of a REAL physical artwork. "
+    "Return ONLY the artwork. No text, no letters, no typography of any kind."
 )
 _PROMPT_REMOVAL_PATTERNS: tuple[str, ...] = (
     r"(?<!no )\bcircular\s+medallion(?:\s+illustration)?\b",
@@ -1154,15 +1162,7 @@ class OpenRouterProvider(BaseProvider):
             "messages": [
                 {
                     "role": "system",
-                    "content": (
-                        "You are generating artwork that looks like a physical painting or illustration "
-                        "made by hand on real paper or canvas. The output MUST have: "
-                        "visible individual brushstrokes or pen strokes, paper or canvas grain texture, "
-                        "slight color variations within painted areas (not uniform fills), "
-                        "natural edge irregularities where colors meet. "
-                        "It must look like a scan of a REAL physical artwork — not digital, not AI-generated. "
-                        "Return ONLY the artwork. No text, no letters, no typography of any kind."
-                    ),
+                    "content": ALEXANDRIA_SYSTEM_PROMPT,
                 },
                 {
                     "role": "user",
