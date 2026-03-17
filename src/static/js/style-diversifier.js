@@ -129,16 +129,9 @@ window.StyleDiversifier = {
 
   buildDiversifiedPrompt(title, author, style) {
     const styleModifier = style?.modifier || 'Classical illustration using ruby red, emerald green, cobalt blue, amber gold, and ivory highlights.';
-    const ORGANIC_QUALITY = 'Slightly irregular linework, color bleeds at edges.';
     return [
-      `HAND-CRAFTED book cover artwork for "${title}" by ${author}.`,
-      'This must look like a REAL traditional artwork made by a skilled human artist — NOT digital art, NOT AI-generated.',
-      'Visible brushwork or pen strokes throughout. The texture of a real physical artwork.',
-      styleModifier,
-      ORGANIC_QUALITY,
-      'COMPOSITION: One dominant focal subject with layered depth and dense detail throughout.',
-      'NO text, NO letters, NO words anywhere in the image.',
-      'The scene must be COLORFUL and DETAILED — avoid monochrome, avoid sparse compositions.',
+      `Book cover illustration — no text, no lettering. Scene: a defining moment from "${title}" by ${author}.`,
+      `STYLE: ${styleModifier}`,
     ].join(' ');
   },
 };
