@@ -462,6 +462,10 @@ function buildIterateGenerationJobs({
     });
   });
 
+  if (jobs.length) {
+    console.log('[BATCH] Style assignments:', jobs.map((job, index) => `V${index + 1}: ${job.library_prompt_id || '(none)'}`).join(', '));
+  }
+
   return { jobs, validationError };
 }
 
@@ -1263,6 +1267,8 @@ function buildVariantPromptPayloads({
     });
   });
 
+  _assertBatchStyleUniqueness(entries);
+
   return {
     entries,
     missingPromptIds: Array.from(new Set(missingPromptIds)),
@@ -1431,73 +1437,90 @@ function buildWildcardRotationPoolForBook(book) {
   return sequence;
 }
 
-function buildExpandedBasePromptIds(primaryBaseId) {
-  const preferred = resolvePromptIdAlias(primaryBaseId || '');
-  const ordered = preferred ? [preferred] : [];
-  ALL_ALEXANDRIA_BASE_PROMPT_IDS.forEach((promptId) => {
-    const resolved = resolvePromptIdAlias(promptId);
-    if (resolved && !ordered.includes(resolved)) ordered.push(resolved);
-  });
-  return ordered;
+function _collectAllPromptIds(book) {
+  const ids = [];
+  const seen = new Set();
+  const addId = (id) => {
+    const resolved = resolvePromptIdAlias(id || '');
+    if (resolved && !seen.has(resolved)) {
+      seen.add(resolved);
+      ids.push(resolved);
+    }
+  };
+
+  ALL_ALEXANDRIA_BASE_PROMPT_IDS.forEach(addId);
+
+  const config = defaultAutoPromptConfigForBook(book);
+  if (Array.isArray(config?.wildcards)) {
+    config.wildcards.forEach(addId);
+  }
+
+  const allPrompts = sortPromptsForUI(DB.dbGetAll('prompts'));
+  allPrompts
+    .filter((prompt) => isAutoRotateEligibleWildcardPrompt(prompt))
+    .forEach((prompt) => addId(prompt?.id || ''));
+
+  return ids;
 }
 
-function buildExpandedPromptSequence({ basePromptId, wildcardIds }) {
-  const baseIds = buildExpandedBasePromptIds(basePromptId);
-  const uniqueWildcards = Array.from(new Set((Array.isArray(wildcardIds) ? wildcardIds : []).filter(Boolean)));
-  const sequence = [];
-  const pushPrompt = (value) => {
-    const resolved = resolvePromptIdAlias(value || '');
-    if (resolved && !sequence.includes(resolved)) sequence.push(resolved);
-  };
-  const preferredOrder = [
-    ['base', 0],
-    ['wild', 0],
-    ['wild', 1],
-    ['base', 1],
-    ['wild', 2],
-    ['base', 2],
-    ['wild', 3],
-    ['base', 3],
-    ['wild', 4],
-    ['base', 4],
-  ];
-  preferredOrder.forEach(([kind, index]) => {
-    if (kind === 'base') pushPrompt(baseIds[index] || '');
-    else pushPrompt(uniqueWildcards[index] || '');
-  });
-  uniqueWildcards.forEach((promptId) => pushPrompt(promptId));
-  baseIds.forEach((promptId) => pushPrompt(promptId));
-  return sequence;
+function _fisherYatesShuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function _shuffleAndDeal(pool, count) {
+  if (!Array.isArray(pool) || !pool.length) return Array.from({ length: count }, () => '');
+
+  const dealt = [];
+  while (dealt.length < count) {
+    const shuffled = _fisherYatesShuffle([...pool]);
+    if (dealt.length && shuffled.length > 1 && shuffled[0] === dealt[dealt.length - 1]) {
+      shuffled.push(shuffled.shift());
+    }
+    for (const id of shuffled) {
+      if (dealt.length >= count) break;
+      dealt.push(id);
+    }
+  }
+  return dealt;
 }
 
 function buildVariantPromptAssignments({ book, variantCount, referenceDate = new Date() }) {
+  void referenceDate;
   const total = Math.max(1, Number(variantCount || 1));
-  const config = defaultAutoPromptConfigForBook(book);
-  const basePromptId = resolvePromptIdAlias(config?.base || ALEXANDRIA_BASE_PROMPT_IDS.romanticRealism || '');
-  const wildcardIds = buildWildcardRotationPoolForBook(book);
-  const wildcardSeed = wildcardIds.length
-    ? (_hashString(`${book?.title || ''}::${book?.author || ''}`) + _dayOfYear(referenceDate)) % wildcardIds.length
-    : 0;
-  const rotatedWildcards = wildcardIds.length
-    ? Array.from({ length: wildcardIds.length }, (_, index) => wildcardIds[(wildcardSeed + index) % wildcardIds.length])
-    : [];
-  const expandedPromptSequence = total > (rotatedWildcards.length + 1)
-    ? buildExpandedPromptSequence({ basePromptId, wildcardIds: rotatedWildcards })
-    : [];
+  const allPromptIds = _collectAllPromptIds(book);
+  const dealt = _shuffleAndDeal(allPromptIds, total);
 
-  return Array.from({ length: total }, (_, index) => {
-    const variant = index + 1;
-    const promptId = expandedPromptSequence.length
-      ? (expandedPromptSequence[index % expandedPromptSequence.length] || basePromptId)
-      : (variant === 1 || !rotatedWildcards.length
-        ? basePromptId
-        : (rotatedWildcards[(variant - 2) % rotatedWildcards.length] || basePromptId));
-    return {
-      variant,
-      promptId,
-      promptName: String(findPromptById(promptId)?.name || '').trim(),
-    };
+  return dealt.map((promptId, index) => ({
+    variant: index + 1,
+    promptId,
+    promptName: String(findPromptById(promptId)?.name || '').trim(),
+  }));
+}
+
+function _assertBatchStyleUniqueness(entries) {
+  const promptIds = (Array.isArray(entries) ? entries : []).map((entry) => (
+    entry?.assignedPromptId || entry?.promptPayload?.libraryPromptId || '(none)'
+  ));
+  const counts = {};
+  promptIds.forEach((id) => {
+    counts[id] = (counts[id] || 0) + 1;
   });
+  const repeats = Object.fromEntries(Object.entries(counts).filter(([, value]) => Number(value) > 1));
+  const unique = Object.keys(counts).length;
+  const total = promptIds.length;
+
+  if (Object.keys(repeats).length > 0) {
+    console.warn(`[STYLE-ROTATION] ❌ ${Object.keys(repeats).length} repeated style(s) in batch of ${total}:`, repeats);
+    console.warn('[STYLE-ROTATION] All assignments:', promptIds);
+  } else {
+    console.log(`[STYLE-ROTATION] ✅ ${unique} unique styles for ${total} variants — zero repeats`);
+  }
+
+  return { unique, total, repeats };
 }
 
 function promptTemplateForPromptId(promptId) {
@@ -1552,6 +1575,7 @@ window.__ITERATE_TEST_HOOKS__.buildVariantPromptAssignments = ({ book, variantCo
     referenceDate: referenceDate ? new Date(referenceDate) : new Date(),
   })
 );
+window.__ITERATE_TEST_HOOKS__.assertBatchStyleUniqueness = ({ entries }) => _assertBatchStyleUniqueness(entries);
 window.__ITERATE_TEST_HOOKS__.buildWildcardRotationPoolForBook = ({ book }) => buildWildcardRotationPoolForBook(book);
 
 function backendJobIdForJob(job) {

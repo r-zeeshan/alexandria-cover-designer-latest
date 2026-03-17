@@ -13,7 +13,14 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
-def _run_iterate_hook(*, function_name: str, payload: dict, prompts: list[dict] | None = None) -> Any:
+def _run_iterate_hook(
+    *,
+    function_name: str,
+    payload: dict,
+    prompts: list[dict] | None = None,
+    capture_logs: bool = False,
+    random_values: list[float] | None = None,
+) -> Any:
     if shutil.which("node") is None:
         pytest.skip("node not installed")
 
@@ -22,9 +29,33 @@ def _run_iterate_hook(*, function_name: str, payload: dict, prompts: list[dict] 
         const fs = require('fs');
         const vm = require('vm');
 
+        const capturedLogs = [];
+        const formatLogValue = (value) => {{
+          if (typeof value === 'string') return value;
+          try {{
+            return JSON.stringify(value);
+          }} catch {{
+            return String(value);
+          }}
+        }};
+
         global.window = {{ Pages: {{}}, __ITERATE_TEST_HOOKS__: {{}} }};
         global.document = {{}};
         const promptRows = {json.dumps(prompts or [])};
+        const randomValues = {json.dumps(random_values or [])};
+        if (randomValues.length) {{
+          let randomIndex = 0;
+          Math.random = () => {{
+            const value = Number(randomValues[randomIndex % randomValues.length]);
+            randomIndex += 1;
+            return Number.isFinite(value) ? value : 0;
+          }};
+        }}
+        global.console = {{
+          log: (...args) => capturedLogs.push({{ level: 'log', message: args.map(formatLogValue).join(' ') }}),
+          warn: (...args) => capturedLogs.push({{ level: 'warn', message: args.map(formatLogValue).join(' ') }}),
+          error: (...args) => capturedLogs.push({{ level: 'error', message: args.map(formatLogValue).join(' ') }}),
+        }};
         global.DB = {{
           dbGetAll: (table) => table === 'prompts' ? promptRows : [],
           dbGet: (table, key) => table === 'prompts' ? (promptRows.find((row) => String(row.id) === String(key)) || null) : null,
@@ -46,7 +77,7 @@ def _run_iterate_hook(*, function_name: str, payload: dict, prompts: list[dict] 
         vm.runInThisContext(source, {{ filename: 'iterate.js' }});
         const fn = window.__ITERATE_TEST_HOOKS__[{json.dumps(function_name)}];
         const result = fn({json.dumps(payload)});
-        process.stdout.write(JSON.stringify(result));
+        process.stdout.write(JSON.stringify({str(capture_logs).lower()} ? {{ result, logs: capturedLogs }} : result));
         """
     )
     proc = subprocess.run(
@@ -64,8 +95,20 @@ def _run_iterate_prompt_builder(payload: dict) -> dict:
     return _run_iterate_hook(function_name="buildGenerationJobPrompt", payload=payload)
 
 
-def _run_iterate_variant_payloads(payload: dict, prompts: list[dict] | None = None) -> dict:
-    return _run_iterate_hook(function_name="buildVariantPromptPayloads", payload=payload, prompts=prompts)
+def _run_iterate_variant_payloads(
+    payload: dict,
+    prompts: list[dict] | None = None,
+    *,
+    capture_logs: bool = False,
+    random_values: list[float] | None = None,
+) -> dict:
+    return _run_iterate_hook(
+        function_name="buildVariantPromptPayloads",
+        payload=payload,
+        prompts=prompts,
+        capture_logs=capture_logs,
+        random_values=random_values,
+    )
 
 
 def _run_iterate_variant_summary_lines(entries: list[dict]) -> list[str]:
@@ -142,8 +185,8 @@ def _run_iterate_filter_model_ids(models: list[dict], filter_name: str) -> list[
     return _run_iterate_hook(function_name="filterModelListIds", payload={"models": models, "filterName": filter_name})
 
 
-def _run_iterate_generation_jobs(payload: dict) -> dict:
-    return _run_iterate_hook(function_name="buildIterateGenerationJobs", payload=payload)
+def _run_iterate_generation_jobs(payload: dict, *, capture_logs: bool = False) -> dict:
+    return _run_iterate_hook(function_name="buildIterateGenerationJobs", payload=payload, capture_logs=capture_logs)
 
 
 def _run_iterate_result_sort(jobs: list[dict], sort_mode: str) -> list[dict]:
@@ -380,6 +423,61 @@ def test_iterate_generation_jobs_expand_variants_across_multiple_models():
     ]
 
 
+def test_iterate_generation_jobs_emit_batch_style_summary_log():
+    captured = _run_iterate_generation_jobs(
+        {
+            "bookId": 7,
+            "book": {
+                "title": "Gulliver's Travels",
+                "author": "Jonathan Swift",
+            },
+            "selectedModels": ["nano-banana-pro"],
+            "selectedCoverId": "cover-7",
+            "selectedCoverBookNumber": 7,
+            "variantEntries": [
+                {
+                    "variant": 1,
+                    "assignedScene": "Gulliver waking up on the beach in Lilliput.",
+                    "assignedMood": "astonished",
+                    "assignedEra": "18th century",
+                    "promptPayload": {
+                        "prompt": "Book cover illustration only - no text. Gulliver waking up on the beach in Lilliput.",
+                        "styleId": "romantic-realism",
+                        "styleLabel": "Romantic Realism",
+                        "promptSource": "library",
+                        "backendPromptSource": "custom",
+                        "composePrompt": False,
+                        "preservePromptText": True,
+                        "libraryPromptId": "alexandria-base-romantic-realism",
+                    },
+                },
+                {
+                    "variant": 2,
+                    "assignedScene": "Gulliver standing in the grand palace.",
+                    "assignedMood": "wry",
+                    "assignedEra": "18th century",
+                    "promptPayload": {
+                        "prompt": "Book cover illustration only - no text. Gulliver standing in the grand palace.",
+                        "styleId": "gothic-atmosphere",
+                        "styleLabel": "Gothic Atmosphere",
+                        "promptSource": "library",
+                        "backendPromptSource": "custom",
+                        "composePrompt": False,
+                        "preservePromptText": True,
+                        "libraryPromptId": "alexandria-base-gothic-atmosphere",
+                    },
+                },
+            ],
+        },
+        capture_logs=True,
+    )
+
+    logs = captured["logs"]
+    assert any("[BATCH] Style assignments:" in row["message"] for row in logs)
+    assert any("alexandria-base-romantic-realism" in row["message"] for row in logs)
+    assert any("alexandria-base-gothic-atmosphere" in row["message"] for row in logs)
+
+
 def test_iterate_result_sort_groups_cards_by_model_then_variant():
     jobs = _run_iterate_result_sort(
         [
@@ -537,17 +635,22 @@ def test_iterate_variant_prompt_plan_skips_travel_poster_for_emma_auto_rotate():
             "referenceDate": "2026-03-11T00:00:00.000Z",
         },
         prompts=prompts,
+        random_values=[0.91, 0.72, 0.18, 0.44, 0.63, 0.27, 0.55, 0.08],
     )
 
     prompt_ids = [row["promptId"] for row in assignments]
     assert "alexandria-wildcard-vintage-travel-poster" not in prompt_ids
-    assert "alexandria-wildcard-pre-raphaelite-garden" in prompt_ids
-    assert "alexandria-wildcard-impressionist-plein-air" in prompt_ids
+    assert len(prompt_ids) == 6
+    assert len(set(prompt_ids)) == 6
 
 
-def test_iterate_variant_prompt_plan_uses_base_then_rotating_wildcards():
+def test_iterate_variant_prompt_plan_uses_zero_repeat_shuffle_assignments():
     prompts = [
         {"id": "alexandria-base-romantic-realism", "name": "BASE 4 — Romantic Realism", "tags": ["alexandria", "base"]},
+        {"id": "alexandria-base-classical-devotion", "name": "BASE 1 — Classical Devotion", "tags": ["alexandria", "base"]},
+        {"id": "alexandria-base-gothic-atmosphere", "name": "BASE 2 — Gothic Atmosphere", "tags": ["alexandria", "base"]},
+        {"id": "alexandria-base-esoteric-mysticism", "name": "BASE 5 — Esoteric Mysticism", "tags": ["alexandria", "base"]},
+        {"id": "alexandria-base-philosophical-gravitas", "name": "BASE 3 — Philosophical Gravitas", "tags": ["alexandria", "base"]},
         {"id": "alexandria-wildcard-pre-raphaelite-garden", "name": "WILDCARD 2 — Pre-Raphaelite Garden", "tags": ["alexandria", "wildcard"]},
         {"id": "alexandria-wildcard-painterly-soft", "name": "Painterly Soft Brushwork", "tags": ["alexandria", "wildcard"]},
         {"id": "alexandria-wildcard-romantic-landscape", "name": "WILDCARD 10 — Romantic Landscape", "tags": ["alexandria", "wildcard"]},
@@ -562,12 +665,12 @@ def test_iterate_variant_prompt_plan_uses_base_then_rotating_wildcards():
             "referenceDate": "2026-03-11T00:00:00.000Z",
         },
         prompts=prompts,
+        random_values=[0.81, 0.35, 0.62, 0.14, 0.55, 0.09, 0.73, 0.21],
     )
 
-    assert assignments[0]["promptId"] == "alexandria-base-romantic-realism"
     assert [row["variant"] for row in assignments] == [1, 2, 3, 4]
-    assert all(row["promptId"] != "alexandria-base-romantic-realism" for row in assignments[1:])
-    assert len({row["promptId"] for row in assignments[1:]}) == 3
+    assert len({row["promptId"] for row in assignments}) == 4
+    assert all(str(row["promptId"]).startswith("alexandria-") for row in assignments)
 
 
 def test_iterate_variant_prompt_plan_falls_back_to_literature_defaults_for_unknown_genre():
@@ -579,16 +682,25 @@ def test_iterate_variant_prompt_plan_falls_back_to_literature_defaults_for_unkno
             "referenceDate": "2026-03-11T00:00:00.000Z",
         },
         prompts=[],
+        random_values=[0.77, 0.22, 0.63, 0.11, 0.48],
     )
 
-    assert assignments[0]["promptId"] == "alexandria-base-romantic-realism"
-    assert assignments[1]["promptId"] in {
-        "alexandria-wildcard-pre-raphaelite-garden",
-        "alexandria-wildcard-painterly-soft",
-        "alexandria-wildcard-romantic-landscape",
-        "alexandria-wildcard-painterly-detailed",
-        "alexandria-wildcard-pre-raphaelite-dream",
-    }
+    prompt_ids = [row["promptId"] for row in assignments]
+    assert len(prompt_ids) == 3
+    assert len(set(prompt_ids)) == 3
+    assert set(prompt_ids).issubset(
+        {
+            "alexandria-base-romantic-realism",
+            "alexandria-base-classical-devotion",
+            "alexandria-base-gothic-atmosphere",
+            "alexandria-base-esoteric-mysticism",
+            "alexandria-base-philosophical-gravitas",
+            "alexandria-wildcard-pre-raphaelite-garden",
+            "alexandria-wildcard-painterly-soft",
+            "alexandria-wildcard-pre-raphaelite-dream",
+            "alexandria-wildcard-painterly-detailed",
+        }
+    )
 
 
 def test_iterate_variant_prompt_plan_uses_all_five_bases_and_five_wildcards_for_ten_variants():
@@ -612,6 +724,7 @@ def test_iterate_variant_prompt_plan_uses_all_five_bases_and_five_wildcards_for_
             "referenceDate": "2026-03-11T00:00:00.000Z",
         },
         prompts=prompts,
+        random_values=[0.91, 0.12, 0.73, 0.28, 0.64, 0.05, 0.82, 0.17, 0.58, 0.34, 0.49],
     )
 
     prompt_ids = [row["promptId"] for row in assignments]
@@ -631,6 +744,42 @@ def test_iterate_variant_prompt_plan_uses_all_five_bases_and_five_wildcards_for_
         "alexandria-wildcard-painterly-detailed",
         "alexandria-wildcard-edo-meets-alexandria",
     }.issubset(set(prompt_ids))
+
+
+def test_iterate_variant_prompt_plan_same_book_can_shuffle_to_different_orders():
+    prompts = [
+        {"id": "alexandria-base-romantic-realism", "name": "BASE 4 — Romantic Realism", "tags": ["alexandria", "base"]},
+        {"id": "alexandria-base-classical-devotion", "name": "BASE 1 — Classical Devotion", "tags": ["alexandria", "base"]},
+        {"id": "alexandria-base-gothic-atmosphere", "name": "BASE 2 — Gothic Atmosphere", "tags": ["alexandria", "base"]},
+        {"id": "alexandria-base-esoteric-mysticism", "name": "BASE 5 — Esoteric Mysticism", "tags": ["alexandria", "base"]},
+        {"id": "alexandria-base-philosophical-gravitas", "name": "BASE 3 — Philosophical Gravitas", "tags": ["alexandria", "base"]},
+        {"id": "alexandria-wildcard-pre-raphaelite-garden", "name": "WILDCARD 2 — Pre-Raphaelite Garden", "tags": ["alexandria", "wildcard"]},
+        {"id": "alexandria-wildcard-painterly-soft", "name": "Painterly Soft Brushwork", "tags": ["alexandria", "wildcard"]},
+        {"id": "alexandria-wildcard-maritime-chart", "name": "WILDCARD 9 — Maritime Chart", "tags": ["alexandria", "wildcard"]},
+        {"id": "alexandria-wildcard-painterly-detailed", "name": "Painterly Hyper-Detailed", "tags": ["alexandria", "wildcard"]},
+        {"id": "alexandria-wildcard-edo-meets-alexandria", "name": "WILDCARD 18 — Edo Meets Alexandria", "tags": ["alexandria", "wildcard"]},
+    ]
+    payload = {
+        "book": {"title": "Gulliver's Travels", "author": "Jonathan Swift", "genre": "adventure"},
+        "variantCount": 6,
+        "referenceDate": "2026-03-11T00:00:00.000Z",
+    }
+    first = _run_iterate_hook(
+        function_name="buildVariantPromptAssignments",
+        payload=payload,
+        prompts=prompts,
+        random_values=[0.91, 0.12, 0.73, 0.28, 0.64, 0.05],
+    )
+    second = _run_iterate_hook(
+        function_name="buildVariantPromptAssignments",
+        payload=payload,
+        prompts=prompts,
+        random_values=[0.11, 0.82, 0.24, 0.67, 0.39, 0.95],
+    )
+
+    assert [row["promptId"] for row in first] != [row["promptId"] for row in second]
+    assert len({row["promptId"] for row in first}) == 6
+    assert len({row["promptId"] for row in second}) == 6
 
 
 def test_iterate_variant_payloads_auto_rotate_assign_distinct_scenes():
@@ -672,6 +821,73 @@ def test_iterate_variant_payloads_auto_rotate_assign_distinct_scenes():
     scenes = [str(entry["assignedScene"]) for entry in result["entries"]]
     assert len(scenes) == 4
     assert len(set(scenes)) == 4
+
+
+def test_iterate_variant_payloads_log_zero_repeat_style_rotation():
+    prompts = [
+        {"id": "alexandria-base-romantic-realism", "name": "BASE 4 — Romantic Realism", "prompt_template": "Book cover illustration only - no text. Scene: {SCENE}. Mood: {MOOD}. Era: {ERA}.", "tags": ["alexandria", "base"]},
+        {"id": "alexandria-base-classical-devotion", "name": "BASE 1 — Classical Devotion", "prompt_template": "Book cover illustration only - no text. Scene: {SCENE}. Mood: {MOOD}. Era: {ERA}.", "tags": ["alexandria", "base"]},
+        {"id": "alexandria-base-gothic-atmosphere", "name": "BASE 2 — Gothic Atmosphere", "prompt_template": "Book cover illustration only - no text. Scene: {SCENE}. Mood: {MOOD}. Era: {ERA}.", "tags": ["alexandria", "base"]},
+        {"id": "alexandria-base-esoteric-mysticism", "name": "BASE 5 — Esoteric Mysticism", "prompt_template": "Book cover illustration only - no text. Scene: {SCENE}. Mood: {MOOD}. Era: {ERA}.", "tags": ["alexandria", "base"]},
+        {"id": "alexandria-base-philosophical-gravitas", "name": "BASE 3 — Philosophical Gravitas", "prompt_template": "Book cover illustration only - no text. Scene: {SCENE}. Mood: {MOOD}. Era: {ERA}.", "tags": ["alexandria", "base"]},
+        {"id": "alexandria-wildcard-pre-raphaelite-garden", "name": "WILDCARD 2 — Pre-Raphaelite Garden", "prompt_template": "Book cover illustration only - no text. Scene: {SCENE}. Mood: {MOOD}. Era: {ERA}.", "tags": ["alexandria", "wildcard"]},
+        {"id": "alexandria-wildcard-painterly-soft", "name": "Painterly Soft Brushwork", "prompt_template": "Book cover illustration only - no text. Scene: {SCENE}. Mood: {MOOD}. Era: {ERA}.", "tags": ["alexandria", "wildcard"]},
+        {"id": "alexandria-wildcard-romantic-landscape", "name": "WILDCARD 10 — Romantic Landscape", "prompt_template": "Book cover illustration only - no text. Scene: {SCENE}. Mood: {MOOD}. Era: {ERA}.", "tags": ["alexandria", "wildcard"]},
+    ]
+    captured = _run_iterate_variant_payloads(
+        {
+            "book": {
+                "title": "Emma",
+                "author": "Jane Austen",
+                "genre": "literature",
+                "enrichment": {
+                    "iconic_scenes": [
+                        "Emma and Harriet walking through the Hartfield gardens in late afternoon light",
+                        "Emma observing the ballroom at the Crown Inn as couples dance",
+                        "Emma seated in the drawing room at Hartfield during a lively visit",
+                        "Emma crossing the village lane with Mr. Knightley in conversation",
+                    ],
+                    "emotional_tone": "witty romantic self-discovery",
+                    "era": "Regency England",
+                },
+            },
+            "variantCount": 4,
+            "promptId": "",
+            "customPrompt": "",
+            "sceneVal": "",
+            "moodVal": "",
+            "eraVal": "",
+        },
+        prompts=prompts,
+        capture_logs=True,
+        random_values=[0.81, 0.35, 0.62, 0.14, 0.55, 0.09, 0.73, 0.21],
+    )
+
+    result = captured["result"]
+    logs = captured["logs"]
+    prompt_ids = [entry["assignedPromptId"] for entry in result["entries"]]
+    assert len(prompt_ids) == 4
+    assert len(set(prompt_ids)) == 4
+    assert any("[STYLE-ROTATION] ✅" in row["message"] for row in logs)
+
+
+def test_iterate_style_uniqueness_assertion_reports_repeats():
+    captured = _run_iterate_hook(
+        function_name="assertBatchStyleUniqueness",
+        payload={
+            "entries": [
+                {"variant": 1, "assignedPromptId": "alexandria-base-romantic-realism"},
+                {"variant": 2, "assignedPromptId": "alexandria-base-romantic-realism"},
+                {"variant": 3, "assignedPromptId": "alexandria-wildcard-painterly-soft"},
+            ],
+        },
+        capture_logs=True,
+    )
+
+    assert captured["result"]["unique"] == 2
+    assert captured["result"]["total"] == 3
+    assert captured["result"]["repeats"] == {"alexandria-base-romantic-realism": 2}
+    assert any("[STYLE-ROTATION] ❌" in row["message"] for row in captured["logs"])
 
 
 def test_iterate_variant_payloads_resolve_legacy_prompt_id_aliases():
