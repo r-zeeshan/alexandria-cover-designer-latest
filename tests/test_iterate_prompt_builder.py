@@ -704,10 +704,11 @@ def test_iterate_wildcard_rotation_changes_across_days():
     assert first["id"] != second["id"]
 
 
-def test_iterate_wildcard_rotation_pool_excludes_travel_poster_for_auto_rotate():
+def test_iterate_wildcard_rotation_pool_excludes_brittle_graphic_styles_for_auto_rotate():
     prompts = [
         {"id": "alexandria-wildcard-pre-raphaelite-garden", "name": "WILDCARD 2 — Pre-Raphaelite Garden", "tags": ["alexandria", "wildcard", "pre-raphaelite-garden", "romantic"]},
         {"id": "alexandria-wildcard-vintage-travel-poster", "name": "Vintage Travel Poster", "tags": ["alexandria", "wildcard", "travel-poster", "graphic", "flat-color"]},
+        {"id": "alexandria-wildcard-soviet-constructivist", "name": "Soviet Constructivist", "tags": ["alexandria", "wildcard", "soviet-constructivist", "graphic"]},
         {"id": "alexandria-wildcard-painterly-soft", "name": "Painterly Soft Brushwork", "tags": ["alexandria", "wildcard"]},
         {"id": "alexandria-wildcard-pre-raphaelite-dream", "name": "WILDCARD 23 — Pre-Raphaelite Dream", "tags": ["alexandria", "wildcard"]},
         {"id": "alexandria-wildcard-impressionist-plein-air", "name": "Impressionist Plein Air", "tags": ["alexandria", "wildcard"]},
@@ -723,15 +724,17 @@ def test_iterate_wildcard_rotation_pool_excludes_travel_poster_for_auto_rotate()
     )
 
     assert "alexandria-wildcard-vintage-travel-poster" not in pool
+    assert "alexandria-wildcard-soviet-constructivist" not in pool
     assert "alexandria-wildcard-pre-raphaelite-garden" in pool
     assert "alexandria-wildcard-impressionist-plein-air" in pool
 
 
-def test_iterate_variant_prompt_plan_skips_travel_poster_for_emma_auto_rotate():
+def test_iterate_variant_prompt_plan_skips_excluded_graphic_prompts_for_emma_auto_rotate():
     prompts = [
         {"id": "alexandria-base-romantic-realism", "name": "BASE 4 — Romantic Realism", "tags": ["alexandria", "base"]},
         {"id": "alexandria-wildcard-pre-raphaelite-garden", "name": "WILDCARD 2 — Pre-Raphaelite Garden", "tags": ["alexandria", "wildcard", "pre-raphaelite-garden", "romantic"]},
         {"id": "alexandria-wildcard-vintage-travel-poster", "name": "Vintage Travel Poster", "tags": ["alexandria", "wildcard", "travel-poster", "graphic", "flat-color"]},
+        {"id": "alexandria-wildcard-soviet-constructivist", "name": "Soviet Constructivist", "tags": ["alexandria", "wildcard", "soviet-constructivist", "graphic"]},
         {"id": "alexandria-wildcard-painterly-soft", "name": "Painterly Soft Brushwork", "tags": ["alexandria", "wildcard"]},
         {"id": "alexandria-wildcard-painterly-detailed", "name": "Painterly Hyper-Detailed", "tags": ["alexandria", "wildcard"]},
         {"id": "alexandria-wildcard-pre-raphaelite-dream", "name": "WILDCARD 23 — Pre-Raphaelite Dream", "tags": ["alexandria", "wildcard"]},
@@ -751,6 +754,7 @@ def test_iterate_variant_prompt_plan_skips_travel_poster_for_emma_auto_rotate():
 
     prompt_ids = [row["promptId"] for row in assignments]
     assert "alexandria-wildcard-vintage-travel-poster" not in prompt_ids
+    assert "alexandria-wildcard-soviet-constructivist" not in prompt_ids
     assert len(prompt_ids) == 6
     assert len(set(prompt_ids)) == 6
 

@@ -17,6 +17,7 @@ const AUTO_ROTATE_PROMPT_OPTION_LABEL = 'Auto-Rotate (Recommended)';
 const AUTO_ROTATE_PROMPT_INFO = 'Automatically varies artistic styles and scenes across your covers.';
 const AUTO_ROTATE_EXCLUDED_WILDCARD_TAGS = new Set([
   'travel-poster',
+  'soviet-constructivist',
 ]);
 const PREFERRED_DEFAULT_MODELS = [
   'openrouter/google/gemini-3-pro-image-preview',
