@@ -387,6 +387,29 @@ def _sanitize_prompt_text(prompt: str) -> str:
         return text
     for pattern in _PROMPT_REMOVAL_PATTERNS:
         text = re.sub(pattern, " ", text, flags=re.IGNORECASE)
+    # Keep tragic scenes book-specific without explicitly instructing self-harm.
+    text = re.sub(r"\bholding a vial of poison\b", "holding a small vial", text, flags=re.IGNORECASE)
+    text = re.sub(r"\blifeless (body|form)\b", "still form", text, flags=re.IGNORECASE)
+    text = re.sub(
+        r"\bas\s+(he|she|they)\s+prepares?\s+to\s+take\s+(his|her|their)\s+own\s+life\b",
+        "as the tragic final moment approaches",
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(
+        r"\bprepares?\s+to\s+take\s+(his|her|their)\s+own\s+life\b",
+        "faces the tragic final moment",
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(
+        r"\btakes?\s+(his|her|their)\s+own\s+life\b",
+        "meets a tragic fate",
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(r"\bself-harm\b", "tragic harm", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bsuicide\b", "tragedy", text, flags=re.IGNORECASE)
     # Cleanup artifacts created by removing forbidden tokens from "no ..." clauses.
     text = re.sub(r"\bno\s*,\s*no\b", "no", text, flags=re.IGNORECASE)
     text = re.sub(r"\bno,\s*(?=no\b)", "", text, flags=re.IGNORECASE)
@@ -791,6 +814,32 @@ def _enriched_book_lookup(runtime: config.Config) -> dict[int, dict[str, Any]]:
         _ENRICHED_BOOK_LOOKUP_CACHE["mtime"] = mtime
         _ENRICHED_BOOK_LOOKUP_CACHE["lookup"] = dict(lookup)
     return lookup
+
+
+def _catalog_book_entry(runtime: config.Config, book_number: int) -> dict[str, Any]:
+    catalog_id = str(getattr(runtime, "catalog_id", config.DEFAULT_CATALOG_ID) or config.DEFAULT_CATALOG_ID)
+    config_dir = getattr(runtime, "config_dir", config.CONFIG_DIR)
+    candidates = [
+        config.enriched_catalog_path(catalog_id=catalog_id, config_dir=config_dir),
+        runtime.book_catalog_path,
+    ]
+    for path in candidates:
+        payload = safe_json.load_json(path, [])
+        rows: list[Any] = []
+        if isinstance(payload, dict):
+            for key in ("books", "rows", "items"):
+                candidate = payload.get(key)
+                if isinstance(candidate, list):
+                    rows = candidate
+                    break
+        elif isinstance(payload, list):
+            rows = payload
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            if int(row.get("number", 0) or 0) == int(book_number):
+                return dict(row)
+    return {}
 
 
 def _scene_pool_for_enrichment(
@@ -2509,14 +2558,24 @@ def generate_single_book(
     runtime = config.get_config()
 
     payload = _load_prompts_payload(prompts_path)
-    book_entry = _find_book_entry(payload, book_number)
+    selected_prompt = str(prompt_text or "").strip()
+    try:
+        book_entry = _find_book_entry(payload, book_number)
+    except KeyError:
+        if not (preserve_prompt_text and selected_prompt):
+            raise
+        book_entry = _catalog_book_entry(runtime, book_number)
+        if not book_entry:
+            book_entry = {"number": int(book_number)}
     title = str(book_entry.get("title", f"Book {book_number}"))
     author = str(book_entry.get("author", "")).strip()
 
-    base_variant = _find_variant(book_entry, prompt_variant)
-    selected_negative_prompt = negative_prompt or str(base_variant.get("negative_prompt", ""))
+    try:
+        base_variant = _find_variant(book_entry, prompt_variant)
+    except KeyError:
+        base_variant = {}
+    selected_negative_prompt = negative_prompt or str(base_variant.get("negative_prompt", "")) or ALEXANDRIA_NEGATIVE_PROMPT
 
-    selected_prompt = prompt_text
     if library_prompt_id:
         prompt_library = PromptLibrary(runtime.prompt_library_path)
         library_matches = [prompt for prompt in prompt_library.get_prompts() if prompt.id == library_prompt_id]

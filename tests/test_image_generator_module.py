@@ -1924,6 +1924,61 @@ def test_generate_single_book_preserve_prompt_text_keeps_resolved_prompt_even_wi
     assert captured["preserve_prompt_text"] is True
 
 
+def test_generate_single_book_preserve_prompt_text_falls_back_to_catalog_when_prompts_file_lacks_book(tmp_path: Path, monkeypatch):
+    runtime = _Runtime(tmp_path)
+    runtime.book_catalog_path.write_text(
+        json.dumps(
+            [
+                {"number": 1, "title": "Moby Dick", "author": "Herman Melville"},
+                {"number": 638, "title": "The Art of War", "author": "Sun Tzu"},
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(ig.config, "get_config", lambda: runtime)
+    prompts_path = tmp_path / "book_prompts.json"
+    _write_prompts(prompts_path)
+    captured: dict[str, object] = {}
+
+    def _capture_generate_all_models(**kwargs):  # type: ignore[no-untyped-def]
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr(ig, "generate_all_models", _capture_generate_all_models)
+    ig.generate_single_book(
+        book_number=638,
+        prompts_path=prompts_path,
+        output_dir=tmp_path / "generated",
+        models=["openai/gpt-image-1-mini"],
+        variants=1,
+        prompt_text='Scene from "The Art of War": Book cover illustration only - no text.',
+        library_prompt_id=None,
+        dry_run=True,
+        preserve_prompt_text=True,
+    )
+
+    assert captured["prompt"] == 'Scene from "The Art of War": Book cover illustration only - no text.'
+    assert captured["book_title"] == "The Art of War"
+    assert captured["book_author"] == "Sun Tzu"
+    assert captured["preserve_prompt_text"] is True
+    assert captured["negative_prompt"] == ig.ALEXANDRIA_NEGATIVE_PROMPT
+
+
+def test_sanitize_prompt_text_softens_explicit_self_harm_language():
+    prompt = (
+        "The tragic moment in the tomb where Romeo, holding a vial of poison, kneels beside Juliet's lifeless body, "
+        "as he prepares to take his own life."
+    )
+
+    sanitized = ig._sanitize_prompt_text(prompt)
+
+    assert "vial of poison" not in sanitized.lower()
+    assert "lifeless body" not in sanitized.lower()
+    assert "take his own life" not in sanitized.lower()
+    assert "small vial" in sanitized
+    assert "still form" in sanitized
+
+
 def test_generate_batch_dry_run_failure_append_and_scope_limit(tmp_path: Path, monkeypatch):
     runtime = _Runtime(tmp_path)
     runtime.variants_per_cover = 2

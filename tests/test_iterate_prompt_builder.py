@@ -290,6 +290,31 @@ def test_iterate_prompt_builder_does_not_duplicate_title_anchor_when_title_is_al
     assert result["prompt"].count('Scene from "Emma":') == 1
 
 
+def test_iterate_prompt_builder_adds_title_anchor_even_when_scene_starts_with_protagonist_name():
+    result = _run_iterate_prompt_builder(
+        {
+            "book": {
+                "title": "Emma",
+                "author": "Jane Austen",
+            },
+            "templateObj": {
+                "id": "alexandria-base-romantic-realism",
+                "name": "BASE 4 Romantic Realism",
+                "prompt_template": "Book cover illustration only - no text. Scene: {SCENE}. Mood: {MOOD}. Era: {ERA}.",
+            },
+            "promptId": "alexandria-base-romantic-realism",
+            "customPrompt": "Book cover illustration only - no text. Scene: {SCENE}. Mood: {MOOD}. Era: {ERA}.",
+            "sceneVal": "Emma Woodhouse in Hartfield, greeting Harriet in the drawing room.",
+            "moodVal": "witty and observant",
+            "eraVal": "Regency England",
+            "style": {"id": "romantic-sublime", "label": "Romantic Sublime"},
+        }
+    )
+
+    assert result["prompt"].startswith('Scene from "Emma": ')
+    assert result["prompt"].count('Scene from "Emma":') == 1
+
+
 def test_iterate_ui_defaults_use_ten_variants_and_auto_rotate_label():
     result = _run_iterate_ui_defaults()
 

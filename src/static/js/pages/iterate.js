@@ -1037,16 +1037,8 @@ function _buildTitleAnchor(book) {
 function _promptStartsWithBookContent(prompt, book) {
   const first100 = _normalizePromptText(prompt).slice(0, 100).toLowerCase();
   const title = _normalizePromptText(book?.title || '').toLowerCase();
-  const protagonist = _extractProtagonistName(defaultProtagonistForBook(book) || '').toLowerCase();
-  const titleWords = title
-    .split(/\s+/)
-    .map((word) => word.replace(/^[^a-z0-9]+|[^a-z0-9]+$/gi, ''))
-    .filter((word) => word.length >= 4);
-  if ((title.length >= 2 && first100.includes(title)) || titleWords.some((word) => first100.includes(word))) {
-    return true;
-  }
-  if (protagonist && protagonist.length >= 3 && first100.includes(protagonist)) return true;
-  return false;
+  if (!title) return false;
+  return first100.includes(`scene from "${title}"`) || first100.includes(`scene from '${title}'`);
 }
 
 function defaultSceneForBook(book) {
