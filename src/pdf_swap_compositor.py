@@ -18,8 +18,10 @@ import pikepdf
 from PIL import Image
 
 try:
+    from src import safe_image
     from src import focus_crop
 except ModuleNotFoundError:  # pragma: no cover
+    import safe_image  # type: ignore
     import focus_crop  # type: ignore
 
 logger = logging.getLogger(__name__)
@@ -180,12 +182,12 @@ def _load_ai_art(
     mode: str,
     border_trim_ratio: float,
 ) -> Image.Image:
-    with Image.open(ai_art_path) as source:
-        prepared = _strip_border(source.convert("RGB"), border_trim_ratio=border_trim_ratio)
-        fitted = focus_crop.smart_fit(prepared, size)
-        if mode != fitted.mode:
-            fitted = fitted.convert(mode)
-        return fitted
+    source = safe_image.load_image(ai_art_path, mode="RGB")
+    prepared = _strip_border(source, border_trim_ratio=border_trim_ratio)
+    fitted = focus_crop.smart_fit(prepared, size)
+    if mode != fitted.mode:
+        fitted = fitted.convert(mode)
+    return fitted
 
 
 def _strip_border(image: Image.Image, *, border_trim_ratio: float) -> Image.Image:
@@ -281,17 +283,17 @@ def _render_pdf_to_jpg(
             raise RuntimeError(f"pdftoppm failed: {result.stderr.strip() or result.stdout.strip()}")
         if not output_jpg_path.exists():
             raise FileNotFoundError(f"Rendered JPG not found: {output_jpg_path}")
-        with Image.open(output_jpg_path) as rendered:
-            rendered_rgb = rendered.convert("RGB")
-            if expected_output_size and rendered_rgb.size != expected_output_size:
-                rendered_rgb = rendered_rgb.resize(expected_output_size, Image.LANCZOS)
-            rendered_rgb.save(
-                output_jpg_path,
-                format="JPEG",
-                quality=JPEG_QUALITY,
-                subsampling=0,
-                dpi=(render_dpi, render_dpi),
-            )
+        rendered_rgb = safe_image.load_image(output_jpg_path, mode="RGB")
+        if expected_output_size and rendered_rgb.size != expected_output_size:
+            rendered_rgb = rendered_rgb.resize(expected_output_size, Image.LANCZOS)
+        safe_image.atomic_save_image(
+            output_jpg_path,
+            rendered_rgb,
+            format="JPEG",
+            quality=JPEG_QUALITY,
+            subsampling=0,
+            dpi=(render_dpi, render_dpi),
+        )
         return
 
     logger.warning("pdftoppm not available; falling back to PyMuPDF render")
@@ -309,8 +311,9 @@ def _render_pdf_to_jpg(
         image = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
         if expected_output_size and image.size != expected_output_size:
             image = image.resize(expected_output_size, Image.LANCZOS)
-        image.save(
+        safe_image.atomic_save_image(
             output_jpg_path,
+            image,
             format="JPEG",
             quality=JPEG_QUALITY,
             subsampling=0,

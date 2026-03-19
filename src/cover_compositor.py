@@ -20,11 +20,13 @@ from PIL import Image, ImageDraw
 try:
     from src import config
     from src import focus_crop
+    from src import safe_image
     from src import safe_json
     from src.logger import get_logger
 except ModuleNotFoundError:  # pragma: no cover
     import config  # type: ignore
     import focus_crop  # type: ignore
+    import safe_image  # type: ignore
     import safe_json  # type: ignore
     from logger import get_logger  # type: ignore
 
@@ -701,8 +703,8 @@ def composite_single(
 ) -> Path:
     """Composite one illustration into a cover image."""
     runtime = config.get_config()
-    cover = Image.open(cover_path).convert("RGB")
-    illustration = Image.open(illustration_path).convert("RGBA")
+    cover = safe_image.load_image(cover_path, mode="RGB")
+    illustration = safe_image.load_image(illustration_path, mode="RGBA")
     illustration = _strip_border(illustration, border_percent=float(getattr(runtime, "border_strip_percent", 0.05)))
 
     if cover.size != (3784, 2777):
@@ -769,8 +771,7 @@ def composite_single(
                     border_trim_ratio=float(getattr(runtime, "border_strip_percent", 0.05)),
                     expected_output_size=(cover_w, cover_h),
                 )
-                with Image.open(output_path) as rendered:
-                    composited_rgb = rendered.convert("RGB")
+                composited_rgb = safe_image.load_image(output_path, mode="RGB")
                 rendered_by_pdf_swap = True
                 validation_region = Region(
                     center_x=FALLBACK_CENTER_X,

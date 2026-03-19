@@ -33,6 +33,7 @@ try:
     from src import config
     from src import content_relevance
     from src import focus_crop
+    from src import safe_image
     from src import safe_json
     from src import similarity_detector
     from src import prompt_generator
@@ -42,6 +43,7 @@ except ModuleNotFoundError:  # pragma: no cover
     import config  # type: ignore
     import content_relevance  # type: ignore
     import focus_crop  # type: ignore
+    import safe_image  # type: ignore
     import safe_json  # type: ignore
     import similarity_detector  # type: ignore
     import prompt_generator  # type: ignore
@@ -3148,7 +3150,7 @@ def _generate_one(
                 seed=seed,
             )
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            output_path.write_bytes(image_bytes)
+            safe_image.atomic_write_image_bytes(output_path, image_bytes)
 
             similar_to_book: int | None = None
             distinctiveness_score: float = 1.0

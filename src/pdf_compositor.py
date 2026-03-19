@@ -35,10 +35,12 @@ except ImportError as exc:  # pragma: no cover
 
 try:
     from src import config
+    from src import safe_image
     from src import safe_json
     from src.logger import get_logger
 except ModuleNotFoundError:  # pragma: no cover
     import config  # type: ignore
+    import safe_image  # type: ignore
     import safe_json  # type: ignore
     from logger import get_logger  # type: ignore
 
@@ -328,20 +330,20 @@ def _im0_to_jpg_mapping(transform: dict[str, Any], jpg_w: int, jpg_h: int) -> di
 # ---------------------------------------------------------------------------
 def _load_ai_art_rgb(*, ai_art_path: Path, width: int, height: int) -> Image.Image:
     """Load AI art, trim margins, edge-trim, resize to (width, height) as RGB."""
-    with Image.open(ai_art_path) as source:
-        rgb_source = _trim_uniform_margins(source)
-        if AI_ART_EDGE_TRIM_RATIO > 0:
-            src_w, src_h = rgb_source.size
-            trim_x = int(round(src_w * AI_ART_EDGE_TRIM_RATIO / 2.0))
-            trim_y = int(round(src_h * AI_ART_EDGE_TRIM_RATIO / 2.0))
-            if (src_w - 2 * trim_x) >= 64 and (src_h - 2 * trim_y) >= 64:
-                rgb_source = rgb_source.crop((trim_x, trim_y, src_w - trim_x, src_h - trim_y))
-        rgb = ImageOps.fit(
-            rgb_source,
-            (int(width), int(height)),
-            method=Image.LANCZOS,
-            centering=(0.5, 0.5),
-        )
+    source = safe_image.load_image(ai_art_path, mode="RGB")
+    rgb_source = _trim_uniform_margins(source)
+    if AI_ART_EDGE_TRIM_RATIO > 0:
+        src_w, src_h = rgb_source.size
+        trim_x = int(round(src_w * AI_ART_EDGE_TRIM_RATIO / 2.0))
+        trim_y = int(round(src_h * AI_ART_EDGE_TRIM_RATIO / 2.0))
+        if (src_w - 2 * trim_x) >= 64 and (src_h - 2 * trim_y) >= 64:
+            rgb_source = rgb_source.crop((trim_x, trim_y, src_w - trim_x, src_h - trim_y))
+    rgb = ImageOps.fit(
+        rgb_source,
+        (int(width), int(height)),
+        method=Image.LANCZOS,
+        centering=(0.5, 0.5),
+    )
     return rgb.convert("RGB")
 
 
@@ -399,7 +401,7 @@ def composite_cover_pdf(
     transform = _extract_im0_transform(source_pdf)
 
     # --- Step 2: Open original JPG ---
-    base_jpg = Image.open(jpg_path).convert("RGB")
+    base_jpg = safe_image.load_image(jpg_path, mode="RGB")
     jpg_w, jpg_h = base_jpg.size
 
     # --- Step 3: Map Im0 coordinates to JPG space ---
@@ -466,7 +468,14 @@ def composite_cover_pdf(
     if result_img.size != EXPECTED_JPG_SIZE:
         result_img = result_img.resize(EXPECTED_JPG_SIZE, Image.LANCZOS)
 
-    result_img.save(output_jpg, format="JPEG", quality=100, subsampling=0, dpi=(EXPECTED_DPI, EXPECTED_DPI))
+    safe_image.atomic_save_image(
+        output_jpg,
+        result_img,
+        format="JPEG",
+        quality=100,
+        subsampling=0,
+        dpi=(EXPECTED_DPI, EXPECTED_DPI),
+    )
 
     # Copy source PDF and AI files for reference (they are not modified)
     shutil.copyfile(source_pdf, output_pdf)
