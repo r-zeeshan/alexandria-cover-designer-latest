@@ -45,15 +45,22 @@ function _isGenerationInProgressConflict(message) {
 function _nextRunnableQueueIndex(queue, runningJobs) {
   const queued = Array.isArray(queue) ? queue : [];
   if (!queued.length) return -1;
-  const activeBookIds = new Set(
-    (Array.isArray(runningJobs) ? runningJobs : [])
-      .map((job) => Number(job?.book_id || 0))
-      .filter((bookId) => bookId > 0)
-  );
-  if (!activeBookIds.size) return 0;
+  const activeConstraints = (Array.isArray(runningJobs) ? runningJobs : [])
+    .map((job) => ({
+      bookId: Number(job?.book_id || 0),
+      batchId: String(job?.batch_id || '').trim(),
+    }))
+    .filter((entry) => entry.bookId > 0);
+  if (!activeConstraints.length) return 0;
   return queued.findIndex((job) => {
     const bookId = Number(job?.book_id || 0);
-    return !bookId || !activeBookIds.has(bookId);
+    if (!bookId) return true;
+    const batchId = String(job?.batch_id || '').trim();
+    return !activeConstraints.some((entry) => {
+      if (entry.bookId !== bookId) return false;
+      if (batchId && entry.batchId && batchId === entry.batchId) return false;
+      return true;
+    });
   });
 }
 

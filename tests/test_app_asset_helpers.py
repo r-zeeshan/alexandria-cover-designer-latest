@@ -170,21 +170,38 @@ def test_generation_in_progress_conflict_detector_matches_backend_409_error():
     assert result is True
 
 
-def test_next_runnable_queue_index_skips_same_book_as_running_job():
+def test_next_runnable_queue_index_skips_same_book_from_different_batch():
     result = _run_app_hook(
         "nextRunnableQueueIndex",
         {
             "queue": [
-                {"id": "job-1", "book_id": 2},
-                {"id": "job-2", "book_id": 3},
+                {"id": "job-1", "book_id": 2, "batch_id": "batch-b"},
+                {"id": "job-2", "book_id": 3, "batch_id": "batch-b"},
             ],
             "running": [
-                {"id": "running-1", "book_id": 2},
+                {"id": "running-1", "book_id": 2, "batch_id": "batch-a"},
             ],
         },
     )
 
     assert result == 1
+
+
+def test_next_runnable_queue_index_allows_same_book_within_same_batch():
+    result = _run_app_hook(
+        "nextRunnableQueueIndex",
+        {
+            "queue": [
+                {"id": "job-1", "book_id": 2, "batch_id": "batch-a"},
+                {"id": "job-2", "book_id": 3, "batch_id": "batch-a"},
+            ],
+            "running": [
+                {"id": "running-1", "book_id": 2, "batch_id": "batch-a"},
+            ],
+        },
+    )
+
+    assert result == 0
 
 
 def test_preferred_backend_result_path_prefers_durable_output_over_tmp_image_path():
