@@ -307,14 +307,14 @@ def test_guardrailed_prompt_strips_text_and_frame_directions():
     assert "ribbon banner" not in guarded
     assert "no empty space" not in guarded
     assert "mandatory output rules" not in guarded
-    assert "center-weighted full-bleed scene built to survive a later circular crop with scenery extending to all four edges" in guarded
+    assert "full-bleed rectangular scene filling the entire canvas edge to edge" in guarded
     assert "no text" in guarded
     assert "no internal border" in guarded
     assert "no visible circle outline" in guarded
     assert "no floral surround" in guarded
     assert "no sunburst" in guarded
     assert "no radial rays" in guarded
-    assert "all four edges" in guarded
+    assert "no isolated oval, cameo, sticker, or floating vignette" in guarded
     assert "gold outlines" not in guarded
     assert "decorative elegance" not in guarded
     assert "nature-integrated composition" not in guarded
@@ -473,12 +473,13 @@ def test_openrouter_modalities_and_429_retry(tmp_path: Path, monkeypatch):
     assert calls[-1]["json"]["modalities"] == ["image", "text"]
     system_prompt = calls[-1]["json"]["messages"][0]["content"]
     assert system_prompt == ig.ALEXANDRIA_SYSTEM_PROMPT
-    assert "No text, letters, words, or typography" in system_prompt
-    assert "no borders, frames" in system_prompt
-    assert "later circular crop" in system_prompt
-    assert "all four edges" in system_prompt
-    assert "visible circle outlines" in system_prompt
-    assert "sunbursts" in system_prompt
+    assert "No text, letters, words, numbers, or typography" in system_prompt
+    assert "ENTIRE rectangular canvas edge to edge" in system_prompt
+    assert "Edmund Dulac or Arthur Rackham" in system_prompt
+    assert "colors and content MUST be specific to the book" in system_prompt
+    assert "ocean blues and storm greys" in system_prompt
+    assert "warm golds and rich crimsons" in system_prompt
+    assert "deep indigos and cold silvers" in system_prompt
 
     calls.clear()
     flux = ig.OpenRouterProvider(model="flux-2-pro", api_key="k", runtime=runtime)
@@ -552,7 +553,7 @@ def test_provider_payloads_include_negative_prompt_and_system_prompt(tmp_path: P
     )
 
     openai_payload = next(call["json"] for call in post_calls if "api.openai.com" in str(call["url"]))
-    assert str(openai_payload["prompt"]).startswith("Oil paint on stretched linen canvas")
+    assert str(openai_payload["prompt"]).startswith("Victorian storybook color plate illustration")
     assert ig.PHYSICAL_TEXTURE_CLOSER in str(openai_payload["prompt"])
     assert ig.PROVIDER_DIGITAL_AVOIDANCE_LINE in str(openai_payload["prompt"])
     assert ig.ALEXANDRIA_SYSTEM_PROMPT not in str(openai_payload["prompt"])
@@ -560,21 +561,21 @@ def test_provider_payloads_include_negative_prompt_and_system_prompt(tmp_path: P
 
     openrouter_payload = next(call["json"] for call in post_calls if "openrouter.ai" in str(call["url"]))
     assert openrouter_payload["messages"][0]["content"] == ig.ALEXANDRIA_SYSTEM_PROMPT
-    assert str(openrouter_payload["messages"][1]["content"]).startswith("Stone lithograph on heavy rag paper")
+    assert str(openrouter_payload["messages"][1]["content"]).startswith("Victorian storybook color plate illustration")
     assert ig.PHYSICAL_TEXTURE_CLOSER in str(openrouter_payload["messages"][1]["content"])
     assert ig.PROVIDER_DIGITAL_AVOIDANCE_LINE in str(openrouter_payload["messages"][1]["content"])
 
     fal_payload = next(call["json"] for call in post_calls if "fal.run" in str(call["url"]))
     assert fal_payload["negative_prompt"] == "n"
-    assert str(fal_payload["prompt"]).startswith("Gouache and ink on textured watercolour paper")
+    assert str(fal_payload["prompt"]).startswith("Victorian storybook color plate illustration")
 
     replicate_payload = next(call["json"] for call in post_calls if "replicate.com/v1/predictions" in str(call["url"]))
     assert replicate_payload["input"]["negative_prompt"] == "n"
-    assert str(replicate_payload["input"]["prompt"]).startswith("Pen and ink with watercolour wash")
+    assert str(replicate_payload["input"]["prompt"]).startswith("Victorian storybook color plate illustration")
 
     google_payload = next(call["json"] for call in post_calls if "generativelanguage.googleapis.com" in str(call["url"]))
     assert google_payload["system_instruction"]["parts"][0]["text"] == ig.ALEXANDRIA_SYSTEM_PROMPT
-    assert str(google_payload["contents"][0]["parts"][0]["text"]).startswith("Hand-cut woodblock print on Japanese washi paper")
+    assert str(google_payload["contents"][0]["parts"][0]["text"]).startswith("Victorian storybook color plate illustration")
     assert ig.PROVIDER_DIGITAL_AVOIDANCE_LINE in str(google_payload["contents"][0]["parts"][0]["text"])
 
 
@@ -704,7 +705,7 @@ def test_compose_provider_prompt_text_is_medium_first_and_capped():
         style_id="alexandria-wildcard-vintage-travel-poster",
     )
 
-    assert composed.startswith("Stone lithograph on heavy rag paper")
+    assert composed.startswith("Victorian storybook color plate illustration")
     assert ig.PHYSICAL_TEXTURE_CLOSER in composed
     assert ig.PROVIDER_DIGITAL_AVOIDANCE_LINE in composed
     assert "IMPORTANT RENDERING STYLE" not in composed

@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "updated_at": "2026-03-17T23:57:08.435616+00:00",
+  "updated_at": "2026-03-19T15:12:47.361524+00:00",
   "style_anchors": [
     {
       "name": "allegorical_symbolic",
@@ -122,7 +122,7 @@
     {
       "id": "alexandria-base-esoteric-mysticism",
       "name": "BASE 5 — Esoteric Mysticism",
-      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Visionary painting with luminous depth. Translucent glazes create inner glow. Cosmic indigo and celestial gold, deep amethyst, ethereal silver-white. Mystical symbols emerge from luminous mist. Mood: {MOOD}. Era: {ERA}. Hand-painted texture with pigment granulation. Slightly irregular linework, color bleeds at edges.",
+      "prompt_template": "{SCENE}. Painted as a rich Victorian storybook color plate — opaque gouache with fine ink outlines, dense illustration filling every inch, saturated colors, layered depth from foreground to atmospheric background. Color direction: deep cosmic tones with inner luminescence and mystical glow — the palette should reflect the setting and era of this specific story. Mood: {MOOD}. Era: {ERA}.",
       "style_anchors": [],
       "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout, no isolated oval vignette, no cameo cutout, no floating picture on blank paper, no blank paper margins. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
@@ -149,7 +149,7 @@
     {
       "id": "alexandria-base-romantic-realism",
       "name": "BASE 4 — Romantic Realism",
-      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Warm romantic landscape, 19th-century Romanticism. Soft luminous brushwork, watercolor washes over oil. Golden-hour amber and warm sienna, soft sky blue, deep forest green. Sweeping atmospheric perspective. Mood: {MOOD}. Era: {ERA}. Oil paint texture with visible canvas weave. Slightly irregular linework, color bleeds at edges.",
+      "prompt_template": "{SCENE}. Painted as a rich Victorian storybook color plate — opaque gouache with fine ink outlines, dense illustration filling every inch, saturated colors, layered depth from foreground to atmospheric background. Color direction: golden warm light with atmospheric perspective and soft luminous distance — the palette should reflect the setting and era of this specific story. Mood: {MOOD}. Era: {ERA}.",
       "style_anchors": [],
       "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout, no isolated oval vignette, no cameo cutout, no floating picture on blank paper, no blank paper margins. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
@@ -176,7 +176,7 @@
     {
       "id": "alexandria-base-gothic-atmosphere",
       "name": "BASE 3 — Gothic Atmosphere",
-      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Dark atmospheric painting, expressionist energy. Loose aggressive brushwork with palette knife marks. Moonlit indigo and deep crimson with silvered edge highlights. Gothic tension, foreboding atmosphere. Mood: {MOOD}. Era: {ERA}. Ink-wash texture with visible paper grain. Slightly irregular linework, color bleeds at edges.",
+      "prompt_template": "{SCENE}. Painted as a rich Victorian storybook color plate — opaque gouache with fine ink outlines, dense illustration filling every inch, saturated colors, layered depth from foreground to atmospheric background. Color direction: dark dominant shadows with cold silver highlights and expressionist tension — the palette should reflect the setting and era of this specific story. Mood: {MOOD}. Era: {ERA}.",
       "style_anchors": [],
       "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout, no isolated oval vignette, no cameo cutout, no floating picture on blank paper, no blank paper margins. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
@@ -203,7 +203,7 @@
     {
       "id": "alexandria-base-philosophical-gravitas",
       "name": "BASE 2 — Philosophical Gravitas",
-      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Dramatic chiaroscuro. Strong light carves figures from shadow. Raw umber and burnt sienna dominate, gold ochre warms the light, charcoal grey deepens shadow. Heavy Rembrandt-era texture. Mood: {MOOD}. Era: {ERA}. Thick impasto paint texture on every surface. Slightly irregular linework, color bleeds at edges.",
+      "prompt_template": "{SCENE}. Painted as a rich Victorian storybook color plate — opaque gouache with fine ink outlines, dense illustration filling every inch, saturated colors, layered depth from foreground to atmospheric background. Color direction: deep earth tones with dramatic chiaroscuro contrast and a single strong light source — the palette should reflect the setting and era of this specific story. Mood: {MOOD}. Era: {ERA}.",
       "style_anchors": [],
       "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout, no isolated oval vignette, no cameo cutout, no floating picture on blank paper, no blank paper margins. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",
@@ -230,7 +230,7 @@
     {
       "id": "alexandria-base-classical-devotion",
       "name": "BASE 1 — Classical Devotion",
-      "prompt_template": "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Rich oil painting, hyper-detailed botanical precision. Deep midnight navy and burnished gold. Thick impasto on gilded elements, fine detail on flora. Sacred, warm candlelight glow. Mood: {MOOD}. Era: {ERA}. Visible brushwork on canvas throughout. Slightly irregular linework, color bleeds at edges.",
+      "prompt_template": "{SCENE}. Painted as a rich Victorian storybook color plate — opaque gouache with fine ink outlines, dense illustration filling every inch, saturated colors, layered depth from foreground to atmospheric background. Color direction: warm luminous tones with gilded highlights and candlelit warmth — the palette should reflect the setting and era of this specific story. Mood: {MOOD}. Era: {ERA}.",
       "style_anchors": [],
       "negative_prompt": "No text, no letters, no words, no numbers, no titles, no author names, no typography, no captions, no labels, no watermarks, no signatures, no inscriptions of any kind. No internal border, no decorative ring, no visible circle outline, no halo ring, no medallion edge, no wreath, no floral frame, no floral surround, no sunburst, no radial rays, no plaque, no banner, no cartouche, no filigree, no scrollwork, no ornamental flourishes, no geometric border pattern, no title-page layout, no isolated oval vignette, no cameo cutout, no floating picture on blank paper, no blank paper margins. No digital art, no CGI, no 3D rendering, no vector art, no clean vector lines, no airbrushed surfaces, no seamless blending, no uniform color fills, no pixel-perfect edges, no smooth digital gradients, no plastic-looking surfaces, no AI-generated sheen, no perfectly smooth skin, no stock photo look, no photorealistic rendering, no neon colours, no cartoonish style, no anime influence, no blurry, no white backgrounds.",
       "source_book": "builtin",

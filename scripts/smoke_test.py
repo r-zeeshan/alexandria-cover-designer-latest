@@ -40,24 +40,15 @@ BANNED_PROMPT_FRAGMENTS = [
     "mandatory output rules",
     "no circular border",
     "no circular frame",
-    "full rectangular canvas",
     "implied centered circle",
     "quiet outer corners",
 ]
 REQUIRED_PROMPT_FRAGMENTS = [
-    "later circular crop",
-    "all four edges",
+    "victorian storybook color plate illustration",
+    "colors specific to this story's setting and era",
 ]
 MEDIUM_STARTS = [
-    "Oil paint",
-    "Transparent watercolour",
-    "Gouache and ink",
-    "Pen and ink",
-    "Soft pastel",
-    "Hand-cut woodblock",
-    "Stone lithograph",
-    "Egg tempera",
-    "Hand-painted illustration",
+    "Victorian storybook color plate illustration",
 ]
 MAX_PROMPT_LENGTH = 1050
 
@@ -152,7 +143,7 @@ def check_recent_jobs(
             failures.append(f"{token}: prompt does not start with a medium opener")
         if "important rendering style" in prompt.lower():
             failures.append(f"{token}: old rendering prefix still present")
-        if "visible brushstrokes" not in prompt.lower() and "pigment variation" not in prompt.lower():
+        if "dense saturated illustration filling every inch" not in prompt.lower():
             failures.append(f"{token}: texture closer missing from prompt")
         for required in REQUIRED_PROMPT_FRAGMENTS:
             if required not in prompt.lower():

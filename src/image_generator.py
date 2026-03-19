@@ -127,9 +127,8 @@ NO_ORNAMENT_GUARDRAIL = (
     "no cartouche, no filigree, no ornamental flourishes."
 )
 FULL_BLEED_COMPOSITION_GUARDRAIL = (
-    "Build a full-bleed square scene that extends to all four edges. Keep the important figures, faces, hands, props, "
-    "and horizon lines inside a centered crop-safe zone for a later circular crop, but never isolate the artwork as an oval, "
-    "cameo, sticker, cutout, or floating vignette on blank paper."
+    "Fill the entire rectangular canvas edge to edge with the painted scene. "
+    "No borders, no frames, no ornamental edges, and no isolated oval, cameo, sticker, cutout, or floating vignette."
 )
 SCENE_ONLY_STYLE_GUARDRAIL = (
     "Express style only through brushwork, palette, costume, props, and environmental details inside the scene, "
@@ -210,24 +209,35 @@ ALEXANDRIA_RENDERING_PREFIX = (
     "gouache and ink on textured paper, visible brushstrokes "
     "and pen lines throughout. Not digital art. "
 )
+ALEXANDRIA_MEDIUM_OPENER = (
+    "Victorian storybook color plate illustration — rich opaque gouache with fine ink outlines, "
+    "dense saturated scene filling the full canvas —"
+)
 ALEXANDRIA_SYSTEM_PROMPT = (
-    "Generate artwork only. No text, letters, words, or typography of any kind. "
-    "Compose the important figures, faces, hands, props, and horizon lines inside a centered crop-safe zone that will survive a later circular crop. "
-    "Extend the environment naturally to all four edges of the square canvas; do not leave blank paper or isolate the scene as an oval, cameo, sticker, or floating vignette. "
-    "Express style only through brushwork, palette, costume, props, and environmental details inside the scene. "
-    "Return a single image with no borders, frames, plaques, banners, visible circle outlines, wreaths, floral surrounds, "
-    "sunbursts, radial rays, or internal ornaments."
+    "You are generating a Victorian storybook illustration for a book cover. "
+    "RULES: "
+    "1. Fill the ENTIRE rectangular canvas edge to edge with the painted scene. "
+    "No borders, no frames, no ornamental edges. "
+    "2. No text, letters, words, numbers, or typography of any kind. "
+    "3. Painting technique: rich opaque gouache with fine ink outlines, "
+    "like an Edmund Dulac or Arthur Rackham color plate. "
+    "Dense illustration, saturated jewel-tone colors, layered depth. "
+    "4. The colors and content MUST be specific to the book described in the prompt. "
+    "A sea adventure should use ocean blues and storm greys. "
+    "A romance should use warm golds and rich crimsons. "
+    "A horror novel should use deep indigos and cold silvers. "
+    "Return ONLY the artwork."
 )
 MEDIUM_OPENERS = {
-    "oil": "Oil paint on stretched linen canvas, visible impasto brushwork throughout —",
-    "watercolor": "Transparent watercolour on cold-pressed Arches paper, pigment granulation visible —",
-    "gouache": "Gouache and ink on textured watercolour paper, opaque layers with visible brush marks —",
-    "ink": "Pen and ink with watercolour wash on cream laid paper, cross-hatching and ink pooling visible —",
-    "pastel": "Soft pastel on toned paper, chalk dust and finger-blending marks visible —",
-    "woodcut": "Hand-cut woodblock print on Japanese washi paper, carved line marks and ink impression visible —",
-    "lithograph": "Stone lithograph on heavy rag paper, tonal crayon marks and printing grain visible —",
-    "egg_tempera": "Egg tempera on gessoed wood panel, fine crosshatched brushstrokes and luminous layering —",
-    "default": "Hand-painted illustration on textured paper, real brushstrokes and pigment variation visible —",
+    "oil": ALEXANDRIA_MEDIUM_OPENER,
+    "watercolor": ALEXANDRIA_MEDIUM_OPENER,
+    "gouache": ALEXANDRIA_MEDIUM_OPENER,
+    "ink": ALEXANDRIA_MEDIUM_OPENER,
+    "pastel": ALEXANDRIA_MEDIUM_OPENER,
+    "woodcut": ALEXANDRIA_MEDIUM_OPENER,
+    "lithograph": ALEXANDRIA_MEDIUM_OPENER,
+    "egg_tempera": ALEXANDRIA_MEDIUM_OPENER,
+    "default": ALEXANDRIA_MEDIUM_OPENER,
 }
 STYLE_TO_MEDIUM = {
     "classical-devotion": "oil",
@@ -267,17 +277,17 @@ STYLE_TO_MEDIUM = {
     "steampunk": "ink",
 }
 PHYSICAL_TEXTURE_CLOSER = (
-    "Surface shows natural material texture: visible brushstrokes, pigment variation, paper grain."
+    "Dense saturated illustration filling every inch. Colors specific to this story's setting and era."
 )
 PROVIDER_DIGITAL_AVOIDANCE_LINE = "Do not render as digital art, vector, CGI, or 3D."
 _PROMPT_REPLACEMENTS: tuple[tuple[str, str], ...] = (
     (
         r"\bcircular vignette composition\b",
-        "center-weighted full-bleed scene built to survive a later circular crop with scenery extending to all four edges",
+        "full-bleed rectangular scene filling the entire canvas edge to edge with no isolated oval, cameo, sticker, or floating vignette",
     ),
     (
         r"\bcircular medallion-ready composition\b",
-        "center-weighted full-bleed scene built to survive a later circular crop with scenery extending to all four edges",
+        "full-bleed rectangular scene filling the entire canvas edge to edge with no isolated oval, cameo, sticker, or floating vignette",
     ),
     (r"\blatin labels?\s+in\s+copperplate\s+script\b", "scientific precision and careful linework"),
     (
@@ -623,7 +633,10 @@ def _guardrailed_prompt(prompt: str) -> str:
         for marker in ("no internal border", "no decorative ring", "no plaque", "no banner", "no ornament")
     ):
         prefixes.append(NO_ORNAMENT_GUARDRAIL)
-    if "later circular crop" not in lowered and "all four edges" not in lowered:
+    if not any(
+        marker in lowered
+        for marker in ("edge to edge", "full canvas", "full-bleed rectangular", "entire rectangular canvas")
+    ):
         prefixes.append(FULL_BLEED_COMPOSITION_GUARDRAIL)
     if "express style only through" not in lowered and "style only through" not in lowered:
         prefixes.append(SCENE_ONLY_STYLE_GUARDRAIL)

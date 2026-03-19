@@ -191,34 +191,39 @@ def _normalize_scene_only_style_text(text: str) -> str:
 
 ALEXANDRIA_BASE_PROMPT_TEMPLATES: dict[str, str] = {
     "alexandria-base-classical-devotion": (
-        "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Rich oil painting, "
-        "hyper-detailed botanical precision. Deep midnight navy and burnished gold. Thick impasto on "
-        "gilded elements, fine detail on flora. Sacred, warm candlelight glow. Mood: {MOOD}. Era: {ERA}. "
-        f"{_append_organic_quality('Visible brushwork on canvas throughout.')}"
+        "{SCENE}. Painted as a rich Victorian storybook color plate — opaque gouache with fine ink "
+        "outlines, dense illustration filling every inch, saturated colors, layered depth from foreground "
+        "to atmospheric background. Color direction: warm luminous tones with gilded highlights and "
+        "candlelit warmth — the palette should reflect the setting and era of this specific story. "
+        "Mood: {MOOD}. Era: {ERA}."
     ),
     "alexandria-base-philosophical-gravitas": (
-        "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Dramatic chiaroscuro. "
-        "Strong light carves figures from shadow. Raw umber and burnt sienna dominate, gold ochre warms "
-        "the light, charcoal grey deepens shadow. Heavy Rembrandt-era texture. Mood: {MOOD}. Era: {ERA}. "
-        f"{_append_organic_quality('Thick impasto paint texture on every surface.')}"
+        "{SCENE}. Painted as a rich Victorian storybook color plate — opaque gouache with fine ink "
+        "outlines, dense illustration filling every inch, saturated colors, layered depth from foreground "
+        "to atmospheric background. Color direction: deep earth tones with dramatic chiaroscuro contrast "
+        "and a single strong light source — the palette should reflect the setting and era of this "
+        "specific story. Mood: {MOOD}. Era: {ERA}."
     ),
     "alexandria-base-gothic-atmosphere": (
-        "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Dark atmospheric "
-        "painting, expressionist energy. Loose aggressive brushwork with palette knife marks. Moonlit "
-        "indigo and deep crimson with silvered edge highlights. Gothic tension, foreboding atmosphere. "
-        f"Mood: {{MOOD}}. Era: {{ERA}}. {_append_organic_quality('Ink-wash texture with visible paper grain.')}"
+        "{SCENE}. Painted as a rich Victorian storybook color plate — opaque gouache with fine ink "
+        "outlines, dense illustration filling every inch, saturated colors, layered depth from foreground "
+        "to atmospheric background. Color direction: dark dominant shadows with cold silver highlights and "
+        "expressionist tension — the palette should reflect the setting and era of this specific story. "
+        "Mood: {MOOD}. Era: {ERA}."
     ),
     "alexandria-base-romantic-realism": (
-        "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Warm romantic landscape, "
-        "19th-century Romanticism. Soft luminous brushwork, watercolor washes over oil. Golden-hour amber "
-        "and warm sienna, soft sky blue, deep forest green. Sweeping atmospheric perspective. Mood: "
-        f"{{MOOD}}. Era: {{ERA}}. {_append_organic_quality('Oil paint texture with visible canvas weave.')}"
+        "{SCENE}. Painted as a rich Victorian storybook color plate — opaque gouache with fine ink "
+        "outlines, dense illustration filling every inch, saturated colors, layered depth from foreground "
+        "to atmospheric background. Color direction: golden warm light with atmospheric perspective and "
+        "soft luminous distance — the palette should reflect the setting and era of this specific story. "
+        "Mood: {MOOD}. Era: {ERA}."
     ),
     "alexandria-base-esoteric-mysticism": (
-        "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Visionary painting with "
-        "luminous depth. Translucent glazes create inner glow. Cosmic indigo and celestial gold, deep "
-        "amethyst, ethereal silver-white. Mystical symbols emerge from luminous mist. Mood: {MOOD}. "
-        f"Era: {{ERA}}. {_append_organic_quality('Hand-painted texture with pigment granulation.')}"
+        "{SCENE}. Painted as a rich Victorian storybook color plate — opaque gouache with fine ink "
+        "outlines, dense illustration filling every inch, saturated colors, layered depth from foreground "
+        "to atmospheric background. Color direction: deep cosmic tones with inner luminescence and "
+        "mystical glow — the palette should reflect the setting and era of this specific story. "
+        "Mood: {MOOD}. Era: {ERA}."
     ),
 }
 

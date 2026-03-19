@@ -176,11 +176,14 @@ def test_seeded_alexandria_builtins_are_scene_first(tmp_path: Path, monkeypatch)
     assert len(wildcard_prompts) == 33
     for prompt_id, prompt in prompts.items():
         template = prompt.prompt_template
-        assert template.startswith("Book cover illustration")
         assert "{SCENE}" in template
         assert template.index("{SCENE}") < 250, prompt_id
         assert "{MOOD}" in template
         assert "{ERA}" in template
+        if prompt_id.startswith("alexandria-base-"):
+            assert template.startswith("{SCENE}. Painted as a rich Victorian storybook color plate"), prompt_id
+        else:
+            assert template.startswith("Book cover illustration"), prompt_id
 
 
 def test_seeded_alexandria_base_prompts_use_prompt65_templates(tmp_path: Path, monkeypatch):
@@ -204,22 +207,11 @@ def test_seeded_alexandria_base_prompts_use_prompt65_templates(tmp_path: Path, m
     }
 
     for prompt in prompts.values():
-        assert prompt.prompt_template.startswith("Book cover illustration — no text, no lettering.")
-        assert "Scene: {SCENE}." in prompt.prompt_template
+        assert prompt.prompt_template.startswith("{SCENE}. Painted as a rich Victorian storybook color plate")
         assert "Mood: {MOOD}." in prompt.prompt_template
         assert "Era: {ERA}." in prompt.prompt_template
-        assert len(prompt.prompt_template) < 430
-        assert "Slightly irregular linework, color bleeds at edges." in prompt.prompt_template
-        assert any(
-            token in prompt.prompt_template
-            for token in (
-                "Visible brushwork on canvas throughout.",
-                "Thick impasto paint texture on every surface.",
-                "Ink-wash texture with visible paper grain.",
-                "Oil paint texture with visible canvas weave.",
-                "Hand-painted texture with pigment granulation.",
-            )
-        )
+        assert len(prompt.prompt_template) < 520
+        assert "the palette should reflect the setting and era of this specific story" in prompt.prompt_template
         assert "This circular medallion illustration" not in prompt.prompt_template
         assert "Circular vignette composition with soft edges." not in prompt.prompt_template
         assert "no clean vector lines" in prompt.negative_prompt.lower()
@@ -232,11 +224,12 @@ def test_seeded_alexandria_base_prompts_use_prompt65_templates(tmp_path: Path, m
         assert "no blank paper margins" in prompt.negative_prompt.lower()
         assert prompt.negative_prompt == pl.ALEXANDRIA_BASE_NEGATIVE_PROMPT
 
-    assert "STYLE: Rich oil painting, hyper-detailed botanical precision." in prompts["alexandria-base-classical-devotion"].prompt_template
-    assert "STYLE: Dramatic chiaroscuro." in prompts["alexandria-base-philosophical-gravitas"].prompt_template
-    assert "STYLE: Dark atmospheric painting, expressionist energy." in prompts["alexandria-base-gothic-atmosphere"].prompt_template
-    assert "STYLE: Warm romantic landscape, 19th-century Romanticism." in prompts["alexandria-base-romantic-realism"].prompt_template
-    assert "STYLE: Visionary painting with luminous depth." in prompts["alexandria-base-esoteric-mysticism"].prompt_template
+    assert "Painted as a rich Victorian storybook color plate" in prompts["alexandria-base-classical-devotion"].prompt_template
+    assert "Color direction: warm luminous tones with gilded highlights and candlelit warmth" in prompts["alexandria-base-classical-devotion"].prompt_template
+    assert "Color direction: deep earth tones with dramatic chiaroscuro contrast and a single strong light source" in prompts["alexandria-base-philosophical-gravitas"].prompt_template
+    assert "Color direction: dark dominant shadows with cold silver highlights and expressionist tension" in prompts["alexandria-base-gothic-atmosphere"].prompt_template
+    assert "Color direction: golden warm light with atmospheric perspective and soft luminous distance" in prompts["alexandria-base-romantic-realism"].prompt_template
+    assert "Color direction: deep cosmic tones with inner luminescence and mystical glow" in prompts["alexandria-base-esoteric-mysticism"].prompt_template
 
 
 def test_seeded_painterly_wildcards_use_prompt65_templates(tmp_path: Path, monkeypatch):

@@ -55,9 +55,9 @@ def test_smoke_script_checks_catalog_and_recent_jobs(monkeypatch):
                                 "results": [
                                     {
                                         "prompt": (
-                                            "Oil paint on stretched linen canvas, visible impasto brushwork throughout — "
-                                            "Scene: Emma at Hartfield. STYLE: Romantic Realism. Built for a later circular crop while extending scenery to all four edges. "
-                                            "Surface shows natural material texture: visible brushstrokes, pigment variation, paper grain."
+                                            "Victorian storybook color plate illustration — rich opaque gouache with fine ink outlines, dense saturated scene filling the full canvas — "
+                                            "Scene: Emma at Hartfield. Style direction: Romantic realism. "
+                                            "Dense saturated illustration filling every inch. Colors specific to this story's setting and era."
                                         ),
                                         "negative_prompt": "no vector art, no airbrushed surfaces, no seamless blending, no uniform color fills, no visible circle outline, no wreath, no sunburst, no blank paper margins",
                                     }
