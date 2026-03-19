@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 from collections import OrderedDict
+import functools
 import gzip
 import hashlib
 import importlib
@@ -126,6 +127,12 @@ except ModuleNotFoundError:  # pragma: no cover
     from prompt_library import LibraryPrompt, PromptLibrary  # type: ignore
 
 logger = get_logger(__name__)
+
+
+@functools.lru_cache(maxsize=64)
+def _read_cached_binary_bytes(path: str, mtime_ns: int, size_bytes: int) -> bytes:
+    del mtime_ns, size_bytes
+    return Path(path).read_bytes()
 
 BATCH_DUPLICATE_DISTANCE_THRESHOLD = 0.19
 BATCH_DUPLICATE_MAX_REROLLS = 2
@@ -9588,8 +9595,23 @@ def serve_review_webapp(
                         status=HTTPStatus.INTERNAL_SERVER_ERROR,
                         endpoint=path,
                     )
-                return self._send_file(
-                    preview_path,
+                try:
+                    preview_stat = preview_path.stat()
+                    preview_bytes = _read_cached_binary_bytes(
+                        str(preview_path),
+                        int(preview_stat.st_mtime_ns),
+                        int(preview_stat.st_size),
+                    )
+                except OSError:
+                    return self._send_error(
+                        code="COVER_PREVIEW_READ_FAILED",
+                        message="Failed to read cover preview",
+                        details={"book": int(book_number), "source": source},
+                        status=HTTPStatus.INTERNAL_SERVER_ERROR,
+                        endpoint=path,
+                    )
+                return self._send_bytes(
+                    preview_bytes,
                     content_type="image/jpeg",
                     cache_control="public, max-age=3600, immutable",
                 )

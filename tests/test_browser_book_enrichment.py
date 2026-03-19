@@ -150,3 +150,47 @@ def test_drive_load_cached_catalog_does_not_strip_enrichment_from_existing_books
     assert result["book"]["cover_jpg_id"] == "drive-cover-456"
     assert result["book"]["enrichment"]["emotional_tone"] == "satirical wonder with unease"
     assert result["book"]["prompt_components"]["title_keywords"] == ["gulliver", "lilliput"]
+
+
+def test_download_cover_for_book_retries_transient_preview_failures():
+    result = _run_browser_script(
+        """
+        let attempts = 0;
+        const retryDelays = [];
+
+        global.fetch = async (url, options = {}) => {
+          attempts += 1;
+          if (attempts < 3) throw new Error(`reset ${attempts}`);
+          return {
+            ok: true,
+            async blob() {
+              return new Blob([Buffer.from('cover')], { type: 'image/jpeg' });
+            },
+          };
+        };
+        global.URL = {
+          createObjectURL: () => 'blob:cover',
+        };
+        global.Image = class {
+          set src(_value) {
+            if (this.onload) this.onload();
+          }
+        };
+        global.setTimeout = (fn, delay) => {
+          retryDelays.push(delay);
+          fn();
+          return 0;
+        };
+
+        const result = await Drive.downloadCoverForBook(2, 'catalog');
+        return {
+          attempts,
+          retryDelays,
+          url: result.url,
+        };
+        """
+    )
+
+    assert result["attempts"] == 3
+    assert result["retryDelays"] == [2000, 4000]
+    assert result["url"] == "blob:cover"

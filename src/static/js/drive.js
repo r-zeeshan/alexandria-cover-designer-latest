@@ -1,6 +1,29 @@
 window.Drive = {
   _lastCatalogSyncSummary: {},
 
+  async _sleep(ms) {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+  },
+
+  async _fetchWithRetry(url, options = {}, maxRetries = 3) {
+    const retries = Math.max(0, Number(maxRetries || 0));
+    let lastError = null;
+    for (let attempt = 0; attempt <= retries; attempt += 1) {
+      try {
+        const response = await fetch(url, { cache: 'default', ...options });
+        if (response.ok) return response;
+        lastError = new Error(`HTTP ${response.status}`);
+      } catch (error) {
+        lastError = error;
+      }
+      if (attempt >= retries) break;
+      const delayMs = Math.min(2000 * (2 ** attempt), 8000);
+      console.warn(`[DRIVE] Retry ${attempt + 1}/${retries} for ${url} in ${delayMs}ms`);
+      await this._sleep(delayMs);
+    }
+    throw lastError || new Error('Request failed');
+  },
+
   async catalogCacheStatus() {
     try {
       const resp = await fetch('/cgi-bin/catalog.py/status', { cache: 'no-store' });
@@ -113,7 +136,11 @@ window.Drive = {
   },
 
   async downloadCoverForBook(bookNumber, source = 'catalog') {
-    const resp = await fetch(`/api/books/${encodeURIComponent(bookNumber)}/cover-preview?source=${encodeURIComponent(source)}&catalog=classics`, { cache: 'no-store' });
+    const resp = await this._fetchWithRetry(
+      `/api/books/${encodeURIComponent(bookNumber)}/cover-preview?source=${encodeURIComponent(source)}&catalog=classics`,
+      {},
+      3,
+    );
     if (!resp.ok) throw new Error('Cover preview unavailable');
     const blob = await resp.blob();
     const url = URL.createObjectURL(blob);
