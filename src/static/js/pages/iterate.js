@@ -1256,17 +1256,36 @@ function appendVariantCompositionDirective(promptText, variantNumber, options = 
   return `${base} ${directive}`.trim();
 }
 
+function stripTemplateStyleSection(promptText) {
+  return String(promptText || '')
+    .replace(/\s*STYLE:\s*[\s\S]*?(?=(?:\s+Mood:|\s+Era:|$))/i, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function appendStyleModifierWithinLimit(basePrompt, styleModifier, reservedLength = 0) {
-  const base = String(basePrompt || '').trim();
+  const originalBase = String(basePrompt || '').trim();
   const modifier = String(styleModifier || '').trim();
-  if (!base || !modifier) return base;
+  if (!originalBase || !modifier) return originalBase;
+  const base = stripTemplateStyleSection(originalBase);
   const availableLength = Math.max(0, MAX_GENERATION_PROMPT_LENGTH - Math.max(0, Number(reservedLength) || 0));
-  const prefix = `${base} VISUAL STYLE: `;
-  if (prefix.length >= availableLength) return base;
-  if ((prefix.length + modifier.length) <= availableLength) return `${prefix}${modifier}`.trim();
-  const maxModifierLen = availableLength - prefix.length;
+  const insertAt = (() => {
+    const moodIndex = base.search(/\bMood:/i);
+    if (moodIndex >= 0) return moodIndex;
+    const eraIndex = base.search(/\bEra:/i);
+    return eraIndex >= 0 ? eraIndex : -1;
+  })();
+  const before = insertAt >= 0 ? base.slice(0, insertAt).trim() : base;
+  const after = insertAt >= 0 ? base.slice(insertAt).trim() : '';
+  const prefix = after
+    ? `${before} VISUAL STYLE: `
+    : `${base} VISUAL STYLE: `;
+  const suffix = after ? `. ${after}` : '';
+  if ((prefix.length + suffix.length) >= availableLength) return base;
+  if ((prefix.length + modifier.length + suffix.length) <= availableLength) return `${prefix}${modifier}${suffix}`.trim();
+  const maxModifierLen = availableLength - prefix.length - suffix.length;
   if (maxModifierLen <= 50) return base;
-  return `${prefix}${modifier.slice(0, maxModifierLen).trim()}`.trim();
+  return `${prefix}${modifier.slice(0, maxModifierLen).trim()}${suffix}`.trim();
 }
 
 function validatePromptBeforeGeneration({ prompt, book }) {
@@ -1324,8 +1343,11 @@ function buildGenerationJobPrompt({ book, templateObj, promptId, customPrompt, s
   const reservedLength = (needsTitleAnchor ? titleAnchor.length + 1 : 0) + standardDirective.length + 1;
   const compactReservedLength = (needsTitleAnchor ? titleAnchor.length + 1 : 0) + compactDirective.length + 1;
   const styleModifier = String(style?.modifier || '').trim();
+  const standaloneBasePrompt = usesStandalonePrompt && styleModifier
+    ? stripTemplateStyleSection(basePrompt)
+    : basePrompt;
   let prompt = usesStandalonePrompt
-    ? appendStyleModifierWithinLimit(basePrompt, styleModifier, reservedLength)
+    ? appendStyleModifierWithinLimit(standaloneBasePrompt, styleModifier, reservedLength)
     : `${StyleDiversifier.buildDiversifiedPrompt(book.title, book.author, style)} ${basePrompt}`.trim();
   prompt = cleanupResolvedPrompt(prompt);
   if (needsTitleAnchor) {
@@ -1334,12 +1356,12 @@ function buildGenerationJobPrompt({ book, templateObj, promptId, customPrompt, s
   prompt = cleanupResolvedPrompt(prompt);
   prompt = appendVariantCompositionDirective(prompt, variantNumber);
   if (prompt.length > MAX_GENERATION_PROMPT_LENGTH && usesStandalonePrompt && styleModifier) {
-    const compactPrompt = appendStyleModifierWithinLimit(basePrompt, styleModifier, compactReservedLength);
+    const compactPrompt = appendStyleModifierWithinLimit(standaloneBasePrompt, styleModifier, compactReservedLength);
     const compactAnchoredPrompt = needsTitleAnchor ? `${titleAnchor} ${compactPrompt}`.trim() : compactPrompt;
     prompt = appendVariantCompositionDirective(cleanupResolvedPrompt(compactAnchoredPrompt), variantNumber, { compact: true });
   }
   if (prompt.length > MAX_GENERATION_PROMPT_LENGTH && usesStandalonePrompt && styleModifier) {
-    const promptWithoutStyle = cleanupResolvedPrompt(basePrompt);
+    const promptWithoutStyle = cleanupResolvedPrompt(standaloneBasePrompt);
     const anchoredPrompt = needsTitleAnchor ? `${titleAnchor} ${promptWithoutStyle}`.trim() : promptWithoutStyle;
     prompt = appendVariantCompositionDirective(anchoredPrompt, variantNumber, { compact: true });
   }
