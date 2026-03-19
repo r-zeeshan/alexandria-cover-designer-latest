@@ -12,7 +12,13 @@ python -m src.pipeline
 ## Production
 
 - Live app: https://web-production-900a7.up.railway.app/#iterate
-- Deploy: push to `master` and Railway deploys the `web` service
+- Current production code SHA: `c0c2404cb149e8a42a18699c97550fb5e300a2b2`
+- Current public Railway service: `web`
+- Important: the current live Railway deployment was last pushed via Railway CLI. A freelancer fork should not assume this exact Railway project is GitHub-linked; they should create or link their own Railway project for their fork.
+
+## Freelancer Handoff
+
+See [`FREELANCER-HANDOFF.md`](FREELANCER-HANDOFF.md) for the exact fork, clone, verification, environment, and Railway duplication steps for the current production version.
 
 ## Key Files
 
