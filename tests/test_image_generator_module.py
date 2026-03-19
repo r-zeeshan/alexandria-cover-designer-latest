@@ -348,6 +348,29 @@ def test_content_guardrail_score_flags_rings_text_and_dullness():
     assert "low_vibrancy" not in issues_vibrant
 
 
+def test_low_vibrancy_does_not_reject_muted_styles():
+    reject, flags = ig._should_reject_content_guardrail(
+        content_score=0.31,
+        content_issues=["low_vibrancy"],
+        metrics={},
+    )
+    assert reject is False
+    assert flags["vibrancy_only"] is True
+
+    reject_soft, flags_soft = ig._should_reject_content_guardrail(
+        content_score=0.31,
+        content_issues=["text_or_banner_artifact", "low_vibrancy"],
+        metrics={
+            "text_penalty": 0.05,
+            "text_band_ratio": 0.02,
+            "tiny_effective": 0.001,
+        },
+    )
+    assert reject_soft is False
+    assert flags_soft["soft_text_only"] is True
+    assert flags_soft["vibrancy_plus_soft_text"] is True
+
+
 def test_content_guardrail_detects_rectangular_internal_frame():
     framed = Image.new("RGBA", (256, 256), (96, 78, 52, 255))
     draw = ImageDraw.Draw(framed, "RGBA")

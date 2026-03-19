@@ -243,7 +243,11 @@ def test_iterate_prompt_builder_keeps_library_prompt_precomposed():
             "sceneVal": "Lucy Honeychurch on a Florentine terrace",
             "moodVal": "classical, timeless, evocative",
             "eraVal": "Edwardian Italy",
-            "style": {"id": "romantic-sublime", "label": "Romantic Sublime"},
+            "style": {
+                "id": "romantic-sublime",
+                "label": "Romantic Sublime",
+                "modifier": "Paint in the lush Pre-Raphaelite tradition with jewel-toned palette, botanical richness, and visible brushwork.",
+            },
         }
     )
 
@@ -251,12 +255,52 @@ def test_iterate_prompt_builder_keeps_library_prompt_precomposed():
     assert "Create a breathtaking legacy prompt." not in result["prompt"]
     assert "Lucy Honeychurch on a Florentine terrace" in result["prompt"]
     assert "Edwardian Italy" in result["prompt"]
+    assert "VISUAL STYLE:" in result["prompt"]
+    assert "lush Pre-Raphaelite tradition" in result["prompt"]
     assert result["styleLabel"] == "BASE 4 Romantic Realism"
     assert result["styleId"] == "none"
     assert result["preservePromptText"] is True
     assert result["libraryPromptId"] == "alexandria-base-romantic-realism"
     assert result["composePrompt"] is False
     assert result["backendPromptSource"] == "custom"
+
+
+def test_iterate_prompt_builder_truncates_library_style_modifier_before_scene_content():
+    result = _run_iterate_prompt_builder(
+        {
+            "book": {
+                "title": "Moby Dick",
+                "author": "Herman Melville",
+            },
+            "templateObj": {
+                "id": "alexandria-base-classical-devotion",
+                "name": "BASE 1 Classical Devotion",
+                "prompt_template": (
+                    'Book cover illustration only - no text. Scene: {SCENE}. '
+                    'Mood: {MOOD}. Era: {ERA}.'
+                ),
+            },
+            "promptId": "alexandria-base-classical-devotion",
+            "customPrompt": (
+                'Book cover illustration only - no text. Scene: {SCENE}. '
+                'Mood: {MOOD}. Era: {ERA}.'
+            ),
+            "sceneVal": "Captain Ahab on the Pequod amid a storm-dark sea with the white whale breaching nearby",
+            "moodVal": "furious, mythic, oceanic",
+            "eraVal": "19th-century whaling voyage",
+            "style": {
+                "id": "turner-sublime",
+                "label": "Turner Sublime",
+                "modifier": " ".join(["molten gold sky, storm-violet clouds, turbulent sea, dragged bristles, impasto spray"] * 40),
+            },
+            "variantNumber": 3,
+        }
+    )
+
+    assert result["prompt"].startswith('Scene from "Moby Dick": ')
+    assert "Captain Ahab on the Pequod" in result["prompt"]
+    assert "VISUAL STYLE:" in result["prompt"]
+    assert len(result["prompt"]) <= 1000
 
 
 def test_iterate_prompt_builder_keeps_legacy_style_diversifier_for_default_auto():

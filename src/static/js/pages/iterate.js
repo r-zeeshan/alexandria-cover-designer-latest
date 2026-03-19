@@ -13,6 +13,7 @@ let _lastGeneratedJobIds = [];
 let _resultsSortMode = 'model';
 const DEFAULT_VARIANT_COUNT = 10;
 const SEQUENTIAL_BATCH_SIZE = 4;
+const MAX_GENERATION_PROMPT_LENGTH = 1000;
 const AUTO_ROTATE_PROMPT_OPTION_LABEL = 'Auto-Rotate (Recommended)';
 const AUTO_ROTATE_PROMPT_INFO = 'Automatically varies artistic styles and scenes across your covers.';
 const AUTO_ROTATE_EXCLUDED_WILDCARD_TAGS = new Set([
@@ -31,6 +32,9 @@ const VARIANT_COMPOSITION_DIRECTIVES = [
   'Composition: lateral motion with the primary subject turned in profile but still fully contained within the frame.',
   'Composition: architectural or natural framing behind a centered subject, keeping strong open margin around the silhouette.',
 ];
+const COMPACT_SAFE_AREA_DIRECTIVE = 'Keep key figures, faces, hands, props, and horizon lines centered inside a later circular crop-safe zone.';
+const COMPACT_FULL_BLEED_DIRECTIVE = 'Extend painted scenery to all four square-canvas edges with no blank paper or floating vignette.';
+const COMPACT_NO_INTERNAL_FRAME_DIRECTIVE = 'No circle outline, border, ring, halo, wreath, plaque, banner, ornament, or lettering.';
 const CENTRAL_SAFE_AREA_DIRECTIVE = 'Keep all important figures, faces, hands, props, and horizon lines inside a centered crop-safe zone that will survive a later circular crop.';
 const FULL_BLEED_SCENE_DIRECTIVE = 'Extend the environment naturally to all four edges of the square canvas with painted scenery, not blank paper. No isolated oval, cameo, sticker, cutout, or floating vignette.';
 const SCENE_ONLY_STYLE_DIRECTIVE = 'Express style only through brushwork, palette, costume, props, and environmental details inside the scene. Never create a border, emblem, halo, wreath, sunburst, radiating backdrop, or floating ornament.';
@@ -1233,20 +1237,36 @@ function resolvePrompt(templateObj, book, customPrompt, sceneVal, moodVal, eraVa
   return resolved.trim();
 }
 
-function variantCompositionDirective(variantNumber) {
+function variantCompositionDirective(variantNumber, { compact = false } = {}) {
   const index = Math.max(0, (Number(variantNumber || 1) - 1)) % VARIANT_COMPOSITION_DIRECTIVES.length;
   const directive = VARIANT_COMPOSITION_DIRECTIVES[index] || VARIANT_COMPOSITION_DIRECTIVES[0];
+  if (compact) {
+    return `${directive} ${COMPACT_SAFE_AREA_DIRECTIVE} ${COMPACT_FULL_BLEED_DIRECTIVE} ${COMPACT_NO_INTERNAL_FRAME_DIRECTIVE}`.trim();
+  }
   return `${directive} ${CENTRAL_SAFE_AREA_DIRECTIVE} ${FULL_BLEED_SCENE_DIRECTIVE} ${SCENE_ONLY_STYLE_DIRECTIVE} ${NO_INTERNAL_FRAME_DIRECTIVE}`.trim();
 }
 
-function appendVariantCompositionDirective(promptText, variantNumber) {
+function appendVariantCompositionDirective(promptText, variantNumber, options = {}) {
   const base = String(promptText || '').trim();
-  if (!base) return variantCompositionDirective(variantNumber);
-  const directive = variantCompositionDirective(variantNumber);
+  if (!base) return variantCompositionDirective(variantNumber, options);
+  const directive = variantCompositionDirective(variantNumber, options);
   const lowered = base.toLowerCase();
   if (lowered.includes(CENTRAL_SAFE_AREA_DIRECTIVE.toLowerCase())) return base;
   if (lowered.includes(String(directive).toLowerCase())) return base;
   return `${base} ${directive}`.trim();
+}
+
+function appendStyleModifierWithinLimit(basePrompt, styleModifier, reservedLength = 0) {
+  const base = String(basePrompt || '').trim();
+  const modifier = String(styleModifier || '').trim();
+  if (!base || !modifier) return base;
+  const availableLength = Math.max(0, MAX_GENERATION_PROMPT_LENGTH - Math.max(0, Number(reservedLength) || 0));
+  const prefix = `${base} VISUAL STYLE: `;
+  if (prefix.length >= availableLength) return base;
+  if ((prefix.length + modifier.length) <= availableLength) return `${prefix}${modifier}`.trim();
+  const maxModifierLen = availableLength - prefix.length;
+  if (maxModifierLen <= 50) return base;
+  return `${prefix}${modifier.slice(0, maxModifierLen).trim()}`.trim();
 }
 
 function validatePromptBeforeGeneration({ prompt, book }) {
@@ -1297,16 +1317,32 @@ function buildGenerationJobPrompt({ book, templateObj, promptId, customPrompt, s
   const customPromptOverride = promptSource === 'custom' ? customPrompt : '';
   const basePrompt = resolvePrompt(templateObj, book, customPromptOverride, sceneVal, moodVal, eraVal);
   const usesStandalonePrompt = Boolean(trimmedPromptId || trimmedCustomPrompt);
+  const titleAnchor = _buildTitleAnchor(book);
+  const needsTitleAnchor = Boolean(titleAnchor && !_promptStartsWithBookContent(basePrompt, book));
+  const standardDirective = variantCompositionDirective(variantNumber);
+  const compactDirective = variantCompositionDirective(variantNumber, { compact: true });
+  const reservedLength = (needsTitleAnchor ? titleAnchor.length + 1 : 0) + standardDirective.length + 1;
+  const compactReservedLength = (needsTitleAnchor ? titleAnchor.length + 1 : 0) + compactDirective.length + 1;
+  const styleModifier = String(style?.modifier || '').trim();
   let prompt = usesStandalonePrompt
-    ? basePrompt
+    ? appendStyleModifierWithinLimit(basePrompt, styleModifier, reservedLength)
     : `${StyleDiversifier.buildDiversifiedPrompt(book.title, book.author, style)} ${basePrompt}`.trim();
   prompt = cleanupResolvedPrompt(prompt);
-  const titleAnchor = _buildTitleAnchor(book);
-  if (titleAnchor && !_promptStartsWithBookContent(prompt, book)) {
+  if (needsTitleAnchor) {
     prompt = `${titleAnchor} ${prompt}`.trim();
   }
   prompt = cleanupResolvedPrompt(prompt);
   prompt = appendVariantCompositionDirective(prompt, variantNumber);
+  if (prompt.length > MAX_GENERATION_PROMPT_LENGTH && usesStandalonePrompt && styleModifier) {
+    const compactPrompt = appendStyleModifierWithinLimit(basePrompt, styleModifier, compactReservedLength);
+    const compactAnchoredPrompt = needsTitleAnchor ? `${titleAnchor} ${compactPrompt}`.trim() : compactPrompt;
+    prompt = appendVariantCompositionDirective(cleanupResolvedPrompt(compactAnchoredPrompt), variantNumber, { compact: true });
+  }
+  if (prompt.length > MAX_GENERATION_PROMPT_LENGTH && usesStandalonePrompt && styleModifier) {
+    const promptWithoutStyle = cleanupResolvedPrompt(basePrompt);
+    const anchoredPrompt = needsTitleAnchor ? `${titleAnchor} ${promptWithoutStyle}`.trim() : promptWithoutStyle;
+    prompt = appendVariantCompositionDirective(anchoredPrompt, variantNumber, { compact: true });
+  }
   const templateName = String(templateObj?.name || '').trim();
   const styleLabel = usesStandalonePrompt
     ? (

@@ -780,18 +780,30 @@ def _should_reject_content_guardrail(
         and not hard_text_artifact
         and issue_tokens.issubset({"text_or_banner_artifact", "low_vibrancy"})
     )
+    vibrancy_only = issue_tokens == {"low_vibrancy"}
+    vibrancy_plus_soft_text = (
+        "low_vibrancy" in issue_tokens
+        and issue_tokens.issubset({"text_or_banner_artifact", "low_vibrancy"})
+    )
     reject = (
         hard_text_artifact
         or hard_frame_artifact
         or hard_composition_artifact
         or (soft_text_only and float(content_score) >= SOFT_TEXT_ONLY_REJECT_SCORE)
-        or (not soft_text_only and float(content_score) > MAX_CONTENT_VIOLATION_SCORE)
+        or (
+            not soft_text_only
+            and not vibrancy_only
+            and not vibrancy_plus_soft_text
+            and float(content_score) > MAX_CONTENT_VIOLATION_SCORE
+        )
     )
     return reject, {
         "hard_text_artifact": hard_text_artifact,
         "hard_frame_artifact": hard_frame_artifact,
         "hard_composition_artifact": hard_composition_artifact,
         "soft_text_only": soft_text_only,
+        "vibrancy_only": vibrancy_only,
+        "vibrancy_plus_soft_text": vibrancy_plus_soft_text,
     }
 
 
@@ -3729,7 +3741,7 @@ def _content_guardrail_score(image: Image.Image) -> tuple[float, list[str], dict
         )
     ):
         issues.append("off_center_subject_artifact")
-    if dull_penalty > 0.12:
+    if dull_penalty > 0.25:
         issues.append("low_vibrancy")
     metrics = {
         "text_penalty": float(text_penalty),
