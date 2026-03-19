@@ -183,40 +183,86 @@ MODEL_ALIAS_MAP: dict[str, str] = {
 }
 
 MODEL_COST_USD: dict[str, float] = {
-    "flux-2-pro": 0.055,
-    "flux-2-schnell": 0.003,
+    # OpenRouter: Google
+    "openrouter/google/gemini-3-pro-image-preview": 0.134,
+    "openrouter/google/gemini-2.5-flash-image": 0.003,
+    "openrouter/google/gemini-3.1-flash-image-preview": 0.006,
+    "google/gemini-3-pro-image-preview": 0.134,
+    "google/gemini-2.5-flash-image": 0.003,
+    "google/gemini-3.1-flash-image-preview": 0.006,
+    "nano-banana-pro": 0.134,
+    "nano-banana-2": 0.003,
+
+    # OpenRouter: OpenAI
+    "openrouter/openai/gpt-5-image": 0.080,
+    "openrouter/openai/gpt-5-image-mini": 0.016,
+    "openai/gpt-5-image": 0.080,
+    "openai/gpt-5-image-mini": 0.016,
+    "openai/gpt-image-1": 0.040,
+    "openai/gpt-image-1-mini": 0.010,
+    "gpt-image-1": 0.040,
+    "gpt-image-1-mini": 0.010,
     "gpt-image-1-high": 0.167,
     "gpt-image-1-medium": 0.040,
-    "imagen-4-ultra": 0.060,
-    "imagen-4-fast": 0.030,
-    "nano-banana-pro": 0.02,
-    "nano-banana-2": 0.003,
-    "openrouter/google/gemini-3-pro-image-preview": 0.02,
-    "google/gemini-2.5-flash-image": 0.003,
-    "google/gemini-3-pro-image-preview": 0.02,
-    "google/gemini-3.1-flash-image-preview": 0.006,
-    "openai/gpt-5-image-mini": 0.012,
-    "openai/gpt-5-image": 0.04,
-    "sourceful/riverflow-v2-pro": 0.05,
-    "sourceful/riverflow-v2-max-preview": 0.06,
-    "sourceful/riverflow-v2-standard-preview": 0.04,
-    "sourceful/riverflow-v2-fast-preview": 0.03,
-    "sourceful/riverflow-v2-fast": 0.02,
-    "bytedance-seed/seedream-4.5": 0.04,
-    "black-forest-labs/flux.2-max": 0.06,
-    "black-forest-labs/flux.2-flex": 0.025,
-    "black-forest-labs/flux.2-pro": 0.03,
+    "gpt-image-1.5": 0.060,
+
+    # OpenRouter: Sourceful Riverflow
+    "openrouter/sourceful/riverflow-v2-pro": 0.150,
+    "openrouter/sourceful/riverflow-v2-max-preview": 0.075,
+    "openrouter/sourceful/riverflow-v2-standard-preview": 0.035,
+    "openrouter/sourceful/riverflow-v2-fast-preview": 0.030,
+    "openrouter/sourceful/riverflow-v2-fast": 0.020,
+    "sourceful/riverflow-v2-pro": 0.150,
+    "sourceful/riverflow-v2-max-preview": 0.075,
+    "sourceful/riverflow-v2-standard-preview": 0.035,
+    "sourceful/riverflow-v2-fast-preview": 0.030,
+    "sourceful/riverflow-v2-fast": 0.020,
+
+    # OpenRouter: Bytedance
+    "openrouter/bytedance-seed/seedream-4.5": 0.040,
+    "bytedance-seed/seedream-4.5": 0.040,
+
+    # OpenRouter: Black Forest Labs FLUX
+    "openrouter/black-forest-labs/flux.2-max": 0.070,
+    "openrouter/black-forest-labs/flux.2-flex": 0.060,
+    "openrouter/black-forest-labs/flux.2-pro": 0.030,
+    "openrouter/black-forest-labs/flux.2-klein-4b": 0.014,
+    "black-forest-labs/flux.2-max": 0.070,
+    "black-forest-labs/flux.2-flex": 0.060,
+    "black-forest-labs/flux.2-pro": 0.030,
     "black-forest-labs/flux.2-klein-4b": 0.014,
-    "fal-ai/flux-2/klein/4b": 0.0025,
+
+    # Fal direct
+    "fal/fal-ai/flux-2/klein/4b": 0.003,
+    "fal/fal-ai/flux-2": 0.012,
+    "fal/fal-ai/flux-2-pro": 0.045,
+    "fal-ai/flux-2/klein/4b": 0.003,
     "fal-ai/flux-2": 0.012,
     "fal-ai/flux-2-pro": 0.045,
-    "gpt-image-1-mini": 0.01,
-    "gpt-image-1": 0.04,
-    "gpt-image-1.5": 0.06,
-    "imagen-4.0-fast-generate-001": 0.03,
-    "imagen-4.0-generate-001": 0.06,
-    "imagen-4.0-ultra-generate-001": 0.08,
+
+    # Google direct Imagen
+    "imagen-4-ultra": 0.080,
+    "imagen-4-fast": 0.030,
+    "imagen-4.0-fast-generate-001": 0.030,
+    "imagen-4.0-generate-001": 0.060,
+    "imagen-4.0-ultra-generate-001": 0.080,
+
+    # Legacy aliases
+    "flux-2-pro": 0.030,
+    "flux-2-schnell": 0.003,
 }
+
+OPENROUTER_TOKEN_IMAGE_OUTPUT_TOKENS: dict[str, int] = {
+    "openai/gpt-5-image": 8000,
+    "openai/gpt-5-image-mini": 8000,
+    "google/gemini-3.1-flash-image-preview": 2000,
+}
+
+OPENROUTER_TOKEN_IMAGE_PATTERN_OUTPUT_TOKENS: tuple[tuple[str, int], ...] = (
+    ("gpt-5-image-mini", 8000),
+    ("gpt-5-image", 8000),
+    ("gemini-3.1-flash-image-preview", 2000),
+)
 
 _RUNTIME_MODEL_COST_USD: dict[str, float] = MODEL_COST_USD.copy()
 _RUNTIME_MODEL_COST_LOCK = threading.Lock()
@@ -929,6 +975,19 @@ def _extract_openrouter_image_price(model_payload: dict[str, Any]) -> float | No
             parsed = _coerce_price_value(pricing.get(key))
             if parsed is not None:
                 return parsed
+        completion_price = _coerce_price_value(pricing.get("completion"))
+        if completion_price is not None:
+            model_id = str(model_payload.get("id", "") or "").strip().lower()
+            estimated_tokens = OPENROUTER_TOKEN_IMAGE_OUTPUT_TOKENS.get(model_id)
+            if estimated_tokens is None:
+                for pattern, token_count in OPENROUTER_TOKEN_IMAGE_PATTERN_OUTPUT_TOKENS:
+                    if pattern in model_id:
+                        estimated_tokens = token_count
+                        break
+            if estimated_tokens is not None:
+                estimated = round(completion_price * estimated_tokens, 4)
+                if estimated >= 0.001:
+                    return estimated
     for key in ("per_image", "image_price", "price_per_image", "price_per_megapixel"):
         parsed = _coerce_price_value(model_payload.get(key))
         if parsed is not None:

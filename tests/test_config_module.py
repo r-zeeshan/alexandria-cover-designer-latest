@@ -222,7 +222,7 @@ def test_config_runtime_methods_and_get_config_fallback(monkeypatch: pytest.Monk
     assert runtime.resolve_model_provider("unknown-model", default_provider="google") == "google"
     assert runtime.resolve_model_alias("nano-banana-pro") == "openrouter/google/gemini-3-pro-image-preview"
     assert runtime.resolve_model_alias("nano-banana-2") == "openrouter/google/gemini-2.5-flash-image"
-    assert runtime.get_model_cost("nano-banana-pro") == pytest.approx(0.02)
+    assert runtime.get_model_cost("nano-banana-pro") == pytest.approx(0.134)
     assert runtime.get_model_cost("nano-banana-2") == pytest.approx(0.003)
     assert runtime.get_model_modality("nano-banana-2") == "both"
     assert runtime.get_model_cost("openai/gpt-image-1") >= 0.0
@@ -259,14 +259,16 @@ def test_runtime_model_costs_include_prompt29_riverflow_fix():
 
 def test_runtime_model_costs_include_prompt31_model_prices():
     expected = {
-        "openrouter/sourceful/riverflow-v2-pro": 0.05,
-        "openrouter/sourceful/riverflow-v2-max-preview": 0.06,
-        "openrouter/black-forest-labs/flux.2-max": 0.06,
-        "openrouter/black-forest-labs/flux.2-flex": 0.025,
-        "openrouter/sourceful/riverflow-v2-standard-preview": 0.04,
+        "openrouter/sourceful/riverflow-v2-pro": 0.15,
+        "openrouter/sourceful/riverflow-v2-max-preview": 0.075,
+        "openrouter/black-forest-labs/flux.2-max": 0.07,
+        "openrouter/black-forest-labs/flux.2-flex": 0.06,
+        "openrouter/sourceful/riverflow-v2-standard-preview": 0.035,
         "openrouter/sourceful/riverflow-v2-fast": 0.02,
-        "google/gemini-3-pro-image-preview": 0.02,
+        "google/gemini-3-pro-image-preview": 0.134,
         "google/gemini-3.1-flash-image-preview": 0.006,
+        "openrouter/openai/gpt-5-image": 0.08,
+        "openrouter/openai/gpt-5-image-mini": 0.016,
     }
     runtime_costs = config.runtime_model_costs_copy()
     cfg = config.get_config("classics")
@@ -274,6 +276,27 @@ def test_runtime_model_costs_include_prompt31_model_prices():
         key = model.split("/", 1)[-1] if model.startswith("openrouter/") else model
         assert runtime_costs[key] == pytest.approx(cost)
         assert cfg.get_model_cost(model) == pytest.approx(cost)
+
+
+def test_extract_openrouter_image_price_supports_token_priced_models():
+    assert config._extract_openrouter_image_price(
+        {
+            "id": "openai/gpt-5-image",
+            "pricing": {"completion": "0.00001"},
+        }
+    ) == pytest.approx(0.08)
+    assert config._extract_openrouter_image_price(
+        {
+            "id": "openai/gpt-5-image-mini",
+            "pricing": {"completion": "0.000002"},
+        }
+    ) == pytest.approx(0.016)
+    assert config._extract_openrouter_image_price(
+        {
+            "id": "google/gemini-3.1-flash-image-preview",
+            "pricing": {"completion": "0.000003"},
+        }
+    ) == pytest.approx(0.006)
 
 
 def test_all_active_models_have_explicit_positive_cost_entries():
@@ -288,7 +311,7 @@ def test_all_active_models_have_explicit_positive_cost_entries():
     assert len(cfg.all_models) == 22
     assert {
         "fal/fal-ai/flux-2/klein/4b",
-        "fal/fal-ai/flux-2-pro",
+        "fal/fal-ai/flux-2",
         "openai/gpt-image-1-mini",
         "openai/gpt-image-1",
     }.issubset(set(cfg.all_models))
@@ -305,7 +328,9 @@ def test_sync_openrouter_pricing_updates_runtime_costs_and_get_config(monkeypatc
             return {
                 "data": [
                     {"id": "sourceful/riverflow-v2-fast", "pricing": {"image": "0.021"}},
-                    {"id": "google/gemini-3-pro-image-preview", "pricing": {"per_image": "0.024"}},
+                    {"id": "openai/gpt-5-image", "pricing": {"completion": "0.00001"}},
+                    {"id": "openai/gpt-5-image-mini", "pricing": {"completion": "0.000002"}},
+                    {"id": "google/gemini-3.1-flash-image-preview", "pricing": {"completion": "0.000003"}},
                 ]
             }
 
@@ -321,10 +346,15 @@ def test_sync_openrouter_pricing_updates_runtime_costs_and_get_config(monkeypatc
         runtime_costs = config.runtime_model_costs_copy()
         assert runtime_costs["sourceful/riverflow-v2-fast"] == pytest.approx(0.021)
         assert runtime_costs["openrouter/sourceful/riverflow-v2-fast"] == pytest.approx(0.021)
-        assert runtime_costs["nano-banana-pro"] == pytest.approx(0.024)
+        assert runtime_costs["openai/gpt-5-image"] == pytest.approx(0.08)
+        assert runtime_costs["openrouter/openai/gpt-5-image"] == pytest.approx(0.08)
+        assert runtime_costs["openai/gpt-5-image-mini"] == pytest.approx(0.016)
+        assert runtime_costs["openrouter/openai/gpt-5-image-mini"] == pytest.approx(0.016)
+        assert runtime_costs["google/gemini-3.1-flash-image-preview"] == pytest.approx(0.006)
+        assert runtime_costs["openrouter/google/gemini-3.1-flash-image-preview"] == pytest.approx(0.006)
 
         cfg = config.get_config("classics")
-        assert cfg.get_model_cost("nano-banana-pro") == pytest.approx(0.024)
+        assert cfg.get_model_cost("openrouter/openai/gpt-5-image") == pytest.approx(0.08)
         assert cfg.cost_per_image_usd == pytest.approx(runtime_costs.get(cfg.ai_model, 0.04))
     finally:
         with config._RUNTIME_MODEL_COST_LOCK:
@@ -370,9 +400,10 @@ def test_sync_openrouter_pricing_ignores_suspiciously_tiny_image_prices():
             config._OPENROUTER_PRICING_SYNC_STATE.update(original_state)
 
 
-def test_sync_openrouter_pricing_skips_without_api_key():
+def test_sync_openrouter_pricing_skips_without_api_key(monkeypatch: pytest.MonkeyPatch):
     original_state = config.openrouter_pricing_sync_status()
     try:
+        monkeypatch.setattr(config, "OPENROUTER_API_KEY", "")
         status = config.sync_openrouter_pricing(api_key="", session=SimpleNamespace(get=lambda *_args, **_kwargs: None))
         assert status["ok"] is False
         assert status["skipped"] is True
