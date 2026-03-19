@@ -21,6 +21,11 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Run regression guardian (source checks)
+        run: |
+          python scripts/regression_check.py
+          echo "Regression guardian passed — source code is clean"
+
       - name: Install smoke test dependency
         run: |
           python -m pip install --upgrade pip
@@ -30,6 +35,14 @@ jobs:
         run: |
           echo "Waiting 120 seconds for Railway deployment..."
           sleep 120
+
+      - name: Run regression guardian (production checks)
+        if: success()
+        env:
+          PROD_URL: https://web-production-900a7.up.railway.app
+        run: |
+          python scripts/regression_check.py --prod "$PROD_URL"
+          echo "Production regression checks passed"
 
       - name: Run production smoke test
         env:
