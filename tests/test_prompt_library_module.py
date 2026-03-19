@@ -211,7 +211,8 @@ def test_seeded_alexandria_base_prompts_use_prompt65_templates(tmp_path: Path, m
         assert "Mood: {MOOD}." in prompt.prompt_template
         assert "Era: {ERA}." in prompt.prompt_template
         assert len(prompt.prompt_template) < 520
-        assert "the palette should reflect the setting and era of this specific story" in prompt.prompt_template
+        assert "let the exact palette come from this story's setting and era" in prompt.prompt_template
+        assert "never from a generic default" in prompt.prompt_template
         assert "This circular medallion illustration" not in prompt.prompt_template
         assert "Circular vignette composition with soft edges." not in prompt.prompt_template
         assert "no clean vector lines" in prompt.negative_prompt.lower()
@@ -225,11 +226,11 @@ def test_seeded_alexandria_base_prompts_use_prompt65_templates(tmp_path: Path, m
         assert prompt.negative_prompt == pl.ALEXANDRIA_BASE_NEGATIVE_PROMPT
 
     assert "Painted as a rich Victorian storybook color plate" in prompts["alexandria-base-classical-devotion"].prompt_template
-    assert "Color direction: warm luminous tones with gilded highlights and candlelit warmth" in prompts["alexandria-base-classical-devotion"].prompt_template
-    assert "Color direction: deep earth tones with dramatic chiaroscuro contrast and a single strong light source" in prompts["alexandria-base-philosophical-gravitas"].prompt_template
-    assert "Color direction: dark dominant shadows with cold silver highlights and expressionist tension" in prompts["alexandria-base-gothic-atmosphere"].prompt_template
-    assert "Color direction: golden warm light with atmospheric perspective and soft luminous distance" in prompts["alexandria-base-romantic-realism"].prompt_template
-    assert "Color direction: deep cosmic tones with inner luminescence and mystical glow" in prompts["alexandria-base-esoteric-mysticism"].prompt_template
+    assert "Color direction: blazing candlelit golds, honeyed amber, ivory glow, and deep jewel shadows at high chroma" in prompts["alexandria-base-classical-devotion"].prompt_template
+    assert "Color direction: dark umber, oxblood, bronze, and near-black shadow cut by one piercing light source" in prompts["alexandria-base-philosophical-gravitas"].prompt_template
+    assert "Color direction: ink-dark indigo, claret, storm-charcoal, and cold silver highlights with violent expressionist contrast" in prompts["alexandria-base-gothic-atmosphere"].prompt_template
+    assert "Color direction: sunlit gold, rose-crimson, glowing peach, and luminous sky distance with boldly saturated warmth" in prompts["alexandria-base-romantic-realism"].prompt_template
+    assert "Color direction: electric lapis, peacock teal, amethyst, obsidian, and celestial gold with jewel-like inner radiance" in prompts["alexandria-base-esoteric-mysticism"].prompt_template
 
 
 def test_seeded_painterly_wildcards_use_prompt65_templates(tmp_path: Path, monkeypatch):

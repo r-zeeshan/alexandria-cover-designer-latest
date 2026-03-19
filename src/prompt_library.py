@@ -193,37 +193,37 @@ ALEXANDRIA_BASE_PROMPT_TEMPLATES: dict[str, str] = {
     "alexandria-base-classical-devotion": (
         "{SCENE}. Painted as a rich Victorian storybook color plate — opaque gouache with fine ink "
         "outlines, dense illustration filling every inch, saturated colors, layered depth from foreground "
-        "to atmospheric background. Color direction: warm luminous tones with gilded highlights and "
-        "candlelit warmth — the palette should reflect the setting and era of this specific story. "
-        "Mood: {MOOD}. Era: {ERA}."
+        "to atmospheric background. Color direction: blazing candlelit golds, honeyed amber, ivory glow, "
+        "and deep jewel shadows at high chroma — let the exact palette come from this story's setting and "
+        "era, never from a generic default. Mood: {MOOD}. Era: {ERA}."
     ),
     "alexandria-base-philosophical-gravitas": (
         "{SCENE}. Painted as a rich Victorian storybook color plate — opaque gouache with fine ink "
         "outlines, dense illustration filling every inch, saturated colors, layered depth from foreground "
-        "to atmospheric background. Color direction: deep earth tones with dramatic chiaroscuro contrast "
-        "and a single strong light source — the palette should reflect the setting and era of this "
-        "specific story. Mood: {MOOD}. Era: {ERA}."
+        "to atmospheric background. Color direction: dark umber, oxblood, bronze, and near-black shadow "
+        "cut by one piercing light source, all pushed to rich dramatic saturation — let the exact palette "
+        "come from this story's setting and era, never from a generic default. Mood: {MOOD}. Era: {ERA}."
     ),
     "alexandria-base-gothic-atmosphere": (
         "{SCENE}. Painted as a rich Victorian storybook color plate — opaque gouache with fine ink "
         "outlines, dense illustration filling every inch, saturated colors, layered depth from foreground "
-        "to atmospheric background. Color direction: dark dominant shadows with cold silver highlights and "
-        "expressionist tension — the palette should reflect the setting and era of this specific story. "
-        "Mood: {MOOD}. Era: {ERA}."
+        "to atmospheric background. Color direction: ink-dark indigo, claret, storm-charcoal, and cold "
+        "silver highlights with violent expressionist contrast — let the exact palette come from this "
+        "story's setting and era, never from a generic default. Mood: {MOOD}. Era: {ERA}."
     ),
     "alexandria-base-romantic-realism": (
         "{SCENE}. Painted as a rich Victorian storybook color plate — opaque gouache with fine ink "
         "outlines, dense illustration filling every inch, saturated colors, layered depth from foreground "
-        "to atmospheric background. Color direction: golden warm light with atmospheric perspective and "
-        "soft luminous distance — the palette should reflect the setting and era of this specific story. "
-        "Mood: {MOOD}. Era: {ERA}."
+        "to atmospheric background. Color direction: sunlit gold, rose-crimson, glowing peach, and "
+        "luminous sky distance with boldly saturated warmth — let the exact palette come from this story's "
+        "setting and era, never from a generic default. Mood: {MOOD}. Era: {ERA}."
     ),
     "alexandria-base-esoteric-mysticism": (
         "{SCENE}. Painted as a rich Victorian storybook color plate — opaque gouache with fine ink "
         "outlines, dense illustration filling every inch, saturated colors, layered depth from foreground "
-        "to atmospheric background. Color direction: deep cosmic tones with inner luminescence and "
-        "mystical glow — the palette should reflect the setting and era of this specific story. "
-        "Mood: {MOOD}. Era: {ERA}."
+        "to atmospheric background. Color direction: electric lapis, peacock teal, amethyst, obsidian, "
+        "and celestial gold with jewel-like inner radiance — let the exact palette come from this story's "
+        "setting and era, never from a generic default. Mood: {MOOD}. Era: {ERA}."
     ),
 }
 
