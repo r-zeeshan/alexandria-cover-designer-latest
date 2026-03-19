@@ -194,36 +194,38 @@ ALEXANDRIA_BASE_PROMPT_TEMPLATES: dict[str, str] = {
         "{SCENE}. Painted as a rich Victorian storybook color plate — opaque gouache with fine ink "
         "outlines, dense illustration filling every inch, saturated colors, layered depth from foreground "
         "to atmospheric background. Color direction: blazing candlelit golds, honeyed amber, ivory glow, "
-        "and deep jewel shadows at high chroma — let the exact palette come from this story's setting and "
-        "era, never from a generic default. Mood: {MOOD}. Era: {ERA}."
+        "and deep jewel shadows at high chroma — choose exact hues from this story's setting and era, and "
+        "keep them vivid, jewel-rich, never muddy or generic. Mood: {MOOD}. Era: {ERA}."
     ),
     "alexandria-base-philosophical-gravitas": (
         "{SCENE}. Painted as a rich Victorian storybook color plate — opaque gouache with fine ink "
         "outlines, dense illustration filling every inch, saturated colors, layered depth from foreground "
         "to atmospheric background. Color direction: dark umber, oxblood, bronze, and near-black shadow "
-        "cut by one piercing light source, all pushed to rich dramatic saturation — let the exact palette "
-        "come from this story's setting and era, never from a generic default. Mood: {MOOD}. Era: {ERA}."
+        "cut by one piercing light source, all pushed to rich dramatic saturation — choose exact hues from "
+        "this story's setting and era, and keep them vivid, jewel-rich, never muddy or generic. Mood: "
+        "{MOOD}. Era: {ERA}."
     ),
     "alexandria-base-gothic-atmosphere": (
         "{SCENE}. Painted as a rich Victorian storybook color plate — opaque gouache with fine ink "
         "outlines, dense illustration filling every inch, saturated colors, layered depth from foreground "
         "to atmospheric background. Color direction: ink-dark indigo, claret, storm-charcoal, and cold "
-        "silver highlights with violent expressionist contrast — let the exact palette come from this "
-        "story's setting and era, never from a generic default. Mood: {MOOD}. Era: {ERA}."
+        "silver highlights with violent expressionist contrast — choose exact hues from this story's "
+        "setting and era, and keep them vivid, jewel-rich, never muddy or generic. Mood: {MOOD}. Era: "
+        "{ERA}."
     ),
     "alexandria-base-romantic-realism": (
         "{SCENE}. Painted as a rich Victorian storybook color plate — opaque gouache with fine ink "
         "outlines, dense illustration filling every inch, saturated colors, layered depth from foreground "
         "to atmospheric background. Color direction: sunlit gold, rose-crimson, glowing peach, and "
-        "luminous sky distance with boldly saturated warmth — let the exact palette come from this story's "
-        "setting and era, never from a generic default. Mood: {MOOD}. Era: {ERA}."
+        "luminous sky distance with boldly saturated warmth — choose exact hues from this story's setting "
+        "and era, and keep them vivid, jewel-rich, never muddy or generic. Mood: {MOOD}. Era: {ERA}."
     ),
     "alexandria-base-esoteric-mysticism": (
         "{SCENE}. Painted as a rich Victorian storybook color plate — opaque gouache with fine ink "
         "outlines, dense illustration filling every inch, saturated colors, layered depth from foreground "
         "to atmospheric background. Color direction: electric lapis, peacock teal, amethyst, obsidian, "
-        "and celestial gold with jewel-like inner radiance — let the exact palette come from this story's "
-        "setting and era, never from a generic default. Mood: {MOOD}. Era: {ERA}."
+        "and celestial gold with jewel-like inner radiance — choose exact hues from this story's setting "
+        "and era, and keep them vivid, jewel-rich, never muddy or generic. Mood: {MOOD}. Era: {ERA}."
     ),
 }
 

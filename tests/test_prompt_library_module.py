@@ -211,8 +211,8 @@ def test_seeded_alexandria_base_prompts_use_prompt65_templates(tmp_path: Path, m
         assert "Mood: {MOOD}." in prompt.prompt_template
         assert "Era: {ERA}." in prompt.prompt_template
         assert len(prompt.prompt_template) < 520
-        assert "let the exact palette come from this story's setting and era" in prompt.prompt_template
-        assert "never from a generic default" in prompt.prompt_template
+        assert "choose exact hues from this story's setting and era" in prompt.prompt_template
+        assert "keep them vivid, jewel-rich, never muddy or generic" in prompt.prompt_template
         assert "This circular medallion illustration" not in prompt.prompt_template
         assert "Circular vignette composition with soft edges." not in prompt.prompt_template
         assert "no clean vector lines" in prompt.negative_prompt.lower()
