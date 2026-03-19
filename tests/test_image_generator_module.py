@@ -1991,6 +1991,33 @@ def test_generate_single_book_forwards_preserve_prompt_text(tmp_path: Path, monk
     assert captured["preserve_prompt_text"] is True
 
 
+def test_generate_single_book_uses_requested_variant_id_for_single_variant_jobs(tmp_path: Path, monkeypatch):
+    runtime = _Runtime(tmp_path)
+    monkeypatch.setattr(ig.config, "get_config", lambda: runtime)
+    prompts_path = tmp_path / "book_prompts.json"
+    _write_prompts(prompts_path)
+    captured: dict[str, object] = {}
+
+    def _capture_generate_all_models(**kwargs):  # type: ignore[no-untyped-def]
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr(ig, "generate_all_models", _capture_generate_all_models)
+    ig.generate_single_book(
+        book_number=1,
+        prompts_path=prompts_path,
+        output_dir=tmp_path / "generated",
+        models=["openrouter/google/gemini-3-pro-image-preview"],
+        variants=1,
+        prompt_variant=3,
+        prompt_text="Book cover illustration only - no text. Exact Alexandria prompt.",
+        dry_run=True,
+        preserve_prompt_text=True,
+    )
+
+    assert captured["variant_ids"] == [3]
+
+
 def test_generate_single_book_preserve_prompt_text_keeps_resolved_prompt_even_with_library_id(tmp_path: Path, monkeypatch):
     runtime = _Runtime(tmp_path)
     monkeypatch.setattr(ig.config, "get_config", lambda: runtime)

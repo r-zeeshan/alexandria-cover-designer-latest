@@ -2392,6 +2392,7 @@ def generate_all_models(
     cancel_checker: Callable[[str, int], bool] | None = None,
     preserve_prompt_text: bool = False,
     style_id: str = "",
+    variant_ids: list[int] | None = None,
 ) -> list[GenerationResult]:
     """Fire ALL models concurrently for the same prompt."""
     runtime = config.get_config()
@@ -2406,6 +2407,16 @@ def generate_all_models(
     failures: list[GenerationResult] = []
     dry_run_plan: list[dict[str, Any]] = []
     effective_negative_prompt = _merge_negative_prompt(negative_prompt)
+    normalized_variant_ids: list[int] = []
+    if variant_ids is not None:
+        normalized_variant_ids = [
+            int(value)
+            for value in variant_ids
+            if _safe_int(value, 0) > 0
+        ]
+        if normalized_variant_ids and len(normalized_variant_ids) != variants_per_model:
+            raise ValueError("variant_ids length must match variants_per_model")
+    variant_sequence = normalized_variant_ids or list(range(1, variants_per_model + 1))
 
     tasks: list[tuple[str, int, Path, str, str, int]] = []
     rng = random.SystemRandom()
@@ -2416,7 +2427,7 @@ def generate_all_models(
         provider = provider_override or runtime.resolve_model_provider(model)
         provider = provider.lower()
 
-        for variant in range(1, variants_per_model + 1):
+        for variant in variant_sequence:
             if callable(cancel_checker):
                 try:
                     if bool(cancel_checker(model, variant)):
@@ -2857,6 +2868,7 @@ def generate_single_book(
         cancel_checker=cancel_checker,
         preserve_prompt_text=preserve_prompt_text,
         style_id=str(library_prompt_id or "").strip(),
+        variant_ids=[max(1, int(prompt_variant))] if int(variants) == 1 else None,
     )
 
 

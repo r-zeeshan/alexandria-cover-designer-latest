@@ -133,6 +133,19 @@ def test_current_run_generated_paths_keeps_generated_path_when_image_path_is_dur
     assert generated.resolve() in keep_paths
 
 
+def test_resolve_composited_candidate_supports_job_scoped_generated_paths(tmp_path: Path):
+    runtime = SimpleNamespace(
+        tmp_dir=tmp_path / "tmp",
+        output_dir=tmp_path / "Output Covers",
+    )
+    image_path = runtime.tmp_dir / "generated" / "job-123" / "2" / "model-a" / "variant_3.png"
+    expected = runtime.tmp_dir / "composited" / "job-123" / "2" / "model-a" / "variant_3.jpg"
+
+    candidate = qr._resolve_composited_candidate(image_path, runtime=runtime)  # type: ignore[arg-type]
+
+    assert candidate == expected
+
+
 def test_job_result_rows_normalize_legacy_tmp_asset_paths():
     job = qr.job_store.JobRecord(
         id="job-1",

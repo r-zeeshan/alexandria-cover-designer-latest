@@ -1878,8 +1878,12 @@ def _serialize_generation_results(
     job_id: str = "",
 ) -> list[dict[str, Any]]:
     serialized: list[dict[str, Any]] = []
+    job_scope = _generation_artifact_job_token(job_id=job_id) if str(job_id or "").strip() else ""
+    composited_root = runtime.tmp_dir / "composited"
+    if job_scope:
+        composited_root = composited_root / job_scope
     fit_overlay_rel = None
-    fit_overlay = runtime.tmp_dir / "composited" / str(book) / "fit_overlay.png"
+    fit_overlay = composited_root / str(book) / "fit_overlay.png"
     if fit_overlay.exists():
         fit_overlay_rel = _to_project_relative(fit_overlay)
 
@@ -2766,6 +2770,12 @@ def _execute_generation_payload(
     dry_run = forced_dry_run or (not runtime.has_any_api_key())
     job_id = str(payload.get("job_id", "")).strip()
     provider_override = provider if provider and provider != "all" else None
+    job_scope = _generation_artifact_job_token(job_id=job_id) if job_id else ""
+    generated_root = runtime.tmp_dir / "generated"
+    composited_root = runtime.tmp_dir / "composited"
+    if job_scope:
+        generated_root = generated_root / job_scope
+        composited_root = composited_root / job_scope
 
     def _emit_stage(stage: str, message: str, progress: float = 0.0) -> None:
         if stage_callback is None:
@@ -2807,7 +2817,7 @@ def _execute_generation_payload(
             results = image_generator.generate_single_book(
                 book_number=book,
                 prompts_path=runtime.prompts_path,
-                output_dir=runtime.tmp_dir / "generated",
+                output_dir=generated_root,
                 models=active_models,
                 variants=variants,
                 prompt_variant=requested_variant,
@@ -2928,8 +2938,8 @@ def _execute_generation_payload(
                     pdf_compositor.composite_all_variants(
                         book_number=book,
                         input_dir=runtime.input_dir,
-                        generated_dir=runtime.tmp_dir / "generated",
-                        output_dir=runtime.tmp_dir / "composited",
+                        generated_dir=generated_root,
+                        output_dir=composited_root,
                         catalog_path=runtime.book_catalog_path,
                     )
                     used_pdf_mode = True
@@ -2945,8 +2955,8 @@ def _execute_generation_payload(
                 cover_compositor.composite_all_variants(
                     book_number=book,
                     input_dir=runtime.input_dir,
-                    generated_dir=runtime.tmp_dir / "generated",
-                    output_dir=runtime.tmp_dir / "composited",
+                    generated_dir=generated_root,
+                    output_dir=composited_root,
                     regions=regions,
                     catalog_path=runtime.book_catalog_path,
                 )
@@ -13510,6 +13520,21 @@ def _resolve_composited_candidate(image_path: Path, *, runtime: config.Config | 
     variant = _parse_variant(image_path.stem)
     if variant <= 0:
         return None
+
+    try:
+        relative = image_path.relative_to(runtime_cfg.tmp_dir / "generated")
+    except Exception:
+        relative = None
+    if relative is not None:
+        parts = relative.parts
+        # Structure C: tmp/generated/{job}/{book}/variant_n.png
+        if len(parts) == 3 and parts[1].isdigit():
+            job_token, book = parts[0], parts[1]
+            return runtime_cfg.tmp_dir / "composited" / job_token / book / f"variant_{variant}.jpg"
+        # Structure D: tmp/generated/{job}/{book}/{model}/variant_n.png
+        if len(parts) == 4 and parts[1].isdigit():
+            job_token, book, model = parts[0], parts[1], parts[2]
+            return runtime_cfg.tmp_dir / "composited" / job_token / book / model / f"variant_{variant}.jpg"
 
     # Structure A: tmp/generated/{book}/variant_n.png
     if image_path.parent.name.isdigit():
