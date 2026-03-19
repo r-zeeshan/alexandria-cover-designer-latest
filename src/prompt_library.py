@@ -53,6 +53,11 @@ ALEXANDRIA_ORGANIC_QUALITY_CLAUSE = (
     "Slightly irregular linework, color bleeds at edges."
 )
 
+ALEXANDRIA_SHARED_COLOR_INTENSITY_CLAUSE = (
+    "Profound color energy: deep indigo shadow, amber-gold light, mineral teal accents, warm umber structure, "
+    "and bold high-chroma saturation, never pale, dusty, or muddy."
+)
+
 ALEXANDRIA_WILDCARD_TEXTURE_CLAUSES: dict[str, str] = {
     "alexandria-wildcard-edo-meets-alexandria": "Dry-brush ink drag with rough paper tooth.",
     "alexandria-wildcard-pre-raphaelite-garden": "Layered watercolor glazes over gesso, petals brushed by hand.",
@@ -96,6 +101,17 @@ def _append_organic_quality(*parts: str) -> str:
     if organic and organic not in tokens:
         tokens.append(organic)
     return " ".join(tokens).strip()
+
+
+def _with_shared_color_intensity(prompt: str) -> str:
+    token = " ".join(str(prompt or "").split()).strip()
+    clause = ALEXANDRIA_SHARED_COLOR_INTENSITY_CLAUSE.strip()
+    if not token or not clause or clause in token:
+        return token
+    marker = " Mood: {MOOD}. Era: {ERA}."
+    if marker in token:
+        return token.replace(marker, f" {clause}{marker}", 1)
+    return f"{token} {clause}".strip()
 
 
 _SCENE_ONLY_STYLE_REPLACEMENTS: tuple[tuple[str, str], ...] = (
@@ -231,7 +247,7 @@ ALEXANDRIA_BASE_PROMPT_TEMPLATES: dict[str, str] = {
 
 
 def _base_prompt_template(prompt_id: str) -> str:
-    return ALEXANDRIA_BASE_PROMPT_TEMPLATES[prompt_id]
+    return _with_shared_color_intensity(ALEXANDRIA_BASE_PROMPT_TEMPLATES[prompt_id])
 
 
 def _wildcard_texture_clause(prompt_id: str) -> str:
@@ -260,8 +276,28 @@ def _scene_first_prompt(
         "Book cover illustration — no text, no lettering. "
         f"Scene: {{SCENE}}. STYLE: {rendered_section}. Mood: {{MOOD}}. Era: {{ERA}}."
     )
+    prompt = _with_shared_color_intensity(prompt)
     if texture_clause.strip():
         prompt = f"{prompt} {texture_clause.strip()}"
+    return prompt
+
+
+def _alexandria_prompt_template_for_spec(spec: dict[str, object]) -> str:
+    prompt_id = str(spec["id"])
+    base_template = str(spec.get("prompt_template") or _scene_first_prompt(
+        str(spec["style_label"]),
+        str(spec["style_description"]),
+        style_section="",
+        full_canvas=bool(spec.get("full_canvas")),
+        texture_clause="",
+    ))
+    prompt = _with_shared_color_intensity(base_template) if prompt_id.startswith("alexandria-") else base_template
+    if prompt_id.startswith("alexandria-wildcard-"):
+        texture = ALEXANDRIA_WILDCARD_TEXTURE_CLAUSES.get(
+            prompt_id,
+            "Hand-applied traditional media texture with visible surface variation.",
+        )
+        prompt = _append_organic_quality(prompt, texture)
     return prompt
 
 
@@ -817,7 +853,7 @@ ALEXANDRIA_PROMPT_CATALOG: tuple[dict[str, object], ...] = (
             "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Soft gouache and oil "
             "painting. Visible blended brushwork, soft edges, warm transitions, no hard lines. Muted earthy "
             "palette with gentle light. Dreamy atmospheric quality of vintage illustrated books. Mood: "
-            f"{{MOOD}}. Era: {{ERA}}. {_wildcard_texture_clause('alexandria-wildcard-painterly-soft')}"
+            f"{{MOOD}}. Era: {{ERA}}."
         ),
         "style_section": (
             "RENDERING TECHNIQUE: HAND-PAINTED illustration in gouache and oil painting style. MANDATORY "
@@ -847,7 +883,7 @@ ALEXANDRIA_PROMPT_CATALOG: tuple[dict[str, object], ...] = (
             "Book cover illustration — no text, no lettering. Scene: {SCENE}. STYLE: Hyper-detailed "
             "hand-painted illustration. Meticulous brushwork on every fabric fold, architectural detail, and "
             "texture. Rich saturated colors, dense visual information across every inch. Museum-quality "
-            f"precision. Mood: {{MOOD}}. Era: {{ERA}}. {_wildcard_texture_clause('alexandria-wildcard-painterly-detailed')}"
+            f"precision. Mood: {{MOOD}}. Era: {{ERA}}."
         ),
         "style_section": (
             "RENDERING TECHNIQUE: HAND-PAINTED hyper-detailed digital painting with meticulously controlled "
@@ -875,13 +911,7 @@ ALEXANDRIA_PROMPT_SPECS: tuple[dict[str, object], ...] = tuple(
     {
         "id": str(spec["id"]),
         "name": str(spec["name"]),
-        "prompt_template": str(spec.get("prompt_template") or _scene_first_prompt(
-            str(spec["style_label"]),
-            str(spec["style_description"]),
-            style_section="",
-            full_canvas=bool(spec.get("full_canvas")),
-            texture_clause=_wildcard_texture_clause(str(spec["id"])),
-        )),
+        "prompt_template": _alexandria_prompt_template_for_spec(spec),
         "negative_prompt": str(spec.get("negative_prompt") or ALEXANDRIA_BASE_NEGATIVE_PROMPT),
         "notes": str(spec["notes"]),
         "tags": list(spec["tags"]),

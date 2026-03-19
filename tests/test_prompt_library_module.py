@@ -210,9 +210,10 @@ def test_seeded_alexandria_base_prompts_use_prompt65_templates(tmp_path: Path, m
         assert prompt.prompt_template.startswith("{SCENE}. Painted as a rich Victorian storybook color plate")
         assert "Mood: {MOOD}." in prompt.prompt_template
         assert "Era: {ERA}." in prompt.prompt_template
-        assert len(prompt.prompt_template) < 520
+        assert len(prompt.prompt_template) < 700
         assert "choose exact hues from this story's setting and era" in prompt.prompt_template
         assert "keep them vivid, jewel-rich, never muddy or generic" in prompt.prompt_template
+        assert pl.ALEXANDRIA_SHARED_COLOR_INTENSITY_CLAUSE in prompt.prompt_template
         assert "This circular medallion illustration" not in prompt.prompt_template
         assert "Circular vignette composition with soft edges." not in prompt.prompt_template
         assert "no clean vector lines" in prompt.negative_prompt.lower()
@@ -258,7 +259,8 @@ def test_seeded_painterly_wildcards_use_prompt65_templates(tmp_path: Path, monke
         assert "Scene: {SCENE}." in prompt.prompt_template
         assert "Mood: {MOOD}." in prompt.prompt_template
         assert "Era: {ERA}." in prompt.prompt_template
-        assert len(prompt.prompt_template) < 430
+        assert len(prompt.prompt_template) < 650
+        assert pl.ALEXANDRIA_SHARED_COLOR_INTENSITY_CLAUSE in prompt.prompt_template
         assert "Slightly irregular linework, color bleeds at edges." in prompt.prompt_template
         assert "Every stroke must show the physical texture of hand-applied paint." not in prompt.prompt_template
 
@@ -288,7 +290,8 @@ def test_seeded_alexandria_wildcards_use_prompt65_compact_templates(tmp_path: Pa
         assert "Scene: {SCENE}." in prompt.prompt_template
         assert "Mood: {MOOD}." in prompt.prompt_template
         assert "Era: {ERA}." in prompt.prompt_template
-        assert len(prompt.prompt_template) < 430, prompt.id
+        assert len(prompt.prompt_template) < 650, prompt.id
+        assert pl.ALEXANDRIA_SHARED_COLOR_INTENSITY_CLAUSE in prompt.prompt_template
         assert "Slightly irregular linework, color bleeds at edges." in prompt.prompt_template
         assert "Every stroke must show the physical texture of hand-applied paint." not in prompt.prompt_template
         assert "Rendered with the physical texture of traditional handmade artwork." not in prompt.prompt_template
