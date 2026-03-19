@@ -451,7 +451,7 @@ def test_iterate_prompt_builder_strips_border_and_label_directions_from_prompt_t
     assert "ribbon banner" not in lowered
     assert "circular vignette composition" not in lowered
     assert "no empty space" not in lowered
-    assert "center-weighted full-bleed scene built to survive a later circular crop with scenery extending to all four edges" in lowered
+    assert "extend the environment naturally to all four edges of the square canvas with painted scenery, not blank paper" in lowered
     assert "style only through brushwork" in lowered
     assert "do not draw any visible circle outline" in lowered
     assert "floral surround" in lowered
