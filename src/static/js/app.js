@@ -481,14 +481,15 @@ window.JobQueue = {
         }
 
         const row = result.result || {};
-        const imagePath = row.image_path ? `/${String(row.image_path).replace(/^\/+/, '')}` : '';
-        const compositedPath = row.composited_path ? `/${String(row.composited_path).replace(/^\/+/, '')}` : '';
-        const compositedPdfPath = row.composited_pdf_path
-          ? `/${String(row.composited_pdf_path).replace(/^\/+/, '')}`
-          : (row.composite_pdf_url ? `/${String(row.composite_pdf_url).replace(/^\/+/, '')}` : '');
-        const compositedAiPath = row.composited_ai_path
-          ? `/${String(row.composited_ai_path).replace(/^\/+/, '')}`
-          : (row.composite_ai_url ? `/${String(row.composite_ai_url).replace(/^\/+/, '')}` : '');
+        const versionToken = _thumbnailVersionToken(job);
+        const rawResultPath = preferredBackendResultPath(row, ['raw_art_path', 'image_path', 'generated_path']);
+        const compositeResultPath = preferredBackendResultPath(row, ['saved_composited_path', 'composited_path']);
+        const pdfResultPath = preferredBackendResultPath(row, ['composited_pdf_path', 'composite_pdf_url']);
+        const aiResultPath = preferredBackendResultPath(row, ['composited_ai_path', 'composite_ai_url']);
+        const imagePath = resolveBackendAssetUrl(rawResultPath, versionToken);
+        const compositedPath = resolveBackendAssetUrl(compositeResultPath, versionToken);
+        const compositedPdfPath = resolveBackendAssetUrl(pdfResultPath, versionToken);
+        const compositedAiPath = resolveBackendAssetUrl(aiResultPath, versionToken);
         const dryRun = Boolean(row.dry_run);
         if (dryRun || (!imagePath && !compositedPath)) {
           const reason = dryRun
@@ -665,6 +666,40 @@ window.buildProjectThumbnailUrl = (value, size = 'large', versionToken = '') => 
   return appendVersionQuery(`/api/thumbnail?path=${encodeURIComponent(rel)}&size=${encodeURIComponent(String(size || 'medium'))}`, versionToken);
 };
 
+function isEphemeralBackendAssetPath(value) {
+  const rel = projectRelativeAssetPath(value).toLowerCase();
+  return rel.startsWith('tmp/');
+}
+
+function resolveBackendAssetUrl(value, versionToken = '') {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (raw.startsWith('blob:') || raw.startsWith('data:') || /^https?:\/\//i.test(raw)) {
+    return appendVersionQuery(raw, versionToken);
+  }
+  if (window.buildProjectAssetUrl) {
+    const asset = window.buildProjectAssetUrl(raw, versionToken);
+    if (asset) return asset;
+  }
+  return appendVersionQuery(window.normalizeAssetUrl(raw), versionToken);
+}
+
+function preferredBackendResultPath(row, keys = []) {
+  const data = row && typeof row === 'object' ? row : {};
+  const durable = [];
+  const ephemeral = [];
+  (Array.isArray(keys) ? keys : []).forEach((key) => {
+    const token = String(data?.[key] || '').trim();
+    if (!token) return;
+    if (isEphemeralBackendAssetPath(token)) ephemeral.push(token);
+    else durable.push(token);
+  });
+  return durable[0] || ephemeral[0] || '';
+}
+
+window.resolveBackendAssetUrl = resolveBackendAssetUrl;
+window.preferredBackendResultPath = preferredBackendResultPath;
+
 window.blobUrls = new Map();
 window.getBlobUrl = (data, key) => {
   if (!data) return '';
@@ -705,6 +740,9 @@ window.__APP_TEST_HOOKS__.buildProjectThumbnailUrl = (value, size = 'large', ver
 );
 window.__APP_TEST_HOOKS__.resolveFullResolutionCompositeSource = (value) => resolveFullResolutionCompositeSource(value);
 window.__APP_TEST_HOOKS__.buildRetryPrompt = (value, attemptNumber = 1) => buildRetryPrompt(value, attemptNumber);
+window.__APP_TEST_HOOKS__.isEphemeralBackendAssetPath = (value) => isEphemeralBackendAssetPath(value);
+window.__APP_TEST_HOOKS__.resolveBackendAssetUrl = (value, versionToken = '') => resolveBackendAssetUrl(value, versionToken);
+window.__APP_TEST_HOOKS__.preferredBackendResultPath = (payload) => preferredBackendResultPath(payload?.row, payload?.keys);
 window.__APP_TEST_HOOKS__.isGenerationInProgressConflict = (value) => _isGenerationInProgressConflict(value);
 window.__APP_TEST_HOOKS__.nextRunnableQueueIndex = (payload) => _nextRunnableQueueIndex(payload?.queue, payload?.running);
 

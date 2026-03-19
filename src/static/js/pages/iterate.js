@@ -627,6 +627,48 @@ function isRenderableImageSource(value) {
   return true;
 }
 
+function resultRowForPreview(job) {
+  try {
+    const parsed = JSON.parse(String(job?.results_json || '{}'));
+    return (parsed?.result && typeof parsed.result === 'object') ? parsed.result : {};
+  } catch {
+    return {};
+  }
+}
+
+function _previewStringSource(value, versionToken, size = 'large') {
+  const raw = String(value || '').trim();
+  if (!raw) return { asset: '', thumbnail: '' };
+  const asset = window.resolveBackendAssetUrl
+    ? window.resolveBackendAssetUrl(raw, versionToken)
+    : (window.buildProjectAssetUrl
+      ? window.buildProjectAssetUrl(raw, versionToken)
+      : (window.normalizeAssetUrl ? window.normalizeAssetUrl(raw) : raw));
+  const thumbnail = window.buildProjectThumbnailUrl
+    ? window.buildProjectThumbnailUrl(raw, size, versionToken)
+    : '';
+  return { asset: asset || '', thumbnail: thumbnail || '' };
+}
+
+function _pushPreviewSource({ value, suffix, job, keyPrefix, sources, seen, size = 'large' }) {
+  if (!isRenderableImageSource(value)) return;
+  if (typeof value !== 'string') {
+    const src = getBlobUrl(value, `${job.id}-${keyPrefix}-${suffix}`);
+    if (!src || seen.has(src)) return;
+    seen.add(src);
+    sources.push(src);
+    return;
+  }
+
+  const versionToken = _thumbnailVersionToken(job);
+  const { asset, thumbnail } = _previewStringSource(value, versionToken, size);
+  [thumbnail, asset].filter(Boolean).forEach((src) => {
+    if (seen.has(src)) return;
+    seen.add(src);
+    sources.push(src);
+  });
+}
+
 function decodeAttrToken(token) {
   try {
     return decodeURIComponent(String(token || ''));
@@ -666,28 +708,16 @@ function _withVersionQuery(url, versionToken) {
 function resolvePreviewSources(job, keyPrefix = 'display', preferRaw = false) {
   const sources = [];
   const seen = new Set();
-  const pushSource = (value, suffix) => {
-    if (!isRenderableImageSource(value)) return;
-    let src = getBlobUrl(value, `${job.id}-${keyPrefix}-${suffix}`);
-    if (typeof value === 'string') {
-      src = _withVersionQuery(src, _thumbnailVersionToken(job));
-    }
-    if (!src || seen.has(src)) return;
-    seen.add(src);
-    sources.push(src);
-    if (typeof value === 'string') {
-      const normalized = src || '';
-      const isDirectPath = normalized.startsWith('/') && !normalized.startsWith('//');
-      if (isDirectPath && !normalized.startsWith('/api/thumbnail')) {
-        const rel = normalized.replace(/^\/+/, '');
-        const thumb = `/api/thumbnail?path=${encodeURIComponent(rel)}&size=large&v=${encodeURIComponent(_thumbnailVersionToken(job))}`;
-        if (!seen.has(thumb)) {
-          seen.add(thumb);
-          sources.push(thumb);
-        }
-      }
-    }
-  };
+  const pushSource = (value, suffix) => _pushPreviewSource({
+    value,
+    suffix,
+    job,
+    keyPrefix,
+    sources,
+    seen,
+  });
+
+  const row = resultRowForPreview(job);
 
   if (preferRaw) {
     pushSource(job.generated_image_blob, 'raw');
@@ -697,18 +727,12 @@ function resolvePreviewSources(job, keyPrefix = 'display', preferRaw = false) {
     pushSource(job.generated_image_blob, 'raw');
   }
 
-  try {
-    const parsed = JSON.parse(String(job.results_json || '{}'));
-    const row = parsed?.result || {};
-    if (preferRaw) {
-      pushSource(row.image_path || row.generated_path, 'row-raw');
-      pushSource(row.composited_path, 'row-composite');
-    } else {
-      pushSource(row.composited_path, 'row-composite');
-      pushSource(row.image_path || row.generated_path, 'row-raw');
-    }
-  } catch {
-    // ignore malformed historical rows
+  if (preferRaw) {
+    pushSource(row.raw_art_path || row.image_path || row.generated_path, 'row-raw');
+    pushSource(row.saved_composited_path || row.composited_path, 'row-composite');
+  } else {
+    pushSource(row.saved_composited_path || row.composited_path, 'row-composite');
+    pushSource(row.raw_art_path || row.image_path || row.generated_path, 'row-raw');
   }
 
   return sources;
@@ -717,36 +741,17 @@ function resolvePreviewSources(job, keyPrefix = 'display', preferRaw = false) {
 function resolveCompositePreviewSources(job, keyPrefix = 'display-composite') {
   const sources = [];
   const seen = new Set();
-  const pushSource = (value, suffix) => {
-    if (!isRenderableImageSource(value)) return;
-    let src = getBlobUrl(value, `${job.id}-${keyPrefix}-${suffix}`);
-    if (typeof value === 'string') {
-      src = _withVersionQuery(src, _thumbnailVersionToken(job));
-    }
-    if (!src || seen.has(src)) return;
-    seen.add(src);
-    sources.push(src);
-    if (typeof value === 'string') {
-      const normalized = src || '';
-      const isDirectPath = normalized.startsWith('/') && !normalized.startsWith('//');
-      if (isDirectPath && !normalized.startsWith('/api/thumbnail')) {
-        const rel = normalized.replace(/^\/+/, '');
-        const thumb = `/api/thumbnail?path=${encodeURIComponent(rel)}&size=large&v=${encodeURIComponent(_thumbnailVersionToken(job))}`;
-        if (!seen.has(thumb)) {
-          seen.add(thumb);
-          sources.push(thumb);
-        }
-      }
-    }
-  };
+  const pushSource = (value, suffix) => _pushPreviewSource({
+    value,
+    suffix,
+    job,
+    keyPrefix,
+    sources,
+    seen,
+  });
   pushSource(job.composited_image_blob, 'composite');
-  try {
-    const parsed = JSON.parse(String(job.results_json || '{}'));
-    const row = parsed?.result || {};
-    pushSource(row.composited_path, 'row-composite');
-  } catch {
-    // ignore malformed historical rows
-  }
+  const row = resultRowForPreview(job);
+  pushSource(row.saved_composited_path || row.composited_path, 'row-composite');
   return sources;
 }
 
@@ -1447,6 +1452,12 @@ window.__ITERATE_TEST_HOOKS__.isGenericContent = _isGenericContent;
 window.__ITERATE_TEST_HOOKS__.buildIterateGenerationJobs = (payload) => buildIterateGenerationJobs(payload);
 window.__ITERATE_TEST_HOOKS__.sortIterateResultJobs = ({ jobs, sortMode }) => sortIterateResultJobs(jobs, sortMode);
 window.__ITERATE_TEST_HOOKS__.saveRawRequestPayloadForJob = ({ job }) => saveRawRequestPayloadForJob(job);
+window.__ITERATE_TEST_HOOKS__.resolvePreviewSources = ({ job, keyPrefix = 'display', preferRaw = false }) => (
+  resolvePreviewSources(job, keyPrefix, preferRaw)
+);
+window.__ITERATE_TEST_HOOKS__.resolveCompositePreviewSources = ({ job, keyPrefix = 'display-composite' }) => (
+  resolveCompositePreviewSources(job, keyPrefix)
+);
 window.__ITERATE_TEST_HOOKS__.modelDescription = ({ model }) => modelDescription(model);
 window.__ITERATE_TEST_HOOKS__.filterModelListIds = ({ models, filterName }) => (
   filterModelList(models, filterName).map((model) => normalizedModelId(model))

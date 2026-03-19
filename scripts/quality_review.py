@@ -1927,33 +1927,36 @@ def _serialize_generation_results(
             if ai_candidate and ai_candidate.exists():
                 composed_ai_path = _to_project_relative(ai_candidate)
         serialized.append(
-            {
-                "book_number": row.book_number,
-                "variant": row.variant,
-                "model": row.model,
-                "provider": row.provider,
-                "prompt": row.effective_prompt or row.prompt,
-                "effective_prompt": row.effective_prompt,
-                "negative_prompt": row.negative_prompt,
-                "image_path": image_rel,
-                "raw_art_path": persisted_raw_path,
-                "composited_path": persisted_composite_path or composed,
-                "saved_composited_path": persisted_composite_path,
-                "composited_pdf_path": composed_pdf_path,
-                "composited_ai_path": composed_ai_path,
-                "success": row.success,
-                "error": row.error,
-                "generation_time": row.generation_time,
-                "cost": row.cost,
-                "dry_run": row.dry_run,
-                "attempts": row.attempts,
-                "failure_meta": row.failure_meta,
-                "similarity_warning": row.similarity_warning,
-                "similar_to_book": row.similar_to_book,
-                "distinctiveness_score": row.distinctiveness_score,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "fit_overlay_path": fit_overlay_rel,
-            }
+            _normalize_result_asset_paths(
+                {
+                    "book_number": row.book_number,
+                    "variant": row.variant,
+                    "model": row.model,
+                    "provider": row.provider,
+                    "prompt": row.effective_prompt or row.prompt,
+                    "effective_prompt": row.effective_prompt,
+                    "negative_prompt": row.negative_prompt,
+                    "image_path": image_rel,
+                    "generated_path": image_rel,
+                    "raw_art_path": persisted_raw_path,
+                    "composited_path": persisted_composite_path or composed,
+                    "saved_composited_path": persisted_composite_path,
+                    "composited_pdf_path": composed_pdf_path,
+                    "composited_ai_path": composed_ai_path,
+                    "success": row.success,
+                    "error": row.error,
+                    "generation_time": row.generation_time,
+                    "cost": row.cost,
+                    "dry_run": row.dry_run,
+                    "attempts": row.attempts,
+                    "failure_meta": row.failure_meta,
+                    "similarity_warning": row.similarity_warning,
+                    "similar_to_book": row.similar_to_book,
+                    "distinctiveness_score": row.distinctiveness_score,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "fit_overlay_path": fit_overlay_rel,
+                }
+            )
         )
     return serialized
 
@@ -2151,19 +2154,47 @@ def _ensure_saved_composite_for_row(*, runtime: config.Config, row: dict[str, An
     return None
 
 
+def _is_ephemeral_generated_asset_path(token: Any) -> bool:
+    normalized = str(token or "").strip().replace("\\", "/")
+    if not normalized:
+        return False
+    trimmed = normalized.lstrip("/")
+    return trimmed.startswith("tmp/generated/") or "/tmp/generated/" in normalized
+
+
+def _normalize_result_asset_paths(row: dict[str, Any]) -> dict[str, Any]:
+    payload = dict(row) if isinstance(row, dict) else {}
+    image_token = str(payload.get("image_path", "") or "").strip()
+    raw_art_token = str(payload.get("raw_art_path", "") or "").strip()
+    generated_token = str(payload.get("generated_path", "") or "").strip()
+    saved_composite_token = str(payload.get("saved_composited_path", "") or "").strip()
+
+    if raw_art_token:
+        if not generated_token and _is_ephemeral_generated_asset_path(image_token):
+            payload["generated_path"] = image_token
+        payload["image_path"] = raw_art_token
+    elif generated_token and not image_token:
+        payload["image_path"] = generated_token
+
+    if saved_composite_token:
+        payload["composited_path"] = saved_composite_token
+
+    return payload
+
+
 def _hydrate_serialized_result_paths(*, runtime: config.Config, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     hydrated: list[dict[str, Any]] = []
     for row in rows:
         if not isinstance(row, dict):
             continue
-        payload = dict(row)
+        payload = _normalize_result_asset_paths(row)
         saved_composite = _ensure_saved_composite_for_row(runtime=runtime, row=payload)
         if saved_composite is not None and saved_composite.exists():
             payload["saved_composited_path"] = _to_project_relative(saved_composite)
             payload["composited_path"] = _to_project_relative(saved_composite)
-        image_path_raw = str(payload.get("image_path", "")).strip()
-        if image_path_raw:
-            image_path = PROJECT_ROOT / image_path_raw
+        generated_path_raw = str(payload.get("generated_path", payload.get("image_path", "")) or "").strip()
+        if generated_path_raw:
+            image_path = PROJECT_ROOT / generated_path_raw
             candidate = _resolve_composited_candidate(image_path, runtime=runtime)
             if candidate and candidate.exists():
                 if saved_composite is None or not saved_composite.exists():
@@ -2185,7 +2216,7 @@ def _hydrate_serialized_result_paths(*, runtime: config.Config, rows: list[dict[
                     ai_candidate = _resolve_composited_companion(existing_composite, ".ai")
                     if ai_candidate and ai_candidate.exists():
                         payload["composited_ai_path"] = _to_project_relative(ai_candidate)
-        hydrated.append(payload)
+        hydrated.append(_normalize_result_asset_paths(payload))
     return hydrated
 
 
@@ -2194,12 +2225,13 @@ def _current_run_generated_paths(*, runtime: config.Config, rows: list[dict[str,
     for row in rows:
         if not isinstance(row, dict):
             continue
-        token = str(row.get("image_path", "") or "").strip()
-        if not token:
-            continue
-        candidate = _project_path_if_exists(token)
-        if candidate is not None and candidate.exists():
-            keep.add(candidate.resolve())
+        for key in ("generated_path", "image_path"):
+            token = str(row.get(key, "") or "").strip()
+            if not token:
+                continue
+            candidate = _project_path_if_exists(token)
+            if candidate is not None and candidate.exists():
+                keep.add(candidate.resolve())
     return keep
 
 
@@ -3704,7 +3736,24 @@ def _job_result_rows(job: job_store.JobRecord | None) -> list[dict[str, Any]]:
     rows = job.result.get("results", [])
     if not isinstance(rows, list):
         return []
-    return [row for row in rows if isinstance(row, dict)]
+    return [_normalize_result_asset_paths(row) for row in rows if isinstance(row, dict)]
+
+
+def _normalized_job_result_payload(result: dict[str, Any] | None) -> dict[str, Any]:
+    payload = dict(result) if isinstance(result, dict) else {}
+    rows = payload.get("results")
+    if isinstance(rows, list):
+        payload["results"] = [_normalize_result_asset_paths(row) for row in rows if isinstance(row, dict)]
+    single = payload.get("result")
+    if isinstance(single, dict):
+        payload["result"] = _normalize_result_asset_paths(single)
+    return payload
+
+
+def _job_to_api_dict(job: job_store.JobRecord) -> dict[str, Any]:
+    payload = job.to_dict()
+    payload["result"] = _normalized_job_result_payload(payload.get("result"))
+    return payload
 
 
 class SaveRawIntegrityError(RuntimeError):
@@ -9044,7 +9093,7 @@ def serve_review_webapp(
                 )
                 if job_types:
                     jobs = [row for row in jobs if str(row.job_type).strip().lower() in job_types]
-                rows = [job.to_dict() for job in jobs]
+                rows = [_job_to_api_dict(job) for job in jobs]
                 page, pagination = _paginate_rows(rows, limit=limit, offset=offset)
                 return self._send_json(
                     {
@@ -9064,7 +9113,7 @@ def serve_review_webapp(
                     statuses=["queued", "running", "retrying", "paused"],
                     catalog_id=runtime_req.catalog_id,
                 )
-                return self._send_json({"ok": True, "jobs": [job.to_dict() for job in jobs], "count": len(jobs)})
+                return self._send_json({"ok": True, "jobs": [_job_to_api_dict(job) for job in jobs], "count": len(jobs)})
             if path == "/api/generation-failures":
                 limit = _safe_int(query.get("limit", ["20"])[0], 20)
                 return self._send_json(_recent_generation_failures_payload(runtime=runtime_req, limit=limit))
@@ -9089,7 +9138,7 @@ def serve_review_webapp(
                         endpoint=path,
                     )
                 attempts = job_db_store.list_attempts(job_id)
-                return self._send_json({"ok": True, "job": row.to_dict(), "attempts": attempts})
+                return self._send_json({"ok": True, "job": _job_to_api_dict(row), "attempts": attempts})
             if path == "/api/thumbnail":
                 rel = _normalize_runtime_relative_asset_token(query.get("path", [""])[0])
                 size_name = str(query.get("size", ["medium"])[0]).strip().lower()
@@ -12454,7 +12503,7 @@ def serve_review_webapp(
                     payload: dict[str, Any] = {
                         "ok": True,
                         "created": created,
-                        "job": job.to_dict(),
+                        "job": _job_to_api_dict(job),
                         "idempotency_key": idempotency_key,
                         "poll_url": f"/api/jobs/{job.id}",
                         "event_url": f"/api/events/job/{job.id}",
@@ -12468,7 +12517,7 @@ def serve_review_webapp(
                         payload["batch_id"] = batch_token
                         payload["batch_event_url"] = f"/api/events/batch/{batch_token}"
                     if job.status == "completed" and job.result:
-                        payload.update(job.result)
+                        payload.update(_normalized_job_result_payload(job.result))
                     _record_audit_event(
                         action="generate_async",
                         impact="cost",
@@ -14938,6 +14987,9 @@ def _source_image_for_variant(
             return raw_art
     # 2) Original generated image path from generation record.
     if isinstance(record, dict):
+        generated = _project_path_if_exists(record.get("generated_path"))
+        if generated is not None and generated.exists():
+            return generated
         medallion_png = _project_path_if_exists(record.get("image_path"))
         if medallion_png is not None and medallion_png.exists():
             return medallion_png
@@ -15051,7 +15103,7 @@ def _build_variant_download_zip(
     if cover_jpg is None and isinstance(record, dict):
         cover_jpg = _project_path_if_exists(record.get("composited_path"))
         if cover_jpg is None:
-            source_image = _project_path_if_exists(record.get("image_path"))
+            source_image = _project_path_if_exists(record.get("generated_path")) or _project_path_if_exists(record.get("image_path"))
             if source_image is not None:
                 candidate = _resolve_composited_candidate(source_image, runtime=runtime)
                 if candidate is not None and candidate.exists():
@@ -17321,13 +17373,16 @@ def _dashboard_recent_results(*, items: list[dict[str, Any]], runtime: config.Co
 
             composed_token = str(row.get("composited_path", "") or "").strip()
             image_token = str(row.get("image_path", "") or "").strip()
+            generated_token = str(row.get("generated_path", "") or "").strip()
             candidate = _project_path_if_exists(composed_token)
-            if candidate is None and image_token:
-                source_path = _project_path_if_exists(image_token)
+            if candidate is None and (generated_token or image_token):
+                source_path = _project_path_if_exists(generated_token) or _project_path_if_exists(image_token)
                 if source_path is not None:
                     derived = _resolve_composited_candidate(source_path, runtime=runtime)
                     if derived is not None and derived.exists():
                         candidate = derived
+                    elif generated_token:
+                        candidate = None
                     elif "/generated/" not in image_token.replace("\\", "/"):
                         # Non-generated artifacts (for example legacy merged assets) may be directly displayable.
                         candidate = source_path

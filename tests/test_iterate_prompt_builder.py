@@ -64,7 +64,27 @@ def _run_iterate_hook(
         global.Toast = {{}};
         global.JobQueue = {{}};
         global.escapeHtml = (value) => String(value ?? '');
-        global.getBlobUrl = () => '';
+        global.window.normalizeAssetUrl = (value) => {{
+          const token = String(value || '').trim();
+          if (!token) return '';
+          if (token.startsWith('/')) return token;
+          return `/${{token.replace(/^\\.?\\//, '')}}`;
+        }};
+        global.window.buildProjectAssetUrl = (value, versionToken = '') => {{
+          const token = String(value || '').trim().replace(/^\\/+/, '');
+          if (!token) return '';
+          const suffix = versionToken ? `?v=${{encodeURIComponent(String(versionToken))}}` : '';
+          return `/api/asset?path=${{encodeURIComponent(token)}}${{suffix}}`;
+        }};
+        global.window.buildProjectThumbnailUrl = (value, size = 'large', versionToken = '') => {{
+          const token = String(value || '').trim().replace(/^\\/+/, '');
+          if (!token) return '';
+          const params = new URLSearchParams({{ path: token, size: String(size || 'large') }});
+          if (versionToken) params.set('v', String(versionToken));
+          return `/api/thumbnail?${{params.toString()}}`;
+        }};
+        global.window.resolveBackendAssetUrl = (value, versionToken = '') => global.window.buildProjectAssetUrl(value, versionToken);
+        global.getBlobUrl = (value) => typeof value === 'string' ? global.window.normalizeAssetUrl(value) : '';
         global.fetchDownloadBlob = async () => {{ throw new Error('unused'); }};
         global.ensureJSZip = async () => {{ throw new Error('unused'); }};
         global.uuid = () => 'job-1';
@@ -702,6 +722,55 @@ def test_save_raw_request_payload_uses_display_variant_without_selector_variant(
     assert payload["style_label"] == "Romantic Realism"
     assert payload["expected_model"] == "nano-banana-pro"
     assert "expected_variant" not in payload
+
+
+def test_resolve_composite_preview_sources_prefers_saved_composite_over_tmp_image_path():
+    result = _run_iterate_hook(
+        function_name="resolveCompositePreviewSources",
+        payload={
+            "job": {
+                "id": "job-7",
+                "completed_at": "2026-03-19T12:00:00Z",
+                "results_json": json.dumps(
+                    {
+                        "result": {
+                            "image_path": "tmp/generated/7/model/variant_1.png",
+                            "saved_composited_path": "Output Covers/saved_composites/7/job-7_variant_1.jpg",
+                            "composited_path": "Output Covers/saved_composites/7/job-7_variant_1.jpg",
+                        }
+                    }
+                ),
+            },
+        },
+    )
+
+    assert result[0].startswith("/api/thumbnail?path=Output+Covers%2Fsaved_composites%2F7%2Fjob-7_variant_1.jpg")
+    assert all("tmp%2Fgenerated" not in item for item in result)
+
+
+def test_resolve_preview_sources_prefers_raw_art_path_over_tmp_generated_path():
+    result = _run_iterate_hook(
+        function_name="resolvePreviewSources",
+        payload={
+            "job": {
+                "id": "job-8",
+                "completed_at": "2026-03-19T12:00:00Z",
+                "results_json": json.dumps(
+                    {
+                        "result": {
+                            "image_path": "tmp/generated/8/model/variant_1.png",
+                            "raw_art_path": "Output Covers/raw_art/8/job-8_variant_1.png",
+                            "saved_composited_path": "Output Covers/saved_composites/8/job-8_variant_1.jpg",
+                        }
+                    }
+                ),
+            },
+            "preferRaw": True,
+        },
+    )
+
+    assert result[0].startswith("/api/thumbnail?path=Output+Covers%2Fraw_art%2F8%2Fjob-8_variant_1.png")
+    assert all("tmp%2Fgenerated" not in item for item in result)
 
 
 def test_iterate_scene_pool_filters_generic_enrichment_and_uses_prompt_context():

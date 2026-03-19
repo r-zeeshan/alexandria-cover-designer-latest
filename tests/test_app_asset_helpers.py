@@ -172,3 +172,31 @@ def test_next_runnable_queue_index_skips_same_book_as_running_job():
     )
 
     assert result == 1
+
+
+def test_preferred_backend_result_path_prefers_durable_output_over_tmp_image_path():
+    result = _run_app_hook(
+        "preferredBackendResultPath",
+        {
+            "row": {
+                "image_path": "tmp/generated/2/model/variant_1.png",
+                "raw_art_path": "Output Covers/raw_art/2/job_variant_1.png",
+            },
+            "keys": ["raw_art_path", "image_path"],
+        },
+    )
+
+    assert result == "Output Covers/raw_art/2/job_variant_1.png"
+
+
+def test_resolve_backend_asset_url_routes_project_paths_through_asset_api():
+    result = _run_app_hook(
+        "resolveBackendAssetUrl",
+        ["Output Covers/saved_composites/2/job_variant_1.jpg", "stamp-1"],
+    )
+
+    parsed = urlparse(result)
+    query = parse_qs(parsed.query)
+    assert parsed.path == "/api/asset"
+    assert query["path"] == ["Output Covers/saved_composites/2/job_variant_1.jpg"]
+    assert query["v"] == ["stamp-1"]
