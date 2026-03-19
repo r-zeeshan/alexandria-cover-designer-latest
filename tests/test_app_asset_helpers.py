@@ -148,6 +148,19 @@ def test_build_retry_prompt_preserves_existing_prompt_text_verbatim():
     assert result == "Book cover illustration. IMPORTANT: This must be a circular vignette illustration centered and fully contained."
 
 
+def test_thumbnail_version_token_prefers_completed_at_when_present():
+    result = _run_app_hook(
+        "thumbnailVersionToken",
+        {
+            "id": "job-42",
+            "completed_at": "2026-03-19T12:40:00Z",
+            "updated_at": "2026-03-19T12:39:00Z",
+        },
+    )
+
+    assert result == "2026-03-19T12:40:00Z"
+
+
 def test_generation_in_progress_conflict_detector_matches_backend_409_error():
     result = _run_app_hook(
         "isGenerationInProgressConflict",

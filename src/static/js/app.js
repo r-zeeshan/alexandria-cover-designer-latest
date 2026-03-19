@@ -481,15 +481,39 @@ window.JobQueue = {
         }
 
         const row = result.result || {};
-        const versionToken = _thumbnailVersionToken(job);
-        const rawResultPath = preferredBackendResultPath(row, ['raw_art_path', 'image_path', 'generated_path']);
-        const compositeResultPath = preferredBackendResultPath(row, ['saved_composited_path', 'composited_path']);
-        const pdfResultPath = preferredBackendResultPath(row, ['composited_pdf_path', 'composite_pdf_url']);
-        const aiResultPath = preferredBackendResultPath(row, ['composited_ai_path', 'composite_ai_url']);
-        const imagePath = resolveBackendAssetUrl(rawResultPath, versionToken);
-        const compositedPath = resolveBackendAssetUrl(compositeResultPath, versionToken);
-        const compositedPdfPath = resolveBackendAssetUrl(pdfResultPath, versionToken);
-        const compositedAiPath = resolveBackendAssetUrl(aiResultPath, versionToken);
+        let versionToken = String(job?.completed_at || job?.id || Date.now());
+        let imagePath = '';
+        let compositedPath = '';
+        let compositedPdfPath = '';
+        let compositedAiPath = '';
+        try {
+          versionToken = typeof _thumbnailVersionToken === 'function'
+            ? _thumbnailVersionToken(job)
+            : String(job?.completed_at || job?.id || Date.now());
+          const rawResultPath = preferredBackendResultPath(row, ['raw_art_path', 'image_path', 'generated_path']);
+          const compositeResultPath = preferredBackendResultPath(row, ['saved_composited_path', 'composited_path']);
+          const pdfResultPath = preferredBackendResultPath(row, ['composited_pdf_path', 'composite_pdf_url']);
+          const aiResultPath = preferredBackendResultPath(row, ['composited_ai_path', 'composite_ai_url']);
+          imagePath = resolveBackendAssetUrl(rawResultPath, versionToken);
+          compositedPath = resolveBackendAssetUrl(compositeResultPath, versionToken);
+          compositedPdfPath = resolveBackendAssetUrl(pdfResultPath, versionToken);
+          compositedAiPath = resolveBackendAssetUrl(aiResultPath, versionToken);
+        } catch (renderErr) {
+          console.error('[APP] Result rendering error (non-fatal):', renderErr?.message || renderErr);
+          const fallbackNormalize = (value) => {
+            const raw = String(value || '').trim();
+            if (!raw) return '';
+            try {
+              return window.normalizeAssetUrl ? window.normalizeAssetUrl(raw) : raw;
+            } catch {
+              return raw;
+            }
+          };
+          imagePath = fallbackNormalize(row.raw_art_path || row.image_path || row.generated_path || '');
+          compositedPath = fallbackNormalize(row.saved_composited_path || row.composited_path || '');
+          compositedPdfPath = fallbackNormalize(row.composited_pdf_path || row.composite_pdf_url || '');
+          compositedAiPath = fallbackNormalize(row.composited_ai_path || row.composite_ai_url || '');
+        }
         const dryRun = Boolean(row.dry_run);
         if (dryRun || (!imagePath && !compositedPath)) {
           const reason = dryRun
@@ -632,6 +656,19 @@ function _decodeAssetToken(token) {
   }
 }
 
+function _thumbnailVersionToken(job) {
+  if (!job || typeof job !== 'object') return String(Date.now());
+  const candidate = String(
+    job.completed_at
+      || job.updated_at
+      || job.created_at
+      || job.timestamp
+      || job.id
+      || Date.now(),
+  ).trim();
+  return candidate || String(Date.now());
+}
+
 function projectRelativeAssetPath(value) {
   const token = String(value || '').trim();
   if (!token) return '';
@@ -740,6 +777,7 @@ window.__APP_TEST_HOOKS__.buildProjectThumbnailUrl = (value, size = 'large', ver
 );
 window.__APP_TEST_HOOKS__.resolveFullResolutionCompositeSource = (value) => resolveFullResolutionCompositeSource(value);
 window.__APP_TEST_HOOKS__.buildRetryPrompt = (value, attemptNumber = 1) => buildRetryPrompt(value, attemptNumber);
+window.__APP_TEST_HOOKS__.thumbnailVersionToken = (job) => _thumbnailVersionToken(job);
 window.__APP_TEST_HOOKS__.isEphemeralBackendAssetPath = (value) => isEphemeralBackendAssetPath(value);
 window.__APP_TEST_HOOKS__.resolveBackendAssetUrl = (value, versionToken = '') => resolveBackendAssetUrl(value, versionToken);
 window.__APP_TEST_HOOKS__.preferredBackendResultPath = (payload) => preferredBackendResultPath(payload?.row, payload?.keys);
