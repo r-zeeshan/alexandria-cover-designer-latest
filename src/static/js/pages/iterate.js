@@ -1533,6 +1533,7 @@ window.__ITERATE_TEST_HOOKS__.isGenericContent = _isGenericContent;
 window.__ITERATE_TEST_HOOKS__.buildIterateGenerationJobs = (payload) => buildIterateGenerationJobs(payload);
 window.__ITERATE_TEST_HOOKS__.sortIterateResultJobs = ({ jobs, sortMode }) => sortIterateResultJobs(jobs, sortMode);
 window.__ITERATE_TEST_HOOKS__.saveRawRequestPayloadForJob = ({ job }) => saveRawRequestPayloadForJob(job);
+window.__ITERATE_TEST_HOOKS__.saveRawButtonState = ({ job }) => saveRawButtonState(job);
 window.__ITERATE_TEST_HOOKS__.resolvePreviewSources = ({ job, keyPrefix = 'display', preferRaw = false }) => (
   resolvePreviewSources(job, keyPrefix, preferRaw)
 );
@@ -3500,6 +3501,13 @@ window.Pages.iterate = {
       job.save_raw_local_folder = String(data.local_folder || '').trim();
       job.save_raw_saved_files = Array.isArray(data.saved_files) ? data.saved_files : [];
       job.save_raw_saved_at = new Date().toISOString();
+      const nextState = saveRawButtonState(job);
+      button.disabled = false;
+      button.textContent = nextState.label;
+      button.title = nextState.title;
+      button.dataset.driveUrl = nextState.driveUrl || '';
+      button.dataset.saveStatus = nextState.status || '';
+      button.style.cssText = nextState.style || '';
       DB.dbPut('jobs', job);
       this.loadExistingResults();
 

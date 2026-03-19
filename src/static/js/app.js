@@ -771,9 +771,27 @@ window.getBlobUrl = (data, key) => {
 };
 
 function resolveFullResolutionCompositeSource(source) {
-  const assetUrl = window.buildProjectAssetUrl ? window.buildProjectAssetUrl(source) : '';
+  const raw = String(source || '').trim();
+  if (!raw) return '';
+  try {
+    const parsed = new URL(raw, window.location.origin);
+    const rel = String(parsed.searchParams.get('path') || '').trim();
+    const versionToken = String(parsed.searchParams.get('v') || '').trim();
+    if (parsed.pathname === '/api/asset') {
+      if (/^https?:\/\//i.test(raw)) return parsed.toString();
+      return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    }
+    if (parsed.pathname === '/api/thumbnail' && rel) {
+      const assetUrl = window.buildProjectAssetUrl ? window.buildProjectAssetUrl(rel, versionToken) : '';
+      if (assetUrl) return assetUrl;
+      return window.normalizeAssetUrl(rel);
+    }
+  } catch {
+    // Fall through to relative-path normalization.
+  }
+  const assetUrl = window.buildProjectAssetUrl ? window.buildProjectAssetUrl(raw) : '';
   if (assetUrl) return assetUrl;
-  return window.normalizeAssetUrl(source);
+  return window.normalizeAssetUrl(raw);
 }
 
 window.__APP_TEST_HOOKS__ = window.__APP_TEST_HOOKS__ || {};

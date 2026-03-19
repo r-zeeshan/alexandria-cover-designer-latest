@@ -768,6 +768,23 @@ def test_save_raw_request_payload_uses_display_variant_without_selector_variant(
     assert "expected_variant" not in payload
 
 
+def test_save_raw_button_state_marks_saved_drive_uploads_as_openable():
+    state = _run_iterate_hook(
+        function_name="saveRawButtonState",
+        payload={
+            "job": {
+                "save_raw_status": "saved",
+                "save_raw_drive_url": "https://drive.google.com/drive/folders/example",
+            },
+        },
+    )
+
+    assert state["label"] == "✓ Saved"
+    assert state["driveUrl"] == "https://drive.google.com/drive/folders/example"
+    assert state["status"] == "saved"
+    assert "Click to open" in state["title"]
+
+
 def test_resolve_composite_preview_sources_prefers_saved_composite_over_tmp_image_path():
     result = _run_iterate_hook(
         function_name="resolveCompositePreviewSources",

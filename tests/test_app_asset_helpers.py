@@ -127,7 +127,24 @@ def test_resolve_full_resolution_composite_source_rewrites_thumbnail_url_to_asse
         "/api/thumbnail?path=Output%20Covers%2Fsaved_composites%2F4%2Fcover%20image.jpg%3Fv%3Dold&size=large&v=current",
     )
 
-    assert result == "/api/asset?path=Output%20Covers%2Fsaved_composites%2F4%2Fcover%20image.jpg"
+    parsed = urlparse(result)
+    query = parse_qs(parsed.query)
+    assert parsed.path == "/api/asset"
+    assert query["path"] == ["Output Covers/saved_composites/4/cover image.jpg"]
+    assert query["v"] == ["current"]
+
+
+def test_resolve_full_resolution_composite_source_preserves_existing_asset_url_and_version():
+    result = _run_app_hook(
+        "resolveFullResolutionCompositeSource",
+        "/api/asset?path=Output%20Covers%2Fsaved_composites%2F4%2Fcover%20image.jpg&v=2026-03-19T16%3A00%3A00Z",
+    )
+
+    parsed = urlparse(result)
+    query = parse_qs(parsed.query)
+    assert parsed.path == "/api/asset"
+    assert query["path"] == ["Output Covers/saved_composites/4/cover image.jpg"]
+    assert query["v"] == ["2026-03-19T16:00:00Z"]
 
 
 def test_build_retry_prompt_returns_original_prompt_for_retries():
