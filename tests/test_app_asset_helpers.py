@@ -146,3 +146,29 @@ def test_build_retry_prompt_preserves_existing_prompt_text_verbatim():
     )
 
     assert result == "Book cover illustration. IMPORTANT: This must be a circular vignette illustration centered and fully contained."
+
+
+def test_generation_in_progress_conflict_detector_matches_backend_409_error():
+    result = _run_app_hook(
+        "isGenerationInProgressConflict",
+        'Generation request failed: 409 {"error_code":"GENERATION_IN_PROGRESS","message":"Generation already in progress for book 2"}',
+    )
+
+    assert result is True
+
+
+def test_next_runnable_queue_index_skips_same_book_as_running_job():
+    result = _run_app_hook(
+        "nextRunnableQueueIndex",
+        {
+            "queue": [
+                {"id": "job-1", "book_id": 2},
+                {"id": "job-2", "book_id": 3},
+            ],
+            "running": [
+                {"id": "running-1", "book_id": 2},
+            ],
+        },
+    )
+
+    assert result == 1

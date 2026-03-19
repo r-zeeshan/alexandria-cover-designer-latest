@@ -172,6 +172,7 @@ GENERIC_ENRICHMENT_PATTERN = re.compile(
 )
 GENERIC_SCENE_FALLBACK_PATTERN = GENERIC_ENRICHMENT_PATTERN
 MAX_CONTENT_VIOLATION_SCORE = 0.24
+SOFT_TEXT_ONLY_REJECT_SCORE = 0.40
 TEXT_ARTIFACT_HARD_SCORE_FLOOR = 0.20
 TEXT_ARTIFACT_HARD_TEXT_PENALTY = 0.62
 TEXT_ARTIFACT_HARD_BAND_RATIO = 0.165
@@ -181,7 +182,11 @@ TEXT_ARTIFACT_ORNAMENT_BAND_MIN = 0.075
 TEXT_ARTIFACT_ORNAMENT_BAND_MAX = 0.155
 TEXT_ARTIFACT_ORNAMENT_TINY_MIN = 0.017
 ARTIFACT_RETRY_LIMIT = 3
-ARTIFACT_RETRY_APPEND = ""
+ARTIFACT_RETRY_APPEND = (
+    "Plain painted scene only. No words, initials, signage, banners, flags, plaques, maps, labels, "
+    "emblems, borders, medallions, or decorative edging. Use larger painterly shapes and simplified "
+    "micro-detail so nothing resembles lettering."
+)
 _ENRICHED_BOOK_LOOKUP_CACHE: dict[str, Any] = {"path": "", "mtime": -1.0, "lookup": {}}
 _ENRICHED_BOOK_LOOKUP_LOCK = threading.Lock()
 ALEXANDRIA_NEGATIVE_PROMPT = (
@@ -722,7 +727,7 @@ def _is_artifact_generation_error(message: str) -> bool:
 
 def _artifact_retry_prompt(*, prompt: str, retry_index: int) -> str:
     del retry_index
-    return _fit_prompt_to_model_limit(_sanitize_prompt_text(prompt))
+    return _fit_prompt_to_model_limit(_sanitize_prompt_text(prompt), suffix=ARTIFACT_RETRY_APPEND)
 
 
 def _is_high_confidence_text_artifact(*, content_score: float, metrics: dict[str, float]) -> bool:
@@ -736,15 +741,6 @@ def _is_high_confidence_text_artifact(*, content_score: float, metrics: dict[str
     text_band_ratio = _metric("text_band_ratio")
     tiny_effective = _metric("tiny_effective")
 
-    # Ornament-like black cutout signatures often evade the old high-score thresholds.
-    ornament_signature = (
-        text_penalty >= TEXT_ARTIFACT_ORNAMENT_TEXT_PENALTY
-        and TEXT_ARTIFACT_ORNAMENT_BAND_MIN <= text_band_ratio <= TEXT_ARTIFACT_ORNAMENT_BAND_MAX
-        and tiny_effective >= TEXT_ARTIFACT_ORNAMENT_TINY_MIN
-    )
-    if ornament_signature:
-        return True
-
     if text_penalty >= TEXT_ARTIFACT_HARD_TEXT_PENALTY:
         return True
 
@@ -755,6 +751,48 @@ def _is_high_confidence_text_artifact(*, content_score: float, metrics: dict[str
         text_band_ratio >= TEXT_ARTIFACT_HARD_BAND_RATIO
         or tiny_effective >= TEXT_ARTIFACT_HARD_TINY_EFFECTIVE
     )
+
+
+def _should_reject_content_guardrail(
+    *,
+    content_score: float,
+    content_issues: list[str],
+    metrics: dict[str, float],
+) -> tuple[bool, dict[str, bool]]:
+    issue_tokens = {str(issue or "").strip() for issue in content_issues if str(issue or "").strip()}
+    hard_text_artifact = (
+        "text_or_banner_artifact" in issue_tokens
+        and _is_high_confidence_text_artifact(content_score=content_score, metrics=metrics)
+    )
+    hard_frame_artifact = (
+        ("inner_frame_or_ring_artifact" in issue_tokens or "rectangular_frame_artifact" in issue_tokens)
+        and float(content_score) >= 0.35
+    )
+    hard_composition_artifact = (
+        "off_center_subject_artifact" in issue_tokens
+        and (
+            float(metrics.get("focus_offset", 0.0) or 0.0) > 0.16
+            or float(metrics.get("corner_focus_ratio", 0.0) or 0.0) > 0.28
+        )
+    )
+    soft_text_only = (
+        "text_or_banner_artifact" in issue_tokens
+        and not hard_text_artifact
+        and issue_tokens.issubset({"text_or_banner_artifact", "low_vibrancy"})
+    )
+    reject = (
+        hard_text_artifact
+        or hard_frame_artifact
+        or hard_composition_artifact
+        or (soft_text_only and float(content_score) >= SOFT_TEXT_ONLY_REJECT_SCORE)
+        or (not soft_text_only and float(content_score) > MAX_CONTENT_VIOLATION_SCORE)
+    )
+    return reject, {
+        "hard_text_artifact": hard_text_artifact,
+        "hard_frame_artifact": hard_frame_artifact,
+        "hard_composition_artifact": hard_composition_artifact,
+        "soft_text_only": soft_text_only,
+    }
 
 
 def _composition_guardrail_metrics(image: Image.Image) -> dict[str, float]:
@@ -2302,23 +2340,12 @@ def generate_image(
     provider_name = str(getattr(provider_instance, "name", "")).strip().lower()
     if provider_name != "synthetic":
         content_score, content_issues, metrics = _content_guardrail_score(processed)
-        has_text_artifact = "text_or_banner_artifact" in content_issues
-        hard_text_artifact = has_text_artifact and _is_high_confidence_text_artifact(
+        reject_content, guardrail_flags = _should_reject_content_guardrail(
             content_score=content_score,
+            content_issues=content_issues,
             metrics=metrics,
         )
-        hard_frame_artifact = (
-            ("inner_frame_or_ring_artifact" in content_issues or "rectangular_frame_artifact" in content_issues)
-            and content_score >= 0.35
-        )
-        hard_composition_artifact = (
-            "off_center_subject_artifact" in content_issues
-            and (
-                float(metrics.get("focus_offset", 0.0) or 0.0) > 0.16
-                or float(metrics.get("corner_focus_ratio", 0.0) or 0.0) > 0.28
-            )
-        )
-        if has_text_artifact and not hard_text_artifact:
+        if guardrail_flags.get("soft_text_only"):
             logger.info(
                 "Soft-passing low-confidence text artifact: score=%.3f text_penalty=%.3f band=%.3f tiny=%.3f",
                 content_score,
@@ -2326,7 +2353,7 @@ def generate_image(
                 float(metrics.get("text_band_ratio", 0.0) or 0.0),
                 float(metrics.get("tiny_effective", 0.0) or 0.0),
             )
-        if content_score > MAX_CONTENT_VIOLATION_SCORE or hard_text_artifact or hard_frame_artifact or hard_composition_artifact:
+        if reject_content:
             issue_blob = ", ".join(content_issues[:3]) if content_issues else "content_artifacts"
             raise GenerationError(
                 f"Generated image rejected by content guardrail ({content_score:.3f}): {issue_blob}"

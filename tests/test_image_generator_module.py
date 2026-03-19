@@ -750,7 +750,40 @@ def test_generate_image_soft_text_artifact_does_not_hard_fail(tmp_path: Path, mo
     assert output
 
 
-def test_generate_image_ornament_signature_text_artifact_rejects(tmp_path: Path, monkeypatch):
+def test_generate_image_soft_text_artifact_above_global_threshold_still_passes(tmp_path: Path, monkeypatch):
+    runtime = _Runtime(tmp_path)
+    monkeypatch.setattr(ig.config, "get_config", lambda: runtime)
+    monkeypatch.setattr(ig._RATE_LIMITER, "wait", lambda *args, **kwargs: None)
+
+    class _Provider:
+        name = "openai"
+
+        def __init__(self, image):
+            self._image = image
+
+        def generate(self, **_kwargs):  # type: ignore[no-untyped-def]
+            return self._image
+
+    monkeypatch.setattr(
+        ig,
+        "_create_provider_instance",
+        lambda **_kwargs: _Provider(Image.open(io.BytesIO(_image_bytes((64, 64), gradient=True)))),
+    )
+    monkeypatch.setattr(
+        ig,
+        "_content_guardrail_score",
+        lambda _image: (
+            0.281,
+            ["text_or_banner_artifact"],
+            {"text_penalty": 0.45, "text_band_ratio": 0.10, "tiny_effective": 0.020},
+        ),
+    )
+
+    output = ig.generate_image("prompt", "negative", "openai/gpt-image-1", {"provider": "openai", "width": 64, "height": 64})
+    assert output
+
+
+def test_generate_image_hard_text_penalty_rejects(tmp_path: Path, monkeypatch):
     runtime = _Runtime(tmp_path)
     monkeypatch.setattr(ig.config, "get_config", lambda: runtime)
     monkeypatch.setattr(ig._RATE_LIMITER, "wait", lambda *args, **kwargs: None)
@@ -775,7 +808,7 @@ def test_generate_image_ornament_signature_text_artifact_rejects(tmp_path: Path,
         lambda _image: (
             0.212,
             ["text_or_banner_artifact"],
-            {"text_penalty": 0.41, "text_band_ratio": 0.11, "tiny_effective": 0.018},
+            {"text_penalty": 0.63, "text_band_ratio": 0.10, "tiny_effective": 0.018},
         ),
     )
 
@@ -1421,7 +1454,10 @@ def test_generate_one_artifact_error_retries_with_hardened_prompt(tmp_path: Path
     assert result.success is True
     assert result.attempts == 2
     assert len(seen_prompts) == 2
-    assert seen_prompts[1] == "Original prompt"
+    assert seen_prompts[1] != "Original prompt"
+    assert seen_prompts[1].startswith("Original prompt")
+    assert "no words" in seen_prompts[1].lower()
+    assert "simplified micro-detail" in seen_prompts[1].lower()
     assert "Mandatory output rules" not in seen_prompts[1]
     assert "no frame" not in seen_prompts[1].lower()
     assert (
@@ -1436,7 +1472,7 @@ def test_generate_one_artifact_error_retries_with_hardened_prompt(tmp_path: Path
         )
         <= ig.MODEL_PROMPT_CHAR_LIMIT
     )
-    assert result.prompt == "Original prompt"
+    assert result.prompt == seen_prompts[1]
 
 
 def test_generate_one_preserve_prompt_text_keeps_saved_prompt_on_artifact_retry(tmp_path: Path, monkeypatch):
@@ -1482,7 +1518,8 @@ def test_generate_one_preserve_prompt_text_keeps_saved_prompt_on_artifact_retry(
     assert result.success is True
     assert result.attempts == 2
     assert len(seen_prompts) == 2
-    assert seen_prompts[1] == original_prompt
+    assert seen_prompts[1] != original_prompt
+    assert seen_prompts[1].startswith(original_prompt)
     assert result.prompt == original_prompt
 
 
@@ -1496,7 +1533,9 @@ def test_artifact_retry_prompt_uses_original_text_and_caps_total_length():
     retry_prompt_2 = ig._artifact_retry_prompt(prompt=base_prompt, retry_index=2)
 
     assert retry_prompt_1 == retry_prompt_2
-    assert retry_prompt_1 == ig._fit_prompt_to_model_limit(ig._sanitize_prompt_text(base_prompt))
+    assert retry_prompt_1.startswith("Book cover illustration only")
+    assert "No words, initials, signage, banners" in retry_prompt_1
+    assert "simplified micro-detail" in retry_prompt_1
     assert "Mandatory output rules" not in retry_prompt_1
     assert "no medallion ring" not in retry_prompt_1.lower()
     assert "no frame" not in retry_prompt_1.lower()

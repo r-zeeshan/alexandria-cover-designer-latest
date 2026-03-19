@@ -27,6 +27,36 @@ function buildRetryPrompt(basePrompt) {
   return typeof basePrompt === 'string' ? basePrompt : String(basePrompt || '');
 }
 
+const GENERATION_IN_PROGRESS_RETRY_DELAY_MS = 5000;
+const GENERATION_IN_PROGRESS_RETRY_LIMIT = 12;
+
+function _sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function _isGenerationInProgressConflict(message) {
+  const token = String(message || '').trim().toLowerCase();
+  if (!token) return false;
+  return token.includes('generation_in_progress')
+    || token.includes('generation already in progress for book')
+    || (/generation request failed:\s*409\b/.test(token) && token.includes('in progress'));
+}
+
+function _nextRunnableQueueIndex(queue, runningJobs) {
+  const queued = Array.isArray(queue) ? queue : [];
+  if (!queued.length) return -1;
+  const activeBookIds = new Set(
+    (Array.isArray(runningJobs) ? runningJobs : [])
+      .map((job) => Number(job?.book_id || 0))
+      .filter((bookId) => bookId > 0)
+  );
+  if (!activeBookIds.size) return 0;
+  return queued.findIndex((job) => {
+    const bookId = Number(job?.book_id || 0);
+    return !bookId || !activeBookIds.has(bookId);
+  });
+}
+
 async function renderPage() {
   const page = getPageFromHash();
   const config = PAGES[page];
@@ -115,6 +145,8 @@ window.CoverCache = {
 
 window.JobQueue = {
   MAX_CONCURRENT: 4,
+  MAX_IN_PROGRESS_RETRIES: GENERATION_IN_PROGRESS_RETRY_LIMIT,
+  IN_PROGRESS_RETRY_DELAY_MS: GENERATION_IN_PROGRESS_RETRY_DELAY_MS,
   GENERATION_TIMEOUT: 600000,
   COVER_TIMEOUT: 20000,
   COMPOSITE_TIMEOUT: 15000,
@@ -257,7 +289,12 @@ window.JobQueue = {
 
   _fillSlots() {
     while (!this.paused && this.running.size < this.MAX_CONCURRENT && this.queue.length > 0) {
-      const job = this.queue.shift();
+      const nextIndex = _nextRunnableQueueIndex(
+        this.queue,
+        [...this.running.values()].map((entry) => entry.job),
+      );
+      if (nextIndex < 0) break;
+      const [job] = this.queue.splice(nextIndex, 1);
       this._executeJob(job);
     }
     this.notify();
@@ -334,6 +371,7 @@ window.JobQueue = {
       let best = null;
       let bestScore = -1;
       let attempts = 0;
+      let inProgressRetries = 0;
 
       while (attempts < this.MAX_RETRIES + 1) {
         attempts += 1;
@@ -417,6 +455,13 @@ window.JobQueue = {
           if (message === 'RATE_LIMITED') {
             attempts -= 1;
             await new Promise((resolve) => setTimeout(resolve, Math.min((attempts + 1) * 5000, 30000)));
+            continue;
+          }
+          if (_isGenerationInProgressConflict(message) && inProgressRetries < this.MAX_IN_PROGRESS_RETRIES) {
+            inProgressRetries += 1;
+            attempts -= 1;
+            setStatus('retrying', `Waiting for prior generation to finish (${inProgressRetries}/${this.MAX_IN_PROGRESS_RETRIES})`);
+            await _sleep(Math.min(this.IN_PROGRESS_RETRY_DELAY_MS * inProgressRetries, 30000));
             continue;
           }
           const transient = /failed to fetch|networkerror|timed out|timeout|missing image payload|generation request failed:\s*5\d\d|polling failed: http 5\d\d|temporarily unavailable|backend\.max_conn reached|service unavailable/i.test(message);
@@ -660,6 +705,8 @@ window.__APP_TEST_HOOKS__.buildProjectThumbnailUrl = (value, size = 'large', ver
 );
 window.__APP_TEST_HOOKS__.resolveFullResolutionCompositeSource = (value) => resolveFullResolutionCompositeSource(value);
 window.__APP_TEST_HOOKS__.buildRetryPrompt = (value, attemptNumber = 1) => buildRetryPrompt(value, attemptNumber);
+window.__APP_TEST_HOOKS__.isGenerationInProgressConflict = (value) => _isGenerationInProgressConflict(value);
+window.__APP_TEST_HOOKS__.nextRunnableQueueIndex = (payload) => _nextRunnableQueueIndex(payload?.queue, payload?.running);
 
 function warnIfSuspiciousCompositeBlob(blob, source) {
   if (!(blob instanceof Blob)) return;
