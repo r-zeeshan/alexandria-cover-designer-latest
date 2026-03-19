@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import mimetypes
 from pathlib import Path
@@ -23,6 +24,12 @@ logger = get_logger(__name__)
 
 
 _ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
+
+
+@functools.lru_cache(maxsize=50)
+def _read_thumbnail_cached(path: str, mtime_ns: int, size_bytes: int) -> bytes:
+    del mtime_ns, size_bytes
+    return Path(path).read_bytes()
 
 
 def normalize_relative_path_token(relative_path: str) -> str:
@@ -141,3 +148,16 @@ class ThumbnailServer:
                 logger.warning("Thumbnail cleanup failed: %s", cleanup_exc)
             return None
         return target
+
+    def thumbnail_bytes_for(self, *, relative_path: str, size: str) -> bytes | None:
+        thumb = self.thumbnail_for(relative_path=relative_path, size=size)
+        if thumb is None:
+            return None
+        try:
+            stat = thumb.stat()
+        except OSError:
+            return None
+        try:
+            return _read_thumbnail_cached(str(thumb), int(stat.st_mtime_ns), int(stat.st_size))
+        except OSError:
+            return None

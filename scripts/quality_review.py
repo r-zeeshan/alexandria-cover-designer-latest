@@ -9175,8 +9175,8 @@ def serve_review_webapp(
                     cache_dir=runtime_req.tmp_dir / "thumbnails",
                     allowed_roots=[runtime_req.output_dir, runtime_req.input_dir, runtime_req.tmp_dir],
                 )
-                thumb = thumb_runtime.thumbnail_for(relative_path=rel, size=size_name)
-                if thumb is None:
+                thumb_bytes = thumb_runtime.thumbnail_bytes_for(relative_path=rel, size=size_name)
+                if thumb_bytes is None:
                     try:
                         if not security.sanitize_path(rel, PROJECT_ROOT).exists():
                             status_code = HTTPStatus.NOT_FOUND
@@ -9194,10 +9194,10 @@ def serve_review_webapp(
                         status=status_code,
                         endpoint=path,
                     )
-                return self._send_file(
-                    thumb,
+                return self._send_bytes(
+                    thumb_bytes,
                     content_type="image/jpeg",
-                    cache_control="no-store",
+                    cache_control="public, max-age=3600, immutable",
                 )
             if path == "/api/asset":
                 rel = _normalize_runtime_relative_asset_token(query.get("path", [""])[0])
@@ -9213,7 +9213,7 @@ def serve_review_webapp(
                 return self._serve_project_relative(
                     f"/{rel}",
                     allowed_roots=[runtime_req.output_dir, runtime_req.input_dir, runtime_req.tmp_dir],
-                    cache_control="no-store",
+                    cache_control="public, max-age=3600, immutable",
                 )
 
             if path == "/api/review-data":
@@ -9588,7 +9588,11 @@ def serve_review_webapp(
                         status=HTTPStatus.INTERNAL_SERVER_ERROR,
                         endpoint=path,
                     )
-                return self._send_file(preview_path, content_type="image/jpeg", cache_control="no-store")
+                return self._send_file(
+                    preview_path,
+                    content_type="image/jpeg",
+                    cache_control="public, max-age=3600, immutable",
+                )
             if path == "/api/visual-qa":
                 force = str(query.get("force", ["0"])[0] or "").strip().lower() in {"1", "true", "yes", "on"}
                 book_filter = _safe_int(query.get("book_number", ["0"])[0], 0)

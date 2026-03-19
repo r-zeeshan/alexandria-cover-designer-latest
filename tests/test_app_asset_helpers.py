@@ -161,6 +161,107 @@ def test_thumbnail_version_token_prefers_completed_at_when_present():
     assert result == "2026-03-19T12:40:00Z"
 
 
+def test_load_image_with_retry_retries_until_success():
+    if shutil.which("node") is None:
+        pytest.skip("node not installed")
+
+    node_script = textwrap.dedent(
+        """
+        const fs = require('fs');
+        const vm = require('vm');
+        let attemptCount = 0;
+        const retryDelays = [];
+
+        global.window = {
+          Pages: {},
+          __APP_TEST_HOOKS__: {},
+          __INITIAL_PAGE__: 'iterate',
+          innerWidth: 1280,
+          location: { hash: '#iterate', origin: 'https://example.test' },
+          addEventListener: () => {},
+        };
+        global.location = global.window.location;
+        global.document = {
+          getElementById: () => null,
+          querySelectorAll: () => [],
+          createElement: () => ({
+            appendChild() {},
+            addEventListener() {},
+            remove() {},
+            click() {},
+            classList: { add() {}, remove() {}, toggle() {} },
+            style: {},
+          }),
+          head: { appendChild() {} },
+          body: { appendChild() {} },
+        };
+        global.DB = {
+          getSetting: () => 0,
+          dbPut: () => {},
+          dbCount: () => 0,
+          openDB: async () => {},
+          initDefaults: async () => {},
+          loadPrompts: async () => {},
+        };
+        global.Drive = {
+          downloadCoverForBook: async () => ({ img: null }),
+          validateCoverTemplate: () => null,
+          catalogCacheStatus: async () => ({ cached: false }),
+          syncCatalog: async () => {},
+          loadCachedCatalog: async () => {},
+          refreshCatalogCache: async () => {},
+        };
+        global.OpenRouter = { init: async () => {}, MODEL_COSTS: {} };
+        global.Quality = { getDetailedScores: async () => ({ overall: 1 }) };
+        global.fetch = async () => ({
+          ok: true,
+          headers: { get: () => 'image/jpeg' },
+          blob: async () => new Blob([], { type: 'image/jpeg' }),
+        });
+        global.Image = class {
+          set src(_value) {
+            attemptCount += 1;
+            if (attemptCount < 3) {
+              if (this.onerror) this.onerror(new Error('broken'));
+              return;
+            }
+            if (this.onload) this.onload();
+          }
+        };
+        global.URL = URL;
+        global.URL.createObjectURL = () => 'blob:test';
+        global.URL.revokeObjectURL = () => {};
+        global.crypto = { randomUUID: () => 'uuid-test-1' };
+        global.setTimeout = (fn, delay) => {
+          retryDelays.push(delay);
+          fn();
+          return 0;
+        };
+        global.setInterval = () => 0;
+
+        const source = fs.readFileSync('src/static/js/app.js', 'utf8');
+        vm.runInThisContext(source, { filename: 'app.js' });
+        window.loadImageWithRetry('/broken.jpg', 3).then(() => {
+          process.stdout.write(JSON.stringify({ attemptCount, retryDelays }));
+        }).catch((err) => {
+          process.stderr.write(String(err && err.message || err));
+          process.exit(1);
+        });
+        """
+    )
+    proc = subprocess.run(
+        ["node", "-e", node_script],
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr or proc.stdout
+    payload = json.loads(proc.stdout)
+    assert payload["attemptCount"] == 3
+    assert payload["retryDelays"] == [2000, 4000]
+
+
 def test_generation_in_progress_conflict_detector_matches_backend_409_error():
     result = _run_app_hook(
         "isGenerationInProgressConflict",

@@ -1191,3 +1191,29 @@ def test_quality_review_server_asset_and_thumbnail_endpoints_accept_encoded_cach
                 tmp_allowed.unlink()
         except OSError:
             pass
+
+
+def test_quality_review_server_asset_thumbnail_and_cover_preview_emit_immutable_cache_headers():
+    token = uuid.uuid4().hex
+    tmp_allowed = PROJECT_ROOT / "tmp" / f"thumb-cache-{token}.jpg"
+    tmp_allowed.parent.mkdir(parents=True, exist_ok=True)
+    image = Image.new("RGB", (64, 64), color=(90, 70, 50))
+    image.save(tmp_allowed, format="JPEG")
+
+    process, base_url = _start_server(wait_path="/api/healthz", timeout_seconds=10.0)
+    try:
+        with urlopen(f"{base_url}/api/asset?path={quote(str(tmp_allowed.relative_to(PROJECT_ROOT)))}", timeout=10) as response:
+            assert response.headers.get("Cache-Control") == "public, max-age=3600, immutable"
+
+        with urlopen(f"{base_url}/api/thumbnail?path={quote(str(tmp_allowed.relative_to(PROJECT_ROOT)))}&size=small", timeout=10) as response:
+            assert response.headers.get("Cache-Control") == "public, max-age=3600, immutable"
+
+        with urlopen(f"{base_url}/api/books/3/cover-preview?catalog=classics", timeout=10) as response:
+            assert response.headers.get("Cache-Control") == "public, max-age=3600, immutable"
+    finally:
+        _stop_server(process)
+        try:
+            if tmp_allowed.exists():
+                tmp_allowed.unlink()
+        except OSError:
+            pass

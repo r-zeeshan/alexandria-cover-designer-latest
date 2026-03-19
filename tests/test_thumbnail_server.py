@@ -5,7 +5,7 @@ from urllib.parse import quote
 
 from PIL import Image
 
-from src.thumbnail_server import ThumbnailServer
+from src.thumbnail_server import ThumbnailServer, _read_thumbnail_cached
 
 
 def _make_image(path: Path, size: tuple[int, int] = (1200, 900)) -> None:
@@ -155,3 +155,23 @@ def test_thumbnail_accepts_encoded_relative_path_with_cachebuster_query(tmp_path
     thumb = server.thumbnail_for(relative_path=encoded, size="small")
     assert thumb is not None
     assert thumb.exists()
+
+
+def test_thumbnail_bytes_for_uses_lru_cache(tmp_path: Path):
+    project_root = tmp_path / "project"
+    source = project_root / "Output Covers" / "book1" / "variant_1.jpg"
+    _make_image(source)
+
+    _read_thumbnail_cached.cache_clear()
+    server = ThumbnailServer(project_root=project_root, cache_dir=project_root / "tmp" / "thumbs")
+    rel = str(source.relative_to(project_root))
+
+    first = server.thumbnail_bytes_for(relative_path=rel, size="small")
+    info_after_first = _read_thumbnail_cached.cache_info()
+    second = server.thumbnail_bytes_for(relative_path=rel, size="small")
+    info_after_second = _read_thumbnail_cached.cache_info()
+
+    assert first is not None
+    assert second == first
+    assert info_after_first.misses == 1
+    assert info_after_second.hits >= 1

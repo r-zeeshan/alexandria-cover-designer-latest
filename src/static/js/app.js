@@ -547,13 +547,13 @@ window.JobQueue = {
 
       setStatus('scoring');
       const rawSource = best.imagePath || best.compositedPath;
-      const img = await loadImage(rawSource);
+      const img = await loadImageWithRetry(rawSource);
       const detailed = await Quality.getDetailedScores(img);
       job.quality_score = Number(detailed.overall || best.score || 0);
       job.results_json = JSON.stringify({ scores: detailed, result: best.row });
 
       setStatus('compositing');
-      const rawBlob = await fetchImageBlob(rawSource, abortController.signal);
+      const rawBlob = await fetchImageBlob(rawSource, abortController.signal, { retries: 2, delayMs: 2000 });
       const fullResCompositeSource = resolveFullResolutionCompositeSource(best.compositedPath);
       if (best.compositedPath && fullResCompositeSource !== best.compositedPath) {
         console.warn('Resolved thumbnail composite path to full-resolution source.', {
@@ -813,14 +813,30 @@ async function loadImage(src) {
   });
 }
 
+async function loadImageWithRetry(src, maxRetries = 3) {
+  const retries = Math.max(0, Number(maxRetries || 0));
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      return await loadImage(src);
+    } catch (err) {
+      if (attempt >= retries) throw err;
+      const delay = Math.min(2000 * (2 ** attempt), 8000);
+      console.warn(`[THUMBNAIL] Retry ${attempt + 1}/${retries} for ${src} in ${delay}ms`);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+  throw new Error(`Failed to load image: ${src}`);
+}
+
 async function fetchImageBlob(src, signal, options = {}) {
   if (!src || typeof src !== 'string') return null;
   const retries = Math.max(0, Number(options.retries || 0));
   const delayMs = Math.max(0, Number(options.delayMs || 0));
+  const cacheMode = String(options.cacheMode || 'default');
   const looksLikeImagePath = /\.(png|jpe?g|webp|gif|bmp|avif)(\?|$)/i.test(src);
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     try {
-      const response = await fetch(src, { cache: 'no-store', signal });
+      const response = await fetch(src, { cache: cacheMode, signal });
       if (response.ok) {
         const contentType = String(response.headers.get('content-type') || '').toLowerCase();
         const blob = await response.blob();
@@ -854,6 +870,7 @@ async function canvasToBlob(canvas, type = 'image/jpeg', quality = 0.96) {
 }
 
 window.loadImage = loadImage;
+window.loadImageWithRetry = loadImageWithRetry;
 
 function updateHeader() {
   const budgetBadge = document.getElementById('budgetBadge');
