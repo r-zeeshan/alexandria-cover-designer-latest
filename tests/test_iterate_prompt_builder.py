@@ -997,8 +997,12 @@ def test_iterate_variant_prompt_plan_uses_zero_repeat_shuffle_assignments():
     )
 
     assert [row["variant"] for row in assignments] == [1, 2, 3, 4]
-    assert len({row["promptId"] for row in assignments}) == 4
-    assert all(str(row["promptId"]).startswith("alexandria-") for row in assignments)
+    assert [row["promptId"] for row in assignments] == [
+        "alexandria-base-romantic-realism",
+        "alexandria-base-classical-devotion",
+        "alexandria-base-gothic-atmosphere",
+        "alexandria-base-esoteric-mysticism",
+    ]
 
 
 def test_iterate_variant_prompt_plan_falls_back_to_literature_defaults_for_unknown_genre():
@@ -1014,21 +1018,11 @@ def test_iterate_variant_prompt_plan_falls_back_to_literature_defaults_for_unkno
     )
 
     prompt_ids = [row["promptId"] for row in assignments]
-    assert len(prompt_ids) == 3
-    assert len(set(prompt_ids)) == 3
-    assert set(prompt_ids).issubset(
-        {
-            "alexandria-base-romantic-realism",
-            "alexandria-base-classical-devotion",
-            "alexandria-base-gothic-atmosphere",
-            "alexandria-base-esoteric-mysticism",
-            "alexandria-base-philosophical-gravitas",
-            "alexandria-wildcard-pre-raphaelite-garden",
-            "alexandria-wildcard-painterly-soft",
-            "alexandria-wildcard-pre-raphaelite-dream",
-            "alexandria-wildcard-painterly-detailed",
-        }
-    )
+    assert prompt_ids == [
+        "alexandria-base-romantic-realism",
+        "alexandria-base-classical-devotion",
+        "alexandria-base-gothic-atmosphere",
+    ]
 
 
 def test_iterate_variant_prompt_plan_uses_all_five_bases_and_five_wildcards_for_ten_variants():
@@ -1058,6 +1052,13 @@ def test_iterate_variant_prompt_plan_uses_all_five_bases_and_five_wildcards_for_
     prompt_ids = [row["promptId"] for row in assignments]
     assert len(prompt_ids) == 10
     assert len(set(prompt_ids)) == 10
+    assert prompt_ids[:5] == [
+        "alexandria-base-romantic-realism",
+        "alexandria-base-classical-devotion",
+        "alexandria-base-gothic-atmosphere",
+        "alexandria-base-esoteric-mysticism",
+        "alexandria-base-philosophical-gravitas",
+    ]
     assert {
         "alexandria-base-romantic-realism",
         "alexandria-base-classical-devotion",
@@ -1071,7 +1072,7 @@ def test_iterate_variant_prompt_plan_uses_all_five_bases_and_five_wildcards_for_
         "alexandria-wildcard-maritime-chart",
         "alexandria-wildcard-painterly-detailed",
         "alexandria-wildcard-edo-meets-alexandria",
-    }.issubset(set(prompt_ids))
+    }.issubset(set(prompt_ids[5:]))
 
 
 def test_iterate_variant_prompt_plan_same_book_can_shuffle_to_different_orders():
@@ -1089,7 +1090,7 @@ def test_iterate_variant_prompt_plan_same_book_can_shuffle_to_different_orders()
     ]
     payload = {
         "book": {"title": "Gulliver's Travels", "author": "Jonathan Swift", "genre": "adventure"},
-        "variantCount": 6,
+        "variantCount": 8,
         "referenceDate": "2026-03-11T00:00:00.000Z",
     }
     first = _run_iterate_hook(
@@ -1105,9 +1106,18 @@ def test_iterate_variant_prompt_plan_same_book_can_shuffle_to_different_orders()
         random_values=[0.11, 0.82, 0.24, 0.67, 0.39, 0.95],
     )
 
-    assert [row["promptId"] for row in first] != [row["promptId"] for row in second]
-    assert len({row["promptId"] for row in first}) == 6
-    assert len({row["promptId"] for row in second}) == 6
+    first_ids = [row["promptId"] for row in first]
+    second_ids = [row["promptId"] for row in second]
+    assert first_ids[:5] == second_ids[:5] == [
+        "alexandria-base-romantic-realism",
+        "alexandria-base-classical-devotion",
+        "alexandria-base-gothic-atmosphere",
+        "alexandria-base-esoteric-mysticism",
+        "alexandria-base-philosophical-gravitas",
+    ]
+    assert first_ids[5:] != second_ids[5:]
+    assert len(set(first_ids)) == 8
+    assert len(set(second_ids)) == 8
 
 
 def test_iterate_variant_payloads_auto_rotate_assign_distinct_scenes():

@@ -15,7 +15,7 @@ const DEFAULT_VARIANT_COUNT = 10;
 const SEQUENTIAL_BATCH_SIZE = 4;
 const MAX_GENERATION_PROMPT_LENGTH = 1000;
 const AUTO_ROTATE_PROMPT_OPTION_LABEL = 'Auto-Rotate (Recommended)';
-const AUTO_ROTATE_PROMPT_INFO = 'Automatically varies artistic styles and scenes across your covers.';
+const AUTO_ROTATE_PROMPT_INFO = 'Always assigns the base prompts first, then rotates wildcard prompts and scenes across the remaining covers.';
 const AUTO_ROTATE_EXCLUDED_WILDCARD_TAGS = new Set([
   'travel-poster',
   'soviet-constructivist',
@@ -1683,7 +1683,8 @@ function buildWildcardRotationPoolForBook(book) {
   return sequence;
 }
 
-function _collectAllPromptIds(book) {
+function _basePromptSequenceForBook(book) {
+  const config = defaultAutoPromptConfigForBook(book);
   const ids = [];
   const seen = new Set();
   const addId = (id) => {
@@ -1694,18 +1695,8 @@ function _collectAllPromptIds(book) {
     }
   };
 
+  addId(config?.base || '');
   ALL_ALEXANDRIA_BASE_PROMPT_IDS.forEach(addId);
-
-  const config = defaultAutoPromptConfigForBook(book);
-  if (Array.isArray(config?.wildcards)) {
-    config.wildcards.forEach(addId);
-  }
-
-  const allPrompts = sortPromptsForUI(DB.dbGetAll('prompts'));
-  allPrompts
-    .filter((prompt) => isAutoRotateEligibleWildcardPrompt(prompt))
-    .forEach((prompt) => addId(prompt?.id || ''));
-
   return ids;
 }
 
@@ -1737,8 +1728,20 @@ function _shuffleAndDeal(pool, count) {
 function buildVariantPromptAssignments({ book, variantCount, referenceDate = new Date() }) {
   void referenceDate;
   const total = Math.max(1, Number(variantCount || 1));
-  const allPromptIds = _collectAllPromptIds(book);
-  const dealt = _shuffleAndDeal(allPromptIds, total);
+  const basePromptIds = _basePromptSequenceForBook(book);
+  const wildcardPromptIds = buildWildcardRotationPoolForBook(book);
+  const dealt = [];
+
+  for (const promptId of basePromptIds) {
+    if (dealt.length >= total) break;
+    dealt.push(promptId);
+  }
+
+  if (dealt.length < total) {
+    const remainingCount = total - dealt.length;
+    const wildcardPool = wildcardPromptIds.length ? wildcardPromptIds : basePromptIds;
+    dealt.push(..._shuffleAndDeal(wildcardPool, remainingCount));
+  }
 
   return dealt.map((promptId, index) => ({
     variant: index + 1,
@@ -2201,7 +2204,7 @@ window.Pages.iterate = {
               <div class="form-group">
                 <div class="flex justify-between items-center">
                   <label class="form-label">Variant prompt plan</label>
-                  <span class="text-xs text-muted" id="iterVariantPlanSummary">Variant 1 starts with the baseline prompt; the rest rotate wildcard prompts.</span>
+                  <span class="text-xs text-muted" id="iterVariantPlanSummary">Auto-Rotate uses the base prompts first; wildcard prompts rotate after the bases are covered.</span>
                 </div>
                 <div class="grid-auto" id="iterVariantPromptPlan"></div>
               </div>
@@ -2345,14 +2348,14 @@ window.Pages.iterate = {
       const book = selectedBook();
       if (!book || !_variantPromptPlan.length) {
         variantPlanEl.innerHTML = '<div class="text-xs text-muted">Select a book to build the prompt plan.</div>';
-        variantPlanSummaryEl.textContent = 'Variant 1 starts with the baseline prompt; the rest rotate wildcard prompts.';
+        variantPlanSummaryEl.textContent = 'Auto-Rotate uses the base prompts first; wildcard prompts rotate after the bases are covered.';
         variantEditorLabelEl.textContent = 'Editing variant 1.';
         return;
       }
       const manualOverrides = _variantPromptPlan.filter((item) => !item.usesAutoAssignment).length;
       variantPlanSummaryEl.textContent = _variantPromptPlan.length > 1
-        ? `${manualOverrides} manual override${manualOverrides === 1 ? '' : 's'}. ${AUTO_ROTATE_PROMPT_OPTION_LABEL} uses the baseline prompt for variant 1 and rotating wildcard prompts for the rest.`
-        : `${manualOverrides ? 'Manual prompt selected.' : `${AUTO_ROTATE_PROMPT_OPTION_LABEL} uses the baseline prompt.`}`;
+        ? `${manualOverrides} manual override${manualOverrides === 1 ? '' : 's'}. ${AUTO_ROTATE_PROMPT_OPTION_LABEL} uses the base prompts first and rotates wildcard prompts only after the base set is covered.`
+        : `${manualOverrides ? 'Manual prompt selected.' : `${AUTO_ROTATE_PROMPT_OPTION_LABEL} uses the base prompts first.`}`;
       const activeItem = activeVariantState() || _variantPromptPlan[0];
       const activePromptLabel = promptNameForId(activeItem?.promptId || '') || AUTO_ROTATE_PROMPT_OPTION_LABEL;
       const activeAutoLabel = promptNameForId(activeItem?.autoPromptId || '') || activePromptLabel;
