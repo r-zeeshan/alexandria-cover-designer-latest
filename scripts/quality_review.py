@@ -16128,7 +16128,7 @@ def _save_raw_context_for_job(
         "book_folder_name": book_folder_name,
         "package_folder_name": package_folder_name,
         "folder_name": package_folder_name,
-        "local_folder": _local_save_raw_root(runtime=runtime) / book_folder_name / package_folder_name,
+        "local_folder": _local_save_raw_root(runtime=runtime) / book_folder_name,
         "raw_source": raw_source,
         "raw_file_name": f"{file_prefix}_raw.png",
         "comp_source": comp_source,
@@ -16238,7 +16238,6 @@ def _save_raw_payload_for_job(
         local_folder=Path(local_payload["local_folder"]),
         folder_parts=[
             str(local_payload.get("book_folder_name", "") or "").strip(),
-            str(local_payload.get("package_folder_name", "") or "").strip(),
         ],
         parent_folder_id=SAVE_RAW_DRIVE_FOLDER_ID,
     )
@@ -16336,6 +16335,7 @@ def _save_result_context_for_job(
         style_label=resolved_style_label,
     )
     local_folder = _local_save_result_root(runtime=runtime) / book_folder_name
+    raw_source = _resolve_durable_raw_image_path(runtime=runtime, row=selected_row)
     return {
         "job_id": str(job.id or "").strip(),
         "book_number": int(job.book_number or 0),
@@ -16347,6 +16347,7 @@ def _save_result_context_for_job(
         "model": str(selected_row.get("model", "") or "").strip(),
         "style_label": resolved_style_label,
         "composite_source": composite_source,
+        "raw_source": raw_source,
     }
 
 
@@ -16394,6 +16395,28 @@ def _materialize_saved_result_file(
         logger.warning("Multi-format save failed: %s; falling back to PNG", exc)
         _copy_image_with_format(comp_source, local_path, format_name="PNG")
         saved_files.append(str(local_path))
+
+    # Export raw art in all 4 formats
+    raw_source = context.get("raw_source")
+    if isinstance(raw_source, Path) and raw_source.exists():
+        raw_stem = file_stem.replace("_composite", "_raw") if "_composite" in file_stem else f"{file_stem}_raw"
+        try:
+            raw_img = Image.open(raw_source)
+            raw_rgb = raw_img.convert("RGB")
+            raw_png = local_folder / f"{raw_stem}.png"
+            raw_img.save(str(raw_png), format="PNG")
+            saved_files.append(str(raw_png))
+            raw_jpg = local_folder / f"{raw_stem}.jpg"
+            raw_rgb.save(str(raw_jpg), format="JPEG", quality=100, subsampling=0, dpi=(300, 300))
+            saved_files.append(str(raw_jpg))
+            raw_pdf = local_folder / f"{raw_stem}.pdf"
+            raw_rgb.save(str(raw_pdf), format="PDF", resolution=300)
+            saved_files.append(str(raw_pdf))
+            raw_ai = local_folder / f"{raw_stem}.ai"
+            shutil.copy2(str(raw_pdf), str(raw_ai))
+            saved_files.append(str(raw_ai))
+        except Exception as exc:
+            logger.warning("Raw art multi-format save failed: %s", exc)
 
     return {
         "job_id": context["job_id"],
