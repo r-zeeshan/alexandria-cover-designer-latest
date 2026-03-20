@@ -16366,17 +16366,41 @@ def _materialize_saved_result_file(
     local_folder = Path(context["local_folder"])
     local_path = Path(context["local_path"])
     local_folder.mkdir(parents=True, exist_ok=True)
-    _copy_image_with_format(
-        Path(context["composite_source"]),
-        local_path,
-        format_name="PNG",
-    )
+
+    # Export composite in all 4 formats (.png, .jpg, .pdf, .ai)
+    comp_source = Path(context["composite_source"])
+    file_stem = str(local_path.stem)
+    saved_files: list[str] = []
+    try:
+        img = Image.open(comp_source)
+        rgb = img.convert("RGB")
+        # PNG
+        png_path = local_folder / f"{file_stem}.png"
+        img.save(str(png_path), format="PNG")
+        saved_files.append(str(png_path))
+        # JPG
+        jpg_path = local_folder / f"{file_stem}.jpg"
+        rgb.save(str(jpg_path), format="JPEG", quality=100, subsampling=0, dpi=(300, 300))
+        saved_files.append(str(jpg_path))
+        # PDF
+        pdf_path = local_folder / f"{file_stem}.pdf"
+        rgb.save(str(pdf_path), format="PDF", resolution=300)
+        saved_files.append(str(pdf_path))
+        # AI (copy of PDF)
+        ai_path = local_folder / f"{file_stem}.ai"
+        shutil.copy2(str(pdf_path), str(ai_path))
+        saved_files.append(str(ai_path))
+    except Exception as exc:
+        logger.warning("Multi-format save failed: %s; falling back to PNG", exc)
+        _copy_image_with_format(comp_source, local_path, format_name="PNG")
+        saved_files.append(str(local_path))
+
     return {
         "job_id": context["job_id"],
         "book_number": context["book_number"],
         "book_folder_name": context["book_folder_name"],
         "local_folder": str(local_folder),
-        "local_path": str(local_path),
+        "local_path": str(saved_files[0]) if saved_files else str(local_path),
         "file_name": context["file_name"],
         "variant": context["variant"],
         "model": context["model"],
