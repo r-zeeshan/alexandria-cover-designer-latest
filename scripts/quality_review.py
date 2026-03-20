@@ -2127,13 +2127,33 @@ def _rebuild_saved_composite_from_raw_art(*, runtime: config.Config, row: dict[s
         catalog_path=runtime.book_catalog_path,
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    rebuilt = cover_compositor.composite_single(
-        cover_path=cover_path,
-        illustration_path=raw_art,
-        region=region,
-        output_path=output_path,
-        source_pdf_path=source_pdf,
-    )
+    # Use pdf_compositor (frame overlay approach) when source PDF is available
+    if source_pdf is not None and source_pdf.exists():
+        try:
+            pdf_compositor.composite_cover_pdf(
+                source_pdf_path=str(source_pdf),
+                ai_art_path=str(raw_art),
+                output_pdf_path=str(output_path.with_suffix(".pdf")),
+                output_jpg_path=str(output_path),
+            )
+            rebuilt = output_path
+        except Exception as pdf_exc:
+            logger.warning("PDF compositor failed for saved composite rebuild: %s; falling back", pdf_exc)
+            rebuilt = cover_compositor.composite_single(
+                cover_path=cover_path,
+                illustration_path=raw_art,
+                region=region,
+                output_path=output_path,
+                source_pdf_path=source_pdf,
+            )
+    else:
+        rebuilt = cover_compositor.composite_single(
+            cover_path=cover_path,
+            illustration_path=raw_art,
+            region=region,
+            output_path=output_path,
+            source_pdf_path=source_pdf,
+        )
     _write_saved_composite_manifest(
         composite_path=rebuilt,
         job_token=_generation_artifact_job_token(row=row),
@@ -13901,6 +13921,12 @@ def _validate_drive_cover_request(
 ) -> tuple[bool, str, str]:
     source = str(cover_source or "catalog").strip().lower() or "catalog"
     if source != "drive":
+        return True, "", ""
+
+    # Skip Drive validation when no credentials are configured — fall back to local files
+    creds_path = _resolve_credentials_path(runtime)
+    if not creds_path.exists():
+        logger.info("Drive credentials not found at %s — falling back to local cover source", creds_path)
         return True, "", ""
 
     selected_id = str(selected_cover_id or "").strip()

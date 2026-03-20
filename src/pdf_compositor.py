@@ -1,20 +1,23 @@
-"""PDF-based compositor – JPG-level geometric blend approach.
+"""PDF-based compositor – frame overlay approach.
 
-Replaces the center art inside the ornamental medallion by working at the
-JPG level instead of PDF rendering.  This avoids all CMYK-to-RGB rendering
-issues (dark frames from pdftoppm / Ghostscript / PyMuPDF) by using the
-original Illustrator-rendered JPG as the base image.
+Replaces the center art inside the ornamental medallion using a pre-generated
+frame overlay PNG.  The overlay was created by diffing Im0 CMYK data across
+multiple books to identify which pixels are frame (identical across all books)
+vs illustration (different per book).
 
 Algorithm:
   1. Open the source PDF to read Im0 dimensions and its cm-transform on the page.
-  2. Open the original source JPG (rendered by Adobe Illustrator — golden frame correct).
+  2. Open the original source JPG (rendered by Adobe Illustrator).
   3. Map Im0 coordinates into JPG pixel space via the cm transform matrix.
-  4. Create a smooth circular blend mask (r=1020, feather=30 in Im0 space).
-  5. Paste new AI art into the centre region, blending smoothly into the original JPG.
-  6. Save the result as a high-quality JPG.
+  4. Navy-fill the medallion interior to erase old illustration.
+  5. Paste new AI art into the medallion center.
+  6. Paste the opaque frame overlay (from config/frame_overlay_template.png)
+     on top — frame sits perfectly over the art with no bleed-through.
+  7. Save the result as a high-quality JPG.
 
-The original ornaments, frame, text, and all non-medallion elements remain
-pixel-perfect because they come from the untouched source JPG.
+The frame overlay is pixel-perfect because it uses the original Illustrator-
+rendered JPG colors at full opacity, with a transparent hole only where
+illustration pixels were identified by cross-book comparison.
 """
 
 from __future__ import annotations
@@ -35,12 +38,10 @@ except ImportError as exc:  # pragma: no cover
 
 try:
     from src import config
-    from src import safe_image
     from src import safe_json
     from src.logger import get_logger
 except ModuleNotFoundError:  # pragma: no cover
     import config  # type: ignore
-    import safe_image  # type: ignore
     import safe_json  # type: ignore
     from logger import get_logger  # type: ignore
 
@@ -52,9 +53,9 @@ logger = get_logger(__name__)
 EXPECTED_DPI = 300
 EXPECTED_JPG_SIZE = (3784, 2777)          # full cover w x h
 
-# Im0-space blend parameters (empirically tuned on Book 1, verified on Book 2)
-IM0_BLEND_RADIUS = 1020      # pixels from Im0 center — frame ring starts here
-IM0_BLEND_FEATHER = 30       # smooth transition width
+# Frame overlay template — pre-generated RGBA PNG with transparent art hole
+FRAME_OVERLAY_TEMPLATE = Path(__file__).resolve().parent.parent / "config" / "frame_overlay_template.png"
+NAVY_FILL_RGB = (21, 32, 76)  # cover background color
 
 # Art pre-processing
 AI_ART_EDGE_TRIM_RATIO = 0.08
@@ -231,7 +232,7 @@ def _extract_im0_transform(pdf_path: Path) -> dict[str, Any]:
         # Content stream pattern: ... a 0 0 d tx ty cm ... /Im0 Do ...
         # Find all cm operators
         cm_pattern = re.compile(
-            r"([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+cm"
+            r"(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+cm"
         )
         matches = list(cm_pattern.finditer(raw_content))
 
@@ -326,29 +327,109 @@ def _im0_to_jpg_mapping(transform: dict[str, Any], jpg_w: int, jpg_h: int) -> di
 
 
 # ---------------------------------------------------------------------------
+# SMask extraction — conservative art-zone mask that protects the full frame
+# ---------------------------------------------------------------------------
+def _extract_conservative_art_mask(pdf_path: Path) -> np.ndarray:
+    """Extract the SMask from Im0 and build a conservative art-zone blend mask.
+
+    The SMask's opaque zone (value 255) includes both the illustration AND
+    the solid parts of the gold frame — it's a transparency mask, not a
+    content mask.  To protect the frame we:
+
+      1. Find the frame ring (SMask 5-250) — the semi-transparent ornament edges.
+      2. DILATE the frame ring outward by SMASK_FRAME_DILATE_PX pixels.
+         This expands the protected zone to cover the solid frame metal that
+         sits behind the semi-transparent edges (also at SMask=255).
+      3. Safe art zone = opaque zone (SMask > 250) MINUS the expanded frame.
+      4. Erode the safe art zone by SMASK_ART_ERODE_PX for additional safety.
+      5. Apply Gaussian feather for smooth blending.
+
+    This follows the actual irregular scrollwork shape — every curl, protrusion,
+    and ornamental detail is protected regardless of how deep it extends.
+
+    Returns a float32 array (H, W) with values 0.0..1.0.
+    """
+    from scipy.ndimage import binary_dilation, binary_erosion, gaussian_filter
+
+    pdf = pikepdf.Pdf.open(str(pdf_path))
+    try:
+        page = pdf.pages[0]
+        im0 = _resolve_im0(page)
+        smask = im0["/SMask"]
+        smask_data = bytes(smask.read_bytes())
+        w = int(smask["/Width"])
+        h = int(smask["/Height"])
+        smask_arr = np.frombuffer(smask_data, dtype=np.uint8).reshape((h, w))
+
+        # Step 1: Identify frame ring (semi-transparent ornament edges)
+        frame_ring = (smask_arr >= SMASK_FRAME_LO) & (smask_arr <= SMASK_FRAME_HI)
+
+        # Step 2: Dilate frame ring to cover solid frame metal behind it.
+        # Use iterative dilation with smaller structuring elements to avoid
+        # memory issues with very large kernels.
+        if SMASK_FRAME_DILATE_PX > 0:
+            expanded_frame = frame_ring.copy()
+            step = 20  # dilate 20px per iteration
+            remaining = SMASK_FRAME_DILATE_PX
+            while remaining > 0:
+                r = min(step, remaining)
+                dilate_struct = np.ones((2 * r + 1, 2 * r + 1), dtype=bool)
+                expanded_frame = binary_dilation(expanded_frame, structure=dilate_struct)
+                remaining -= r
+        else:
+            expanded_frame = frame_ring
+
+        # Step 3: Safe art zone = fully opaque minus expanded frame
+        safe_art = (smask_arr > SMASK_FRAME_HI) & ~expanded_frame
+
+        # Step 4: Additional erosion for safety margin
+        if SMASK_ART_ERODE_PX > 0:
+            erode_struct = np.ones(
+                (2 * SMASK_ART_ERODE_PX + 1, 2 * SMASK_ART_ERODE_PX + 1),
+                dtype=bool,
+            )
+            safe_art = binary_erosion(safe_art, structure=erode_struct)
+
+        safe_art = safe_art.astype(np.float32)
+
+        # Step 5: Gaussian feather for smooth transition
+        if SMASK_FEATHER_PX > 0:
+            safe_art = gaussian_filter(safe_art, sigma=SMASK_FEATHER_PX)
+
+        logger.info(
+            "SMask conservative art mask: %d x %d, frame_dilate=%d, art_erode=%d, feather=%d, art_pixels=%d",
+            w, h, SMASK_FRAME_DILATE_PX, SMASK_ART_ERODE_PX,
+            SMASK_FEATHER_PX, int((safe_art > 0.5).sum()),
+        )
+        return safe_art
+    finally:
+        pdf.close()
+
+
+# ---------------------------------------------------------------------------
 # Art loading
 # ---------------------------------------------------------------------------
 def _load_ai_art_rgb(*, ai_art_path: Path, width: int, height: int) -> Image.Image:
     """Load AI art, trim margins, edge-trim, resize to (width, height) as RGB."""
-    source = safe_image.load_image(ai_art_path, mode="RGB")
-    rgb_source = _trim_uniform_margins(source)
-    if AI_ART_EDGE_TRIM_RATIO > 0:
-        src_w, src_h = rgb_source.size
-        trim_x = int(round(src_w * AI_ART_EDGE_TRIM_RATIO / 2.0))
-        trim_y = int(round(src_h * AI_ART_EDGE_TRIM_RATIO / 2.0))
-        if (src_w - 2 * trim_x) >= 64 and (src_h - 2 * trim_y) >= 64:
-            rgb_source = rgb_source.crop((trim_x, trim_y, src_w - trim_x, src_h - trim_y))
-    rgb = ImageOps.fit(
-        rgb_source,
-        (int(width), int(height)),
-        method=Image.LANCZOS,
-        centering=(0.5, 0.5),
-    )
+    with Image.open(ai_art_path) as source:
+        rgb_source = _trim_uniform_margins(source)
+        if AI_ART_EDGE_TRIM_RATIO > 0:
+            src_w, src_h = rgb_source.size
+            trim_x = int(round(src_w * AI_ART_EDGE_TRIM_RATIO / 2.0))
+            trim_y = int(round(src_h * AI_ART_EDGE_TRIM_RATIO / 2.0))
+            if (src_w - 2 * trim_x) >= 64 and (src_h - 2 * trim_y) >= 64:
+                rgb_source = rgb_source.crop((trim_x, trim_y, src_w - trim_x, src_h - trim_y))
+        rgb = ImageOps.fit(
+            rgb_source,
+            (int(width), int(height)),
+            method=Image.LANCZOS,
+            centering=(0.5, 0.5),
+        )
     return rgb.convert("RGB")
 
 
 # ---------------------------------------------------------------------------
-# Main entry: composite_cover_pdf  (JPG-level geometric blend)
+# Main entry: composite_cover_pdf  (frame overlay approach)
 # ---------------------------------------------------------------------------
 def composite_cover_pdf(
     source_pdf_path: str,
@@ -359,14 +440,17 @@ def composite_cover_pdf(
     *,
     source_jpg_path: str | None = None,
 ) -> dict[str, Any]:
-    """Replace medallion art using JPG-level geometric blend.
+    """Replace medallion art using frame overlay approach.
 
-    Uses the original Illustrator-rendered JPG as the base (golden frame
-    rendered correctly), reads Im0 position from the PDF, and blends new
-    AI art into the medallion centre with a smooth circular mask.
+    Uses a pre-generated frame overlay PNG (created by diffing Im0 across
+    multiple books) to cleanly separate frame from illustration.  The overlay
+    is fully opaque with a transparent hole where new art is placed.
 
-    The frame, ornaments, text, and all surrounding elements remain
-    pixel-perfect from the original JPG.
+    Steps:
+      1. Start with original JPG (has perfect cover: text, corners, background)
+      2. Navy-fill the medallion interior (erases old illustration)
+      3. Paste new AI art into the medallion area
+      4. Paste opaque frame overlay on top (frame sits perfectly over art)
     """
     source_pdf = Path(source_pdf_path)
     art_path = Path(ai_art_path)
@@ -384,7 +468,6 @@ def composite_cover_pdf(
     if source_jpg_path:
         jpg_path = Path(source_jpg_path)
     else:
-        # Look for JPG in same folder as the source PDF
         folder = source_pdf.parent
         jpg_candidates = sorted([p for p in folder.iterdir() if p.is_file() and p.suffix.lower() in (".jpg", ".jpeg")])
         if jpg_candidates:
@@ -392,6 +475,12 @@ def composite_cover_pdf(
 
     if jpg_path is None or not jpg_path.exists():
         raise FileNotFoundError(f"Source JPG not found alongside PDF: {source_pdf.parent}")
+
+    if not FRAME_OVERLAY_TEMPLATE.exists():
+        raise FileNotFoundError(
+            f"Frame overlay template not found: {FRAME_OVERLAY_TEMPLATE}. "
+            "Generate it by running scripts/generate_frame_overlay.py with 3+ book PDFs."
+        )
 
     output_pdf.parent.mkdir(parents=True, exist_ok=True)
     output_jpg.parent.mkdir(parents=True, exist_ok=True)
@@ -401,7 +490,7 @@ def composite_cover_pdf(
     transform = _extract_im0_transform(source_pdf)
 
     # --- Step 2: Open original JPG ---
-    base_jpg = safe_image.load_image(jpg_path, mode="RGB")
+    base_jpg = Image.open(jpg_path).convert("RGB")
     jpg_w, jpg_h = base_jpg.size
 
     # --- Step 3: Map Im0 coordinates to JPG space ---
@@ -411,90 +500,94 @@ def composite_cover_pdf(
     im0_region_h = int(round(mapping["im0_h_jpg"]))
     im0_cx = mapping["im0_cx"]
     im0_cy = mapping["im0_cy"]
-
-    # Scale blend parameters from Im0 space to JPG space
-    im0_scale = (mapping["im0_to_jpg_scale_x"] + mapping["im0_to_jpg_scale_y"]) / 2.0
-    blend_radius_jpg = IM0_BLEND_RADIUS * im0_scale
-    feather_jpg = IM0_BLEND_FEATHER * im0_scale
-
-    # --- Step 4: Load and prep new AI art ---
-    new_art = _load_ai_art_rgb(ai_art_path=art_path, width=im0_region_w, height=im0_region_h)
-
-    # --- Step 5: Create circular blend mask in JPG space ---
-    base_arr = np.asarray(base_jpg, dtype=np.float32)
-    result_arr = base_arr.copy()
-
-    # Place new art into the Im0 region
     im0_left = int(round(mapping["im0_left"]))
     im0_top = int(round(mapping["im0_top"]))
-    new_art_arr = np.asarray(new_art, dtype=np.float32)
 
-    # Build a distance-from-center grid for the Im0 region (in JPG pixels)
-    yy, xx = np.mgrid[0:im0_region_h, 0:im0_region_w]
-    # Centre of Im0 region relative to its own top-left
-    rcx = im0_region_w / 2.0
-    rcy = im0_region_h / 2.0
-    dist = np.sqrt((xx - rcx) ** 2 + (yy - rcy) ** 2)
+    # --- Step 4: Load frame overlay (already at JPG region size) ---
+    frame_overlay = Image.open(FRAME_OVERLAY_TEMPLATE).convert("RGBA")
+    if frame_overlay.size != (im0_region_w, im0_region_h):
+        frame_overlay_scaled = frame_overlay.resize((im0_region_w, im0_region_h), Image.LANCZOS)
+    else:
+        frame_overlay_scaled = frame_overlay
 
-    # Smooth circular mask: 1.0 = new art, 0.0 = keep original
-    inner_r = blend_radius_jpg - feather_jpg / 2.0
-    outer_r = blend_radius_jpg + feather_jpg / 2.0
-    mask = np.clip((outer_r - dist) / max(1.0, outer_r - inner_r), 0.0, 1.0)
-    mask_3ch = mask[:, :, np.newaxis]
+    # --- Step 5: Load and prep new AI art ---
+    new_art = _load_ai_art_rgb(ai_art_path=art_path, width=im0_region_w, height=im0_region_h)
 
-    # Clamp region to image bounds
+    # --- Step 6: Composite — navy fill → art → frame overlay on top ---
+    base_rgba = base_jpg.convert("RGBA")
+    base_arr = np.array(base_rgba)
+
+    # Navy-fill the medallion interior
+    yy, xx = np.mgrid[:jpg_h, :jpg_w]
+    dist = np.sqrt((xx - im0_cx) ** 2 + (yy - im0_cy) ** 2)
+    im0_scale = (mapping["im0_to_jpg_scale_x"] + mapping["im0_to_jpg_scale_y"]) / 2.0
+    wipe_r = 1100 * im0_scale
+    wipe_mask = np.clip((wipe_r - dist) / 3.0, 0.0, 1.0)
+    for c in range(3):
+        base_arr[:, :, c] = (
+            NAVY_FILL_RGB[c] * wipe_mask + base_arr[:, :, c].astype(float) * (1.0 - wipe_mask)
+        ).astype(np.uint8)
+
+    # Paste AI art ONLY where the frame overlay is transparent (the art hole).
+    # This prevents the AI art's white background from showing outside the
+    # circular frame area as a visible rectangle.
+    art_arr = np.array(new_art, dtype=np.float32)
+    overlay_alpha = np.array(frame_overlay_scaled.split()[3], dtype=np.float32) / 255.0
+    art_mask = 1.0 - overlay_alpha  # 1.0 where transparent (art hole), 0.0 where opaque (frame)
+    art_mask_3ch = art_mask[:, :, np.newaxis]
+
     src_y1 = max(0, im0_top)
     src_y2 = min(jpg_h, im0_top + im0_region_h)
     src_x1 = max(0, im0_left)
     src_x2 = min(jpg_w, im0_left + im0_region_w)
-
     art_y1 = src_y1 - im0_top
-    art_y2 = art_y1 + (src_y2 - src_y1)
     art_x1 = src_x1 - im0_left
-    art_x2 = art_x1 + (src_x2 - src_x1)
+    rh = src_y2 - src_y1
+    rw = src_x2 - src_x1
 
-    # Blend: result = new_art * mask + original * (1 - mask)
-    region_original = result_arr[src_y1:src_y2, src_x1:src_x2]
-    region_art = new_art_arr[art_y1:art_y2, art_x1:art_x2]
-    region_mask = mask_3ch[art_y1:art_y2, art_x1:art_x2]
+    region = base_arr[src_y1:src_y2, src_x1:src_x2, :3].astype(np.float32)
+    art_region = art_arr[art_y1:art_y1 + rh, art_x1:art_x1 + rw]
+    mask_region = art_mask_3ch[art_y1:art_y1 + rh, art_x1:art_x1 + rw]
 
-    blended = region_art * region_mask + region_original * (1.0 - region_mask)
-    result_arr[src_y1:src_y2, src_x1:src_x2] = blended
+    # Blend: art where transparent, navy-wiped base where opaque
+    blended = art_region * mask_region + region * (1.0 - mask_region)
+    base_arr[src_y1:src_y2, src_x1:src_x2, :3] = np.clip(blended, 0, 255).astype(np.uint8)
 
-    # --- Step 6: Save result ---
+    # Paste frame overlay ON TOP — frame is opaque, art hole is transparent
+    base_with_art = Image.fromarray(base_arr, "RGBA")
+    base_with_art.paste(frame_overlay_scaled, (im0_left, im0_top), frame_overlay_scaled)
+
+    result_arr = np.array(base_with_art.convert("RGB"), dtype=np.float32)
+
+    # --- Step 7: Save result ---
     result_img = Image.fromarray(np.clip(result_arr, 0, 255).astype(np.uint8), "RGB")
 
     # Ensure expected dimensions
     if result_img.size != EXPECTED_JPG_SIZE:
         result_img = result_img.resize(EXPECTED_JPG_SIZE, Image.LANCZOS)
 
-    safe_image.atomic_save_image(
-        output_jpg,
-        result_img,
-        format="JPEG",
-        quality=100,
-        subsampling=0,
-        dpi=(EXPECTED_DPI, EXPECTED_DPI),
-    )
+    result_img.save(output_jpg, format="JPEG", quality=100, subsampling=0, dpi=(EXPECTED_DPI, EXPECTED_DPI))
 
     # Copy source PDF and AI files for reference (they are not modified)
     shutil.copyfile(source_pdf, output_pdf)
     shutil.copyfile(source_pdf, output_ai)
 
     logger.info(
-        "JPG blend compositor completed",
+        "Frame overlay compositor completed",
         extra={
             "source_pdf": str(source_pdf),
             "source_jpg": str(jpg_path),
             "output_jpg": str(output_jpg),
             "im0_center_jpg": f"({im0_cx:.0f}, {im0_cy:.0f})",
-            "blend_radius_jpg": f"{blend_radius_jpg:.0f}",
+            "blend_mode": "frame_overlay",
+            "frame_overlay": str(FRAME_OVERLAY_TEMPLATE),
             "im0_region": f"{im0_region_w}x{im0_region_h}",
         },
     )
 
     return {
         "success": True,
+        "blend_mode": "frame_overlay",
         "source_pdf": str(source_pdf),
         "source_jpg": str(jpg_path),
         "output_pdf": str(output_pdf),

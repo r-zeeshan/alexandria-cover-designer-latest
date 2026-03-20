@@ -758,36 +758,68 @@ def composite_single(
     else:
         pdf_source = pdf_source or _find_source_pdf_for_cover_path(cover_path)
         if pdf_source is not None:
+            # Prefer frame overlay compositor (pdf_compositor) when template exists
             try:
-                from src.pdf_swap_compositor import composite_via_pdf_swap
-            except ModuleNotFoundError:  # pragma: no cover
-                from pdf_swap_compositor import composite_via_pdf_swap  # type: ignore
+                from src.pdf_compositor import composite_cover_pdf, FRAME_OVERLAY_TEMPLATE
+            except (ModuleNotFoundError, ImportError):
+                try:
+                    from pdf_compositor import composite_cover_pdf, FRAME_OVERLAY_TEMPLATE  # type: ignore
+                except (ModuleNotFoundError, ImportError):
+                    FRAME_OVERLAY_TEMPLATE = None  # type: ignore
+                    composite_cover_pdf = None  # type: ignore
 
-            try:
-                composite_via_pdf_swap(
-                    source_pdf_path=pdf_source,
-                    ai_art_path=Path(illustration_path),
-                    output_jpg_path=Path(output_path),
-                    border_trim_ratio=float(getattr(runtime, "border_strip_percent", 0.05)),
-                    expected_output_size=(cover_w, cover_h),
-                )
-                composited_rgb = safe_image.load_image(output_path, mode="RGB")
-                rendered_by_pdf_swap = True
-                validation_region = Region(
-                    center_x=FALLBACK_CENTER_X,
-                    center_y=FALLBACK_CENTER_Y,
-                    radius=max(20, TEMPLATE_PUNCH_RADIUS),
-                    frame_bbox=region_obj.frame_bbox,
-                    region_type="circle",
-                )
-                logger.info("PDF swap composite succeeded for %s using %s", cover_path.name, pdf_source.name)
-            except Exception as exc:
-                logger.warning(
-                    "PDF swap failed for %s with %s: %s; falling back to legacy compositor",
-                    cover_path.name,
-                    pdf_source.name,
-                    exc,
-                )
+            if composite_cover_pdf is not None and FRAME_OVERLAY_TEMPLATE is not None and FRAME_OVERLAY_TEMPLATE.exists():
+                try:
+                    composite_cover_pdf(
+                        source_pdf_path=str(pdf_source),
+                        ai_art_path=str(illustration_path),
+                        output_pdf_path=str(output_path.with_suffix(".pdf")),
+                        output_jpg_path=str(output_path),
+                    )
+                    composited_rgb = safe_image.load_image(output_path, mode="RGB")
+                    rendered_by_pdf_swap = True
+                    validation_region = Region(
+                        center_x=FALLBACK_CENTER_X,
+                        center_y=FALLBACK_CENTER_Y,
+                        radius=max(20, TEMPLATE_PUNCH_RADIUS),
+                        frame_bbox=region_obj.frame_bbox,
+                        region_type="circle",
+                    )
+                    logger.info("Frame overlay composite succeeded for %s", cover_path.name)
+                except Exception as exc:
+                    logger.warning("Frame overlay compositor failed for %s: %s; trying pdf_swap", cover_path.name, exc)
+
+            if not rendered_by_pdf_swap:
+                try:
+                    from src.pdf_swap_compositor import composite_via_pdf_swap
+                except ModuleNotFoundError:  # pragma: no cover
+                    from pdf_swap_compositor import composite_via_pdf_swap  # type: ignore
+
+                try:
+                    composite_via_pdf_swap(
+                        source_pdf_path=pdf_source,
+                        ai_art_path=Path(illustration_path),
+                        output_jpg_path=Path(output_path),
+                        border_trim_ratio=float(getattr(runtime, "border_strip_percent", 0.05)),
+                        expected_output_size=(cover_w, cover_h),
+                    )
+                    composited_rgb = safe_image.load_image(output_path, mode="RGB")
+                    rendered_by_pdf_swap = True
+                    validation_region = Region(
+                        center_x=FALLBACK_CENTER_X,
+                        center_y=FALLBACK_CENTER_Y,
+                        radius=max(20, TEMPLATE_PUNCH_RADIUS),
+                        frame_bbox=region_obj.frame_bbox,
+                        region_type="circle",
+                    )
+                    logger.info("PDF swap composite succeeded for %s using %s", cover_path.name, pdf_source.name)
+                except Exception as exc:
+                    logger.warning(
+                        "PDF swap failed for %s with %s: %s; falling back to legacy compositor",
+                        cover_path.name,
+                        pdf_source.name,
+                        exc,
+                    )
 
         if not rendered_by_pdf_swap:
             # ── RGBA Frame-Overlay Compositing ─────────────────────────
