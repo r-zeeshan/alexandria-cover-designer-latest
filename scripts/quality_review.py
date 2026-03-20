@@ -16153,65 +16153,57 @@ def _materialize_save_raw_package(
     missing_files: list[str] = []
     saved_files: list[str] = []
 
+    def _export_all_formats(source_path: Path, base_name: str, folder: Path) -> list[str]:
+        """Export an image as .png, .jpg, .pdf, .ai into folder."""
+        exported: list[str] = []
+        try:
+            img = Image.open(source_path)
+            rgb = img.convert("RGB")
+            # PNG
+            png_path = folder / f"{base_name}.png"
+            img.save(str(png_path), format="PNG")
+            exported.append(str(png_path))
+            # JPG
+            jpg_path = folder / f"{base_name}.jpg"
+            rgb.save(str(jpg_path), format="JPEG", quality=100, subsampling=0, dpi=(300, 300))
+            exported.append(str(jpg_path))
+            # PDF (image wrapped in PDF)
+            pdf_path = folder / f"{base_name}.pdf"
+            rgb.save(str(pdf_path), format="PDF", resolution=300)
+            exported.append(str(pdf_path))
+            # AI (copy of PDF — Illustrator can open PDF files)
+            ai_path = folder / f"{base_name}.ai"
+            shutil.copy2(str(pdf_path), str(ai_path))
+            exported.append(str(ai_path))
+        except Exception as exc:
+            logger.warning("Multi-format export failed for %s: %s", base_name, exc)
+        return exported
+
     raw_source = context["raw_source"]
     raw_file_name = str(context["raw_file_name"])
+    raw_stem = str(Path(raw_file_name).stem)
     if isinstance(raw_source, Path) and raw_source.exists():
-        saved_path = _export_png_asset(
-            source_image=raw_source,
-            local_folder=local_folder,
-            file_name=raw_file_name,
-        )
-        if saved_path:
-            saved_files.append(saved_path)
+        exported = _export_all_formats(raw_source, raw_stem, local_folder)
+        saved_files.extend(exported)
+        if not exported:
+            missing_files.append(raw_file_name)
+            warnings.append("Raw image export failed.")
     else:
         missing_files.append(raw_file_name)
         warnings.append("Generated raw image not found.")
 
     comp_source = context["comp_source"]
     comp_file_name = str(context["comp_file_name"])
+    comp_stem = str(Path(comp_file_name).stem)
     if isinstance(comp_source, Path) and comp_source.exists():
-        saved_path = _export_png_asset(
-            source_image=comp_source,
-            local_folder=local_folder,
-            file_name=comp_file_name,
-        )
-        if saved_path:
-            saved_files.append(saved_path)
-        # Also export as JPG
-        try:
-            jpg_name = str(Path(comp_file_name).with_suffix(".jpg"))
-            img = Image.open(comp_source).convert("RGB")
-            jpg_path = local_folder / jpg_name
-            img.save(str(jpg_path), format="JPEG", quality=100, subsampling=0, dpi=(300, 300))
-            saved_files.append(str(jpg_path))
-        except Exception:
-            pass
+        exported = _export_all_formats(comp_source, comp_stem, local_folder)
+        saved_files.extend(exported)
+        if not exported:
+            missing_files.append(comp_file_name)
+            warnings.append("Composite image export failed.")
     else:
         missing_files.append(comp_file_name)
         warnings.append("Composite image not found.")
-
-    # Copy source PDF and AI files if available
-    try:
-        book_number = context["book_number"]
-        source_pdf = pdf_compositor.find_source_pdf_for_book(
-            input_dir=runtime.input_dir,
-            book_number=book_number,
-            catalog_path=runtime.book_catalog_path,
-        )
-        if source_pdf is not None and source_pdf.exists():
-            file_stem = Path(comp_file_name).stem if comp_file_name else "cover"
-            # Copy PDF
-            pdf_dest = local_folder / f"{file_stem}.pdf"
-            shutil.copy2(str(source_pdf), str(pdf_dest))
-            saved_files.append(str(pdf_dest))
-            # Copy AI (same folder, .ai extension)
-            ai_source = source_pdf.with_suffix(".ai")
-            if ai_source.exists():
-                ai_dest = local_folder / f"{file_stem}.ai"
-                shutil.copy2(str(ai_source), str(ai_dest))
-                saved_files.append(str(ai_dest))
-    except Exception:
-        pass
 
     if not saved_files:
         raise FileNotFoundError("No raw or composite image found for job")
