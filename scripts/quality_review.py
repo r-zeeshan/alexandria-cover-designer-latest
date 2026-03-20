@@ -16177,9 +16177,41 @@ def _materialize_save_raw_package(
         )
         if saved_path:
             saved_files.append(saved_path)
+        # Also export as JPG
+        try:
+            jpg_name = str(Path(comp_file_name).with_suffix(".jpg"))
+            img = Image.open(comp_source).convert("RGB")
+            jpg_path = local_folder / jpg_name
+            img.save(str(jpg_path), format="JPEG", quality=100, subsampling=0, dpi=(300, 300))
+            saved_files.append(str(jpg_path))
+        except Exception:
+            pass
     else:
         missing_files.append(comp_file_name)
         warnings.append("Composite image not found.")
+
+    # Copy source PDF and AI files if available
+    try:
+        book_number = context["book_number"]
+        source_pdf = pdf_compositor.find_source_pdf_for_book(
+            input_dir=runtime.input_dir,
+            book_number=book_number,
+            catalog_path=runtime.book_catalog_path,
+        )
+        if source_pdf is not None and source_pdf.exists():
+            file_stem = Path(comp_file_name).stem if comp_file_name else "cover"
+            # Copy PDF
+            pdf_dest = local_folder / f"{file_stem}.pdf"
+            shutil.copy2(str(source_pdf), str(pdf_dest))
+            saved_files.append(str(pdf_dest))
+            # Copy AI (same folder, .ai extension)
+            ai_source = source_pdf.with_suffix(".ai")
+            if ai_source.exists():
+                ai_dest = local_folder / f"{file_stem}.ai"
+                shutil.copy2(str(ai_source), str(ai_dest))
+                saved_files.append(str(ai_dest))
+    except Exception:
+        pass
 
     if not saved_files:
         raise FileNotFoundError("No raw or composite image found for job")
