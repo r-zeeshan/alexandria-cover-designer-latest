@@ -196,8 +196,8 @@ _STARTUP_STATE: dict[str, Any] = {
 }
 JOBS_DB_PATH = PROJECT_ROOT / os.getenv("JOBS_DB_PATH", "data/jobs.sqlite3")
 STATE_DB_PATH = PROJECT_ROOT / os.getenv("STATE_DB_PATH", "data/state.sqlite3")
-JOB_WORKER_COUNT = max(1, int(os.getenv("JOB_WORKERS", "4")))
-JOB_STALE_RECOVERY_SECONDS = max(30, int(os.getenv("JOB_STALE_RECOVERY_SECONDS", "900")))
+JOB_WORKER_COUNT = max(1, int(os.getenv("JOB_WORKERS", "10")))
+JOB_STALE_RECOVERY_SECONDS = max(30, int(os.getenv("JOB_STALE_RECOVERY_SECONDS", "1800")))
 JOB_STALE_RECOVERY_RETRY_DELAY_SECONDS = max(1.0, float(os.getenv("JOB_STALE_RECOVERY_RETRY_DELAY_SECONDS", "2.0")))
 JOB_WORKER_MODE = str(os.getenv("JOB_WORKER_MODE", "inline")).strip().lower() or "inline"
 JOB_WORKER_HEARTBEAT_PATH = PROJECT_ROOT / os.getenv("JOB_WORKER_HEARTBEAT_PATH", "data/worker_heartbeat.json")
@@ -210,12 +210,12 @@ SLO_ALERT_LEVELS = {
 }
 SLO_MONITOR_INTERVAL_SECONDS = max(0, int(os.getenv("SLO_MONITOR_INTERVAL_SECONDS", "300")))
 MUTATION_API_TOKEN = os.getenv("WEB_API_TOKEN", "").strip()
-MUTATION_RATE_LIMIT_PER_MINUTE = max(10, int(os.getenv("WEB_RATE_LIMIT_PER_MINUTE", "120")))
-READ_RATE_LIMIT_PER_MINUTE = max(60, int(os.getenv("WEB_READ_RATE_LIMIT_PER_MINUTE", "300")))
+MUTATION_RATE_LIMIT_PER_MINUTE = max(10, int(os.getenv("WEB_RATE_LIMIT_PER_MINUTE", "600")))
+READ_RATE_LIMIT_PER_MINUTE = max(60, int(os.getenv("WEB_READ_RATE_LIMIT_PER_MINUTE", "1500")))
 DATA_CACHE_MAX_ENTRIES = max(100, int(os.getenv("DATA_CACHE_MAX_ENTRIES", "1000")))
-SSE_MAX_CONNECTIONS_PER_CLIENT = max(1, int(os.getenv("SSE_MAX_CONNECTIONS_PER_CLIENT", "3")))
+SSE_MAX_CONNECTIONS_PER_CLIENT = max(1, int(os.getenv("SSE_MAX_CONNECTIONS_PER_CLIENT", "60")))
 ALLOW_SYNC_GENERATION = str(os.getenv("ALLOW_SYNC_GENERATION", "0")).strip().lower() in {"1", "true", "yes", "on"}
-REQUEST_HANDLER_TIMEOUT_SECONDS = max(5.0, float(os.getenv("REQUEST_HANDLER_TIMEOUT_SECONDS", "30")))
+REQUEST_HANDLER_TIMEOUT_SECONDS = max(5.0, float(os.getenv("REQUEST_HANDLER_TIMEOUT_SECONDS", "120")))
 
 
 def _normalize_worker_mode(raw: str | None) -> str:
@@ -1283,7 +1283,7 @@ data_cache = DataCache(ttl_seconds=60)
 request_tracker = RequestTracker()
 mutation_rate_limiter = SimpleRateLimiter(per_minute=MUTATION_RATE_LIMIT_PER_MINUTE)
 read_rate_limiter = SimpleRateLimiter(per_minute=READ_RATE_LIMIT_PER_MINUTE)
-generation_rate_limiter = SimpleRateLimiter(per_minute=max(1, int(os.getenv("GENERATION_RATE_LIMIT_PER_MINUTE", "5"))))
+generation_rate_limiter = SimpleRateLimiter(per_minute=max(1, int(os.getenv("GENERATION_RATE_LIMIT_PER_MINUTE", "300"))))
 admin_rate_limiter = SimpleRateLimiter(per_minute=max(5, int(os.getenv("ADMIN_RATE_LIMIT_PER_MINUTE", "30"))))
 sse_connection_limiter = SSEConnectionLimiter(per_client=SSE_MAX_CONNECTIONS_PER_CLIENT)
 _catalog_mutation_limiters: dict[str, SimpleRateLimiter] = {}
